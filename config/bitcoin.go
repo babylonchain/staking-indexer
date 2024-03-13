@@ -4,6 +4,7 @@ import (
 	"time"
 
 	vconfig "github.com/babylonchain/vigilante/config"
+	vtypes "github.com/babylonchain/vigilante/types"
 )
 
 const (
@@ -54,6 +55,7 @@ func DefaultBTCConfig() *BTCConfig {
 
 func BTCConfigToVigilanteBTCConfig(cfg *BTCConfig) *vconfig.BTCConfig {
 	defaultVBTCCfg := vconfig.DefaultBTCConfig()
+	defaultVBTCCfg.BtcBackend = vtypes.Bitcoind
 	defaultVBTCCfg.Endpoint = cfg.RPCHost
 	defaultVBTCCfg.Username = cfg.RPCUser
 	defaultVBTCCfg.Password = cfg.RPCPass

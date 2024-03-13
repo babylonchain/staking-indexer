@@ -70,6 +70,9 @@ func start(ctx *cli.Context) error {
 		cfg.BTCConfig.MaxRetrySleepTime,
 		logger,
 	)
+	if err != nil {
+		return fmt.Errorf("failed to initialize the BTC client: %w", err)
+	}
 
 	// create BTC scanner
 	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, uint64(startHeight))
