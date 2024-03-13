@@ -34,12 +34,15 @@ type Config struct {
 	BitcoinNetwork string `long:"bitcoinnetwork" description:"Bitcoin network to run on" choise:"mainnet" choice:"regtest" choice:"testnet" choice:"simnet" choice:"signet"`
 
 	BTCNetParams chaincfg.Params
+
+	BTCScannerConfig *BTCScannerConfig
 }
 
-func DefaultConfigWithHome(homePath string) Config {
-	cfg := Config{
-		LogLevel:       defaultLogLevel,
-		BitcoinNetwork: defaultBitcoinNetwork,
+func DefaultConfigWithHome(homePath string) *Config {
+	cfg := &Config{
+		LogLevel:         defaultLogLevel,
+		BitcoinNetwork:   defaultBitcoinNetwork,
+		BTCScannerConfig: DefaultBTCScannerConfig(),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -49,7 +52,7 @@ func DefaultConfigWithHome(homePath string) Config {
 	return cfg
 }
 
-func DefaultConfig() Config {
+func DefaultConfig() *Config {
 	return DefaultConfigWithHome(DefaultHomeDir)
 }
 
@@ -122,6 +125,10 @@ func (cfg *Config) Validate() error {
 		cfg.BTCNetParams = chaincfg.SigNetParams
 	default:
 		return fmt.Errorf("invalid network: %v", cfg.BitcoinNetwork)
+	}
+
+	if err := cfg.BTCScannerConfig.Validate(); err != nil {
+		return err
 	}
 
 	// All good, return the sanitized result.
