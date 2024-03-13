@@ -8,6 +8,7 @@ import (
 	"github.com/urfave/cli"
 
 	"github.com/babylonchain/staking-indexer/config"
+	"github.com/babylonchain/staking-indexer/indexer"
 	"github.com/babylonchain/staking-indexer/log"
 	service "github.com/babylonchain/staking-indexer/server"
 	"github.com/babylonchain/staking-indexer/utils"
@@ -44,13 +45,18 @@ func start(ctx *cli.Context) error {
 		return fmt.Errorf("failed to initialize the logger: %w", err)
 	}
 
+	si, err := indexer.NewStakingIndexer(cfg, logger)
+	if err != nil {
+		return fmt.Errorf("failed to create the staking indexer app: %w", err)
+	}
+
 	// Hook interceptor for os signals.
 	shutdownInterceptor, err := signal.Intercept()
 	if err != nil {
 		return err
 	}
 
-	indexerServer := service.NewStakingIndexerServer(cfg, logger, shutdownInterceptor)
+	indexerServer := service.NewStakingIndexerServer(cfg, si, logger, shutdownInterceptor)
 
 	return indexerServer.RunUntilShutdown()
 }

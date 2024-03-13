@@ -1,12 +1,14 @@
 package service
 
 import (
+	"fmt"
 	"sync/atomic"
 
 	"github.com/lightningnetwork/lnd/signal"
 	"go.uber.org/zap"
 
 	"github.com/babylonchain/staking-indexer/config"
+	"github.com/babylonchain/staking-indexer/indexer"
 )
 
 // Server is the main daemon construct for the staking indexer service. It handles
@@ -14,21 +16,21 @@ import (
 type Server struct {
 	started int32
 
+	si *indexer.StakingIndexer
+
 	cfg    *config.Config
 	logger *zap.Logger
 
 	interceptor signal.Interceptor
-
-	quit chan struct{}
 }
 
 // NewStakingIndexerServer creates a new server with the given config.
-func NewStakingIndexerServer(cfg *config.Config, l *zap.Logger, sig signal.Interceptor) *Server {
+func NewStakingIndexerServer(cfg *config.Config, si *indexer.StakingIndexer, l *zap.Logger, sig signal.Interceptor) *Server {
 	return &Server{
 		cfg:         cfg,
+		si:          si,
 		logger:      l,
 		interceptor: sig,
-		quit:        make(chan struct{}, 1),
 	}
 }
 
@@ -42,6 +44,11 @@ func (s *Server) RunUntilShutdown() error {
 	defer func() {
 		s.logger.Info("Shutdown complete")
 	}()
+
+	if err := s.si.Start(); err != nil {
+		return fmt.Errorf("failed to start the staking indexer app: %w", err)
+	}
+	defer s.si.Stop()
 
 	s.logger.Info("Staking Indexer service is fully active!")
 
