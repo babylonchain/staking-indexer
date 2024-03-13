@@ -24,6 +24,15 @@ ifeq ($(VERBOSE),true)
 endif
 
 BUILD_TARGETS := build install
+BUILD_FLAGS := --tags "$(build_tags)" --ldflags '$(ldflags)'
+
+# Update changelog vars
+ifneq (,$(SINCE_TAG))
+       sinceTag := --since-tag $(SINCE_TAG)
+endif
+ifneq (,$(UPCOMING_TAG))
+       upcomingTag := --future-release $(UPCOMING_TAG)
+endif
 
 all: build install
 

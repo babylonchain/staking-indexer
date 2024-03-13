@@ -1,11 +1,12 @@
 FROM golang:1.21.4-alpine as builder
 
-# Version to build. Default is the Git HEAD.
-ARG VERSION="HEAD"
+# TARGETPLATFORM should be one of linux/amd64 or linux/arm64.
+ARG TARGETPLATFORM="linux/amd64"
+# Version to build. Default is empty.
+ARG VERSION
 
 # Use muslc for static libs
 ARG BUILD_TAGS="muslc"
-
 
 RUN apk add --no-cache --update openssh git make build-base linux-headers libc-dev \
                                 pkgconfig zeromq-dev musl-dev alpine-sdk libsodium-dev \
@@ -18,6 +19,19 @@ COPY go.mod go.sum /go/src/github.com/babylonchain/staking-indexer/
 RUN go mod download
 # Copy the rest of the files
 COPY ./ /go/src/github.com/babylonchain/staking-indexer/
+# If version is set, then checkout this version
+RUN if [ -n "${VERSION}" ]; then \
+        git checkout -f ${VERSION}; \
+    fi
+
+# Cosmwasm - Download correct libwasmvm version
+RUN WASMVM_VERSION=$(go list -m github.com/CosmWasm/wasmvm | cut -d ' ' -f 2) && \
+    wget https://github.com/CosmWasm/wasmvm/releases/download/$WASMVM_VERSION/libwasmvm_muslc.$(uname -m).a \
+        -O /lib/libwasmvm_muslc.a && \
+    # verify checksum
+    wget https://github.com/CosmWasm/wasmvm/releases/download/$WASMVM_VERSION/checksums.txt -O /tmp/checksums.txt && \
+    sha256sum /lib/libwasmvm_muslc.a | grep $(cat /tmp/checksums.txt | grep libwasmvm_muslc.$(uname -m) | cut -d ' ' -f 1)
+
 
 RUN CGO_LDFLAGS="$CGO_LDFLAGS -lstdc++ -lm -lsodium" \
     CGO_ENABLED=1 \
