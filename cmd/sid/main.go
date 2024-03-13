@@ -7,10 +7,6 @@ import (
 	"github.com/urfave/cli"
 )
 
-const (
-	homeFlag = "home"
-)
-
 func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "[staking-indexer] %v\n", err)
 	os.Exit(1)

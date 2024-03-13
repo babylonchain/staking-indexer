@@ -29,13 +29,12 @@ var (
 
 // Config is the main config for the fpd cli command
 type Config struct {
-	LogLevel string `long:"loglevel" description:"Logging level for all subsystems" choice:"trace" choice:"debug" choice:"info" choice:"warn" choice:"error" choice:"fatal"`
-
-	BitcoinNetwork string `long:"bitcoinnetwork" description:"Bitcoin network to run on" choise:"mainnet" choice:"regtest" choice:"testnet" choice:"simnet" choice:"signet"`
+	LogLevel         string            `long:"loglevel" description:"Logging level for all subsystems" choice:"trace" choice:"debug" choice:"info" choice:"warn" choice:"error" choice:"fatal"`
+	BitcoinNetwork   string            `long:"bitcoinnetwork" description:"Bitcoin network to run on" choise:"mainnet" choice:"regtest" choice:"testnet" choice:"simnet" choice:"signet"`
+	BTCScannerConfig *BTCScannerConfig `group:"btcscannerconfig" namespace:"btcscannerconfig"`
+	BTCConfig        *BTCConfig        `group:"btcconfig" namespace:"btcconfig"`
 
 	BTCNetParams chaincfg.Params
-
-	BTCScannerConfig *BTCScannerConfig
 }
 
 func DefaultConfigWithHome(homePath string) *Config {
