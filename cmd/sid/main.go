@@ -18,8 +18,8 @@ func fatal(err error) {
 
 func main() {
 	app := cli.NewApp()
-	app.Name = "indexer"
-	app.Usage = "Staking Indexer."
+	app.Name = "sid"
+	app.Usage = "Staking Indexer Daemon (sid)."
 	app.Commands = append(app.Commands, startCommand, initCommand)
 
 	if err := app.Run(os.Args); err != nil {

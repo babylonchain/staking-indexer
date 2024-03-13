@@ -58,7 +58,7 @@ func initHome(c *cli.Context) error {
 		return err
 	}
 
-	defaultConfig := config.DefaultConfig()
+	defaultConfig := config.DefaultConfigWithHome(homePath)
 	fileParser := flags.NewParser(&defaultConfig, flags.Default)
 
 	return flags.NewIniParser(fileParser).WriteFile(config.ConfigFile(homePath), flags.IniIncludeComments|flags.IniIncludeDefaults)

@@ -11,8 +11,6 @@ MOCKGEN_VERSION=v1.6.0
 MOCKGEN_CMD=go run ${MOCKGEN_REPO}@${MOCKGEN_VERSION}
 
 ldflags := $(LDFLAGS)
-build_tags := $(BUILD_TAGS)
-build_args := $(BUILD_ARGS)
 
 PACKAGES_E2E=$(shell go list ./... | grep '/itest')
 
@@ -25,22 +23,13 @@ ifeq ($(VERBOSE),true)
 endif
 
 BUILD_TARGETS := build install
-BUILD_FLAGS := --tags "$(build_tags)" --ldflags '$(ldflags)'
-
-# Update changelog vars
-ifneq (,$(SINCE_TAG))
-	sinceTag := --since-tag $(SINCE_TAG)
-endif
-ifneq (,$(UPCOMING_TAG))
-	upcomingTag := --future-release $(UPCOMING_TAG)
-endif
 
 all: build install
 
-build: BUILD_ARGS := $(build_args) -o $(BUILDDIR)
+build: BUILD_ARGS := -o $(BUILDDIR)
 
 $(BUILD_TARGETS): go.sum $(BUILDDIR)/
-	CGO_CFLAGS="-O -D__BLST_PORTABLE__" go $@ -mod=readonly $(BUILD_FLAGS) $(BUILD_ARGS) ./...
+	go $@ -mod=readonly $(BUILD_ARGS) ./...
 
 $(BUILDDIR)/:
 	mkdir -p $(BUILDDIR)/

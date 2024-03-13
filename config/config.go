@@ -14,8 +14,8 @@ import (
 const (
 	defaultLogLevel       = "info"
 	defaultLogDirname     = "logs"
-	defaultLogFilename    = "indexer.log"
-	defaultConfigFileName = "indexer.conf"
+	defaultLogFilename    = "sid.log"
+	defaultConfigFileName = "sid.conf"
 	defaultBitcoinNetwork = "signet"
 	defaultDataDirname    = "data"
 )
@@ -23,10 +23,8 @@ const (
 var (
 	//   C:\Users\<username>\AppData\Local\ on Windows
 	//   ~/.fpd on Linux
-	//   ~/Users/<username>/Library/Application Support/Indexer on MacOS
-	DefaultHomeDir = btcutil.AppDataDir("indexer", false)
-
-	DefaultDataDir = DataDir(DefaultHomeDir)
+	//   ~/Users/<username>/Library/Application Support/Sid on MacOS
+	DefaultHomeDir = btcutil.AppDataDir("sid", false)
 )
 
 // Config is the main config for the fpd cli command
