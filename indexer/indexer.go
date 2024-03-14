@@ -56,10 +56,10 @@ func (si *StakingIndexer) confirmedBlocksLoop() {
 
 	for {
 		select {
-		case block := <-si.confirmedBlocksChan:
-			si.logger.Info("received confirmed block",
-				zap.Int32("height", block.Height))
-			// TODO: process confirmed block
+		// case block := <-si.confirmedBlocksChan:
+		// 	si.logger.Info("received confirmed block",
+		// 		zap.Int32("height", block.Height))
+		// TODO: process confirmed block
 		case <-si.quit:
 			si.logger.Info("closing the confirmed blocks loop")
 			return

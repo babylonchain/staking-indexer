@@ -54,7 +54,7 @@ func DefaultBTCConfig() *BTCConfig {
 	}
 }
 
-func BTCConfigToVigilanteBTCConfig(cfg *BTCConfig) *vconfig.BTCConfig {
+func (cfg *BTCConfig) ToVigilanteBTCConfig() *vconfig.BTCConfig {
 	defaultVBTCCfg := vconfig.DefaultBTCConfig()
 	defaultVBTCCfg.BtcBackend = vtypes.Bitcoind
 	defaultVBTCCfg.Endpoint = cfg.RPCHost
@@ -62,6 +62,7 @@ func BTCConfigToVigilanteBTCConfig(cfg *BTCConfig) *vconfig.BTCConfig {
 	defaultVBTCCfg.Password = cfg.RPCPass
 	defaultVBTCCfg.ZmqBlockEndpoint = cfg.ZMQPubRawBlock
 	defaultVBTCCfg.ZmqTxEndpoint = cfg.ZMQPubRawTx
+	defaultVBTCCfg.DisableClientTLS = true
 
 	return &defaultVBTCCfg
 }

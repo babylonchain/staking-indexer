@@ -63,9 +63,8 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create BTC client and connect to BTC server
-	btcCfg := config.BTCConfigToVigilanteBTCConfig(cfg.BTCConfig)
 	btcClient, err := btcclient.NewWithBlockSubscriber(
-		btcCfg,
+		cfg.BTCConfig.ToVigilanteBTCConfig(),
 		cfg.BTCConfig.RetrySleepTime,
 		cfg.BTCConfig.MaxRetrySleepTime,
 		logger,
