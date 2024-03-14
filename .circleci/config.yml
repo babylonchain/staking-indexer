@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  go: circleci/go@1.7.3
+  go: circleci/go@1.9.0
   aws-ecr: circleci/aws-ecr@8.2.1
 
 jobs:
@@ -19,17 +19,20 @@ jobs:
       - go/load-cache:
           key: go-mod-v6-{{ checksum "go.sum" }}
       - go/mod-download
+      - run:
+          name: Install Dependencies
+          command: sudo apt-get install libzmq3-dev
       - go/save-cache:
           key: go-mod-v6-{{ checksum "go.sum" }}
           path: "/home/circleci/.go_workspace/pkg/mod"
       - run:
-          name: Build cli app
+          name: Build staking-indexer
           command: make build
       - run:
           name: Lint
           command: |
             curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.55.2
-            ./bin/golangci-lint run --timeout 5m0s
+            ./bin/golangci-lint run
       - run:
           name: Run tests
           command: |
@@ -47,7 +50,7 @@ jobs:
           path: ./
           build-path: ./
           tag: "$CIRCLE_SHA1,$CIRCLE_TAG"
-          repo: "$CIRCLE_PROJECT_REPONAME"
+          repo: "staking-indexer"
       - run:
           name: Save Docker image to export it to workspace
           command: |
@@ -75,7 +78,7 @@ jobs:
       - aws-ecr/push-image:
           registry-id: AWS_ECR_REGISTRY_ID
           region: "$AWS_REGION"
-          repo: "$CIRCLE_PROJECT_REPONAME"
+          repo: "staking-indexer"
           tag: "$CIRCLE_SHA1,$CIRCLE_TAG"
 
 workflows:
@@ -95,3 +98,4 @@ workflows:
             branches:
               only:
                 - main
+                - dev
