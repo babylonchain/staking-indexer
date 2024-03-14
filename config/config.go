@@ -42,6 +42,7 @@ func DefaultConfigWithHome(homePath string) *Config {
 		LogLevel:         defaultLogLevel,
 		BitcoinNetwork:   defaultBitcoinNetwork,
 		BTCScannerConfig: DefaultBTCScannerConfig(),
+		BTCConfig:        DefaultBTCConfig(),
 	}
 
 	if err := cfg.Validate(); err != nil {

@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	defaultBitcoindRpcHost        = "127.0.0.1:8334"
+	// default rpc port of signet is 38332
+	defaultBitcoindRpcHost        = "127.0.0.1:38332"
 	defaultBitcoindRPCUser        = "user"
 	defaultBitcoindRPCPass        = "pass"
 	defaultBitcoindBlockCacheSize = 20 * 1024 * 1024 // 20 MB

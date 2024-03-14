@@ -163,8 +163,8 @@ func (bs *BtcScanner) Bootstrap() {
 func (bs *BtcScanner) sendConfirmedBlocksToChan(blocks []*vtypes.IndexedBlock) {
 	for i := 0; i < len(blocks); i++ {
 		bs.confirmedBlocksChan <- blocks[i]
-		bs.confirmedTipBlock = blocks[i]
 	}
+	bs.confirmedTipBlock = blocks[len(blocks)-1]
 }
 
 func (bs *BtcScanner) ConfirmedBlocksChan() chan *vtypes.IndexedBlock {
@@ -173,7 +173,7 @@ func (bs *BtcScanner) ConfirmedBlocksChan() chan *vtypes.IndexedBlock {
 
 func (bs *BtcScanner) Stop() error {
 	if !bs.isStarted.Swap(false) {
-		return fmt.Errorf("the staking indexer has already stopped")
+		return nil
 	}
 
 	bs.btcClient.Stop()
