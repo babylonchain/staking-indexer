@@ -5,13 +5,11 @@ import (
 )
 
 const (
-	defaultBlockBufferSize   = 100
 	defaultCacheSize         = 100
 	defaultConfirmationDepth = 6
 )
 
 type BTCScannerConfig struct {
-	BlockBufferSize   uint64 `long:"blockbuffersize" description:"the max number of BTC blocks in the buffer"`
 	CacheSize         uint64 `long:"cachesize" description:"max number of BTC blocks in the cache"`
 	ConfirmationDepth uint64 `long:"confirmationdepth" description:"the confirmation depth to consider a BTC block as confirmed"`
 }
@@ -28,7 +26,6 @@ func (cfg *BTCScannerConfig) Validate() error {
 
 func DefaultBTCScannerConfig() *BTCScannerConfig {
 	return &BTCScannerConfig{
-		BlockBufferSize:   defaultBlockBufferSize,
 		CacheSize:         defaultCacheSize,
 		ConfirmationDepth: defaultConfirmationDepth,
 	}
