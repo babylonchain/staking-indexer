@@ -61,7 +61,16 @@ func StartManager(t *testing.T) *TestManager {
 		cfg.BTCConfig.MaxRetrySleepTime,
 		logger,
 	)
-	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, 1)
+	require.NoError(t, err)
+
+	btcNotifier, err := btcclient.NewNodeBackend(
+		cfg.BTCConfig.ToBtcNodeBackendConfig(),
+		&cfg.BTCNetParams,
+		&btcclient.EmptyHintCache{},
+	)
+	require.NoError(t, err)
+
+	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, btcNotifier, 1)
 	require.NoError(t, err)
 
 	si, err := indexer.NewStakingIndexer(cfg, logger, scanner.ConfirmedBlocksChan())

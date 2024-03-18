@@ -3,6 +3,7 @@ package config
 import (
 	"time"
 
+	"github.com/babylonchain/vigilante/btcclient"
 	vconfig "github.com/babylonchain/vigilante/config"
 	vtypes "github.com/babylonchain/vigilante/types"
 )
@@ -18,6 +19,9 @@ const (
 	defaultZMQReadDeadline        = 30 * time.Second
 	defaultRetrySleepTime         = 5 * time.Second
 	defaultMaxRetrySleepTime      = 5 * time.Minute
+	// DefaultTxPollingJitter defines the default TxPollingIntervalJitter
+	// to be used for bitcoind backend.
+	DefaultTxPollingJitter = 0.5
 )
 
 // BTCConfig defines configuration for the Bitcoin client
@@ -65,4 +69,18 @@ func (cfg *BTCConfig) ToVigilanteBTCConfig() *vconfig.BTCConfig {
 	defaultVBTCCfg.DisableClientTLS = true
 
 	return &defaultVBTCCfg
+}
+
+func (cfg *BTCConfig) ToBtcNodeBackendConfig() *btcclient.BtcNodeBackendConfig {
+	defaultBitcoindCfg := btcclient.DefaultBitcoindConfig()
+	defaultBitcoindCfg.RPCHost = cfg.RPCHost
+	defaultBitcoindCfg.RPCUser = cfg.RPCUser
+	defaultBitcoindCfg.RPCPass = cfg.RPCPass
+	defaultBitcoindCfg.ZMQPubRawBlock = cfg.ZMQPubRawBlock
+	defaultBitcoindCfg.ZMQPubRawTx = cfg.ZMQPubRawTx
+
+	return &btcclient.BtcNodeBackendConfig{
+		Bitcoind:          &defaultBitcoindCfg,
+		ActiveNodeBackend: vtypes.Bitcoind,
+	}
 }

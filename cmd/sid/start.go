@@ -73,8 +73,17 @@ func start(ctx *cli.Context) error {
 		return fmt.Errorf("failed to initialize the BTC client: %w", err)
 	}
 
+	btcNotifier, err := btcclient.NewNodeBackend(
+		cfg.BTCConfig.ToBtcNodeBackendConfig(),
+		&cfg.BTCNetParams,
+		&btcclient.EmptyHintCache{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to initialize the BTC notifier: %w", err)
+	}
+
 	// create BTC scanner
-	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, uint64(startHeight))
+	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, btcNotifier, uint64(startHeight))
 	if err != nil {
 		return fmt.Errorf("failed to initialize the BTC scanner: %w", err)
 	}

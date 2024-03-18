@@ -6,6 +6,7 @@ import (
 
 	"github.com/babylonchain/vigilante/btcclient"
 	vtypes "github.com/babylonchain/vigilante/types"
+	notifier "github.com/lightningnetwork/lnd/chainntnfs"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
@@ -16,7 +17,8 @@ type BtcScanner struct {
 	logger *zap.Logger
 
 	// connect to BTC node
-	btcClient btcclient.BTCClient
+	btcClient   btcclient.BTCClient
+	btcNotifier notifier.ChainNotifier
 
 	// the BTC height the scanner starts
 	baseHeight uint64
@@ -41,6 +43,7 @@ func NewBTCScanner(
 	scannerCfg *config.BTCScannerConfig,
 	logger *zap.Logger,
 	btcClient btcclient.BTCClient,
+	btcNotifier notifier.ChainNotifier,
 	baseHeight uint64,
 ) (*BtcScanner, error) {
 	confirmedBlocksChan := make(chan *vtypes.IndexedBlock, scannerCfg.BlockBufferSize)
@@ -52,6 +55,7 @@ func NewBTCScanner(
 	return &BtcScanner{
 		logger:                logger.With(zap.String("module", "btcscanner")),
 		btcClient:             btcClient,
+		btcNotifier:           btcNotifier,
 		baseHeight:            baseHeight,
 		k:                     scannerCfg.ConfirmationDepth,
 		unconfirmedBlockCache: unconfirmedBlockCache,
@@ -74,14 +78,26 @@ func (bs *BtcScanner) Start() error {
 	bs.wg.Add(1)
 	go bs.Bootstrap()
 
-	bs.btcClient.MustSubscribeBlocks()
+	blockEventNotifier, err := bs.btcNotifier.RegisterBlockEpochNtfn(nil)
+	if err != nil {
+		return err
+	}
+
+	// we registered for notifications with `nil`  so we should receive best block
+	// immediately
+	select {
+	case block := <-blockEventNotifier.Epochs:
+		bs.logger.Info("Initial btc best block", zap.Int32("height", block.Height))
+	case <-bs.quit:
+		return fmt.Errorf("quit before finishing start")
+	}
 
 	bs.isStarted.Store(true)
 	bs.logger.Info("the BTC scanner is started")
 
 	// start handling new blocks
 	bs.wg.Add(1)
-	go bs.blockEventLoop()
+	go bs.blockEventLoop(blockEventNotifier)
 
 	return nil
 }

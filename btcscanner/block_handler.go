@@ -2,42 +2,33 @@ package btcscanner
 
 import (
 	"errors"
-	"fmt"
 
-	"github.com/babylonchain/vigilante/types"
+	notifier "github.com/lightningnetwork/lnd/chainntnfs"
 	"go.uber.org/zap"
 )
 
 // blockEventLoop handles connected and disconnected blocks from the BTC client.
-func (bs *BtcScanner) blockEventLoop() {
+func (bs *BtcScanner) blockEventLoop(blockNotifier *notifier.BlockEpochEvent) {
 	defer bs.wg.Done()
+	defer blockNotifier.Cancel()
 
 	for {
 		select {
-		case event, open := <-bs.btcClient.BlockEventChan():
-			if !open {
+		case blockEpoch, ok := <-blockNotifier.Epochs:
+			newBlock := blockEpoch
+			if !ok {
 				bs.logger.Error("Block event channel is closed")
 				return // channel closed
 			}
-			if event.EventType == types.BlockConnected {
-				err := bs.handleConnectedBlocks(event)
-				if err != nil {
-					bs.logger.Warn("failed to handle a connected block, need bootstrapping",
-						zap.Int32("height", event.Height),
-						zap.Error(err))
-					if bs.isSynced.Swap(false) {
-						bs.Bootstrap()
-					}
-				}
-			} else if event.EventType == types.BlockDisconnected {
-				err := bs.handleDisconnectedBlocks(event)
-				if err != nil {
-					bs.logger.Warn("failed to handle a disconnected block, need bootstrapping",
-						zap.Int32("height", event.Height),
-						zap.Error(err))
-					if bs.isSynced.Swap(false) {
-						bs.Bootstrap()
-					}
+			bs.logger.Debug("received new best btc block",
+				zap.Int32("height", newBlock.Height))
+			err := bs.handleNewBlock(newBlock)
+			if err != nil {
+				bs.logger.Warn("failed to handle a new block, need bootstrapping",
+					zap.Int32("height", newBlock.Height),
+					zap.Error(err))
+				if bs.isSynced.Swap(false) {
+					bs.Bootstrap()
 				}
 			}
 		case <-bs.quit:
@@ -47,18 +38,18 @@ func (bs *BtcScanner) blockEventLoop() {
 	}
 }
 
-// handleConnectedBlocks handles connected blocks from the BTC client
+// handleNewBlock handles connected blocks from the BTC client
 // if new confirmed blocks are found, send them through the channel
-func (bs *BtcScanner) handleConnectedBlocks(event *types.BlockEvent) error {
+func (bs *BtcScanner) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
 	if !bs.isSynced.Load() {
 		return errors.New("the btc scanner is not synced")
 	}
 
 	// get the block from hash
-	blockHash := event.Header.BlockHash()
-	ib, _, err := bs.btcClient.GetBlockByHash(&blockHash)
+	ib, _, err := bs.btcClient.GetBlockByHash(blockEpoch.Hash)
 	if err != nil {
 		// failing to request the block, which means a bug
+		// TODO should use retry to avoid panic
 		panic(err)
 	}
 
@@ -94,27 +85,6 @@ func (bs *BtcScanner) handleConnectedBlocks(event *types.BlockEvent) error {
 	}
 
 	bs.sendConfirmedBlocksToChan(confirmedBlocks)
-
-	return nil
-}
-
-// handleDisconnectedBlocks handles disconnected blocks from the BTC client.
-func (bs *BtcScanner) handleDisconnectedBlocks(event *types.BlockEvent) error {
-	// get cache tip
-	cacheTip := bs.unconfirmedBlockCache.Tip()
-	if cacheTip == nil {
-		return errors.New("cache is empty")
-	}
-
-	// if the block to be disconnected is not the tip of the cache, then the cache is not up-to-date,
-	if event.Header.BlockHash() != cacheTip.BlockHash() {
-		return errors.New("cache is out-of-sync")
-	}
-
-	// otherwise, remove the block from the cache
-	if err := bs.unconfirmedBlockCache.RemoveLast(); err != nil {
-		return fmt.Errorf("failed to remove last block from cache: %v", err)
-	}
 
 	return nil
 }
