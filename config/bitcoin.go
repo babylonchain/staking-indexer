@@ -78,6 +78,7 @@ func (cfg *BTCConfig) ToBtcNodeBackendConfig() *btcclient.BtcNodeBackendConfig {
 	defaultBitcoindCfg.RPCPass = cfg.RPCPass
 	defaultBitcoindCfg.ZMQPubRawBlock = cfg.ZMQPubRawBlock
 	defaultBitcoindCfg.ZMQPubRawTx = cfg.ZMQPubRawTx
+	defaultBitcoindCfg.RPCPolling = cfg.RPCPolling
 
 	return &btcclient.BtcNodeBackendConfig{
 		Bitcoind:          &defaultBitcoindCfg,

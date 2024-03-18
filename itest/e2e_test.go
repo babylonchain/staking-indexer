@@ -1,6 +1,3 @@
-//go:build e2e
-// +build e2e
-
 package e2etest
 
 import (
@@ -10,15 +7,16 @@ import (
 )
 
 func TestBTCScanner(t *testing.T) {
-	tm := StartManager(t)
+	n := 100
+	tm := StartManagerWithNBlocks(t, n)
 	defer tm.Stop()
 
-	numBlocks := 10
-	res := tm.BitcoindHandler.GenerateBlocks(numBlocks)
-	generatedBlocks := res.Blocks
+	count, err := tm.BitcoindHandler.GetBlockCount()
+	require.NoError(t, err)
+	require.Equal(t, n, count)
 
-	for i := 0; i < numBlocks-int(tm.Config.BTCScannerConfig.ConfirmationDepth); i++ {
-		confirmedBlock := <-tm.ConfirmedBlocksChan
-		require.Equal(t, generatedBlocks[0], confirmedBlock.BlockHash().String())
-	}
+	require.Eventually(t, func() bool {
+		confirmedTip := tm.BS.ConfirmedTipBlock()
+		return confirmedTip.Height == int32(n-int(tm.Config.BTCScannerConfig.ConfirmationDepth))
+	}, eventuallyWaitTimeOut, eventuallyPollTime)
 }

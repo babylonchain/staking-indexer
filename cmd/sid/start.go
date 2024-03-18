@@ -101,7 +101,7 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create the server
-	indexerServer := service.NewStakingIndexerServer(cfg, scanner, si, logger, shutdownInterceptor)
+	indexerServer := service.NewStakingIndexerServer(cfg, btcNotifier, scanner, si, logger, shutdownInterceptor)
 
 	// run all the services until shutdown
 	return indexerServer.RunUntilShutdown()

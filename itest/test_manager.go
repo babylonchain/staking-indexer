@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/babylonchain/vigilante/btcclient"
-	vtypes "github.com/babylonchain/vigilante/types"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/lightningnetwork/lnd/kvdb"
 	"github.com/lightningnetwork/lnd/signal"
@@ -23,14 +22,14 @@ import (
 )
 
 type TestManager struct {
-	Config              *config.Config
-	Db                  kvdb.Backend
-	Si                  *indexer.StakingIndexer
-	serverStopper       *signal.Interceptor
-	wg                  *sync.WaitGroup
-	BitcoindHandler     *BitcoindTestHandler
-	BtcClient           *btcclient.Client
-	ConfirmedBlocksChan chan *vtypes.IndexedBlock
+	Config          *config.Config
+	Db              kvdb.Backend
+	Si              *indexer.StakingIndexer
+	BS              *btcscanner.BtcScanner
+	serverStopper   *signal.Interceptor
+	wg              *sync.WaitGroup
+	BitcoindHandler *BitcoindTestHandler
+	BtcClient       *btcclient.Client
 }
 
 // bitcoin params used for testing
@@ -43,9 +42,12 @@ var (
 	eventuallyPollTime    = 250 * time.Millisecond
 )
 
-func StartManager(t *testing.T) *TestManager {
+func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	h := NewBitcoindHandler(t)
 	h.Start()
+	passphrase := "pass"
+	_ = h.CreateWallet("test-wallet", passphrase)
+	h.GenerateBlocks(n)
 
 	dirPath := filepath.Join(os.TempDir(), "stakerd", "e2etest")
 	err := os.MkdirAll(dirPath, 0755)
@@ -81,6 +83,7 @@ func StartManager(t *testing.T) *TestManager {
 
 	service := server.NewStakingIndexerServer(
 		cfg,
+		btcNotifier,
 		scanner,
 		si,
 		logger,
@@ -100,13 +103,13 @@ func StartManager(t *testing.T) *TestManager {
 	time.Sleep(3 * time.Second)
 
 	return &TestManager{
-		Config:              cfg,
-		Si:                  si,
-		serverStopper:       &interceptor,
-		ConfirmedBlocksChan: scanner.ConfirmedBlocksChan(),
-		wg:                  &wg,
-		BitcoindHandler:     h,
-		BtcClient:           btcClient,
+		Config:          cfg,
+		Si:              si,
+		BS:              scanner,
+		serverStopper:   &interceptor,
+		wg:              &wg,
+		BitcoindHandler: h,
+		BtcClient:       btcClient,
 	}
 }
 
