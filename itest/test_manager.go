@@ -1,7 +1,6 @@
 package e2etest
 
 import (
-	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
@@ -34,12 +33,7 @@ type TestManager struct {
 
 // bitcoin params used for testing
 var (
-	r = rand.New(rand.NewSource(time.Now().Unix()))
-
 	regtestParams = &chaincfg.RegressionNetParams
-
-	eventuallyWaitTimeOut = 10 * time.Second
-	eventuallyPollTime    = 250 * time.Millisecond
 )
 
 func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
@@ -95,9 +89,7 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	go func() {
 		defer wg.Done()
 		err := service.RunUntilShutdown()
-		if err != nil {
-			t.Fatalf("Error running server: %v", err)
-		}
+		require.NoError(t, err)
 	}()
 	// Wait for the server to start
 	time.Sleep(3 * time.Second)

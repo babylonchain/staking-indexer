@@ -9,6 +9,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	eventuallyWaitTimeOut = 10 * time.Second
+	eventuallyPollTime    = 250 * time.Millisecond
+)
+
 func TestBTCScanner(t *testing.T) {
 	n := 100
 	tm := StartManagerWithNBlocks(t, n)
