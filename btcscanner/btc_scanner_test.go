@@ -62,7 +62,10 @@ func FuzzPollConfirmedBlocks(f *testing.F) {
 		}()
 		err = btcScanner.Start()
 		require.NoError(t, err)
-		defer btcScanner.Stop()
+		defer func() {
+			err := btcScanner.Stop()
+			require.NoError(t, err)
+		}()
 
 		wg.Wait()
 		require.Equal(t, uint64(confirmedBlocks[len(confirmedBlocks)-1].Height), btcScanner.LastConfirmedHeight())
