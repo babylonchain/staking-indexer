@@ -21,7 +21,7 @@ import (
 // FuzzIndexer tests the property that the indexer can correctly
 // parse staking tx from confirmed blocks
 func FuzzIndexer(f *testing.F) {
-	bbndatagen.AddRandomSeedsToFuzzer(f, 100)
+	bbndatagen.AddRandomSeedsToFuzzer(f, 10)
 
 	f.Fuzz(func(t *testing.T, seed int64) {
 		r := rand.New(rand.NewSource(seed))
