@@ -18,6 +18,8 @@ import (
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
 )
 
+// FuzzIndexer tests the property that the indexer can correctly
+// parse staking tx from confirmed blocks
 func FuzzIndexer(f *testing.F) {
 	bbndatagen.AddRandomSeedsToFuzzer(f, 100)
 
@@ -26,11 +28,6 @@ func FuzzIndexer(f *testing.F) {
 
 		homePath := filepath.Join(t.TempDir(), "indexer")
 		cfg := config.DefaultConfigWithHome(homePath)
-
-		// test staking params
-		numCovenantKeys := r.Intn(7) + 3
-		quorum := uint32(numCovenantKeys - 2)
-		testParams := datagen.GenerateTestStakingParams(t, r, numCovenantKeys, quorum)
 
 		confirmedBlockChan := make(chan *vtypes.IndexedBlock)
 		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), confirmedBlockChan)
@@ -43,12 +40,16 @@ func FuzzIndexer(f *testing.F) {
 			require.NoError(t, err)
 		}()
 
-		// build staking tx and insert them into blocks
+		// 1. build staking tx and insert them into blocks
 		// and send block to the confirmed block channel
 		totalNumTxs := 0
 		numBlocks := r.Intn(100) + 1
 		stakingDataList := make([]*datagen.TestStakingData, 0)
 		startingHeight := r.Int31n(1000) + 1
+		// test staking params
+		numCovenantKeys := r.Intn(7) + 3
+		quorum := uint32(numCovenantKeys - 2)
+		testParams := datagen.GenerateTestStakingParams(t, r, numCovenantKeys, quorum)
 		go func() {
 			for i := 0; i < numBlocks; i++ {
 				numTxs := r.Intn(10) + 1
@@ -69,7 +70,7 @@ func FuzzIndexer(f *testing.F) {
 			}
 		}()
 
-		// read the staking event channel expect them to be the
+		// 2. read the staking event channel expect them to be the
 		// same as the data before being inserted into the block
 		stakingEventChan := stakingIndexer.StakingEventChan()
 		for i := 0; i < totalNumTxs; i++ {
