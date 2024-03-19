@@ -25,7 +25,7 @@ func TestBTCScanner(t *testing.T) {
 	require.Equal(t, n, count)
 
 	require.Eventually(t, func() bool {
-		confirmedTip := tm.BS.ConfirmedTipBlock()
-		return confirmedTip.Height == int32(n-int(tm.Config.BTCScannerConfig.ConfirmationDepth))
+		confirmedTip := tm.BS.LastConfirmedHeight()
+		return confirmedTip == uint64(n-int(tm.Config.BTCScannerConfig.ConfirmationDepth))
 	}, eventuallyWaitTimeOut, eventuallyPollTime)
 }

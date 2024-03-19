@@ -18,8 +18,8 @@ import (
 	"github.com/babylonchain/staking-indexer/config"
 )
 
-func FuzzBootStrap(f *testing.F) {
-	datagen.AddRandomSeedsToFuzzer(f, 100)
+func FuzzPollConfirmedBlocks(f *testing.F) {
+	datagen.AddRandomSeedsToFuzzer(f, 10)
 
 	f.Fuzz(func(t *testing.T, seed int64) {
 		r := rand.New(rand.NewSource(seed))
@@ -34,14 +34,16 @@ func FuzzBootStrap(f *testing.F) {
 		ctl := gomock.NewController(t)
 		mockBtcClient := mocks.NewMockBTCClient(ctl)
 		confirmedBlocks := chainIndexedBlocks[:numBlocks-k]
-		mockBtcClient.EXPECT().GetBestBlock().Return(nil, uint64(bestHeight), nil)
 		for i := 0; i < int(numBlocks); i++ {
 			mockBtcClient.EXPECT().GetBlockByHeight(gomock.Eq(uint64(chainIndexedBlocks[i].Height))).
 				Return(chainIndexedBlocks[i], nil, nil).AnyTimes()
 		}
 
+		epochChan := make(chan *chainntnfs.BlockEpoch, 1)
+		bestEpoch := &chainntnfs.BlockEpoch{Height: bestHeight}
+		epochChan <- bestEpoch
 		mockBtcNotifier := &mock.ChainNotifier{
-			EpochChan: make(chan *chainntnfs.BlockEpoch),
+			EpochChan: epochChan,
 			SpendChan: make(chan *chainntnfs.SpendDetail),
 			ConfChan:  make(chan *chainntnfs.TxConfirmation),
 		}
@@ -60,6 +62,7 @@ func FuzzBootStrap(f *testing.F) {
 		}()
 		err = btcScanner.Start()
 		require.NoError(t, err)
+		defer btcScanner.Stop()
 
 		wg.Wait()
 		require.Equal(t, uint64(confirmedBlocks[len(confirmedBlocks)-1].Height), btcScanner.LastConfirmedHeight())

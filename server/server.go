@@ -60,21 +60,21 @@ func (s *Server) RunUntilShutdown() error {
 		}
 	}()
 
-	if err := s.scanner.Start(); err != nil {
-		return fmt.Errorf("failed to start the BTC scanner: %w", err)
-	}
-	defer func() {
-		if err := s.scanner.Stop(); err != nil {
-			s.logger.Error("failed to stop the BTC scanner")
-		}
-	}()
-
 	if err := s.si.Start(); err != nil {
 		return fmt.Errorf("failed to start the staking indexer app: %w", err)
 	}
 	defer func() {
 		if err := s.si.Stop(); err != nil {
 			s.logger.Error("failed to stop the staking indexer app")
+		}
+	}()
+
+	if err := s.scanner.Start(); err != nil {
+		return fmt.Errorf("failed to start the BTC scanner: %w", err)
+	}
+	defer func() {
+		if err := s.scanner.Stop(); err != nil {
+			s.logger.Error("failed to stop the BTC scanner")
 		}
 	}()
 
