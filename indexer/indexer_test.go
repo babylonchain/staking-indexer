@@ -10,12 +10,15 @@ import (
 	vtypes "github.com/babylonchain/vigilante/types"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/indexer"
+	"github.com/babylonchain/staking-indexer/params"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
+	"github.com/babylonchain/staking-indexer/testutils/mocks"
 )
 
 // FuzzIndexer tests the property that the indexer can correctly
@@ -30,7 +33,9 @@ func FuzzIndexer(f *testing.F) {
 		cfg := config.DefaultConfigWithHome(homePath)
 
 		confirmedBlockChan := make(chan *vtypes.IndexedBlock)
-		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), confirmedBlockChan)
+		sysParams, err := params.NewLocalParamsRetriever().GetParams()
+		require.NoError(t, err)
+		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), sysParams, confirmedBlockChan)
 		require.NoError(t, err)
 
 		err = stakingIndexer.Start()
@@ -83,4 +88,14 @@ func FuzzIndexer(f *testing.F) {
 			require.Equal(t, expectedFpKeyHex, ev.FinalityProviderPkHex)
 		}
 	})
+}
+
+func NewMockedConsumer(t *testing.T) *mocks.MockEventConsumer {
+	ctl := gomock.NewController(t)
+	mockedConsumer := mocks.NewMockEventConsumer(ctl)
+	mockedConsumer.EXPECT().PushStakingEvent(gomock.Any()).Return(nil).AnyTimes()
+	mockedConsumer.EXPECT().Start().Return(nil).AnyTimes()
+	mockedConsumer.EXPECT().Stop().Return(nil).AnyTimes()
+
+	return mockedConsumer
 }

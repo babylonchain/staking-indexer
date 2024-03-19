@@ -7,7 +7,7 @@ build_args := $(BUILD_ARGS)
 
 DOCKER := $(shell which docker)
 CUR_DIR := $(shell pwd)
-MOCKS_DIR=$(CUR_DIR)/testutil/mocks
+MOCKS_DIR=$(CUR_DIR)/testutils/mocks
 MOCKGEN_REPO=github.com/golang/mock/mockgen
 MOCKGEN_VERSION=v1.6.0
 MOCKGEN_CMD=go run ${MOCKGEN_REPO}@${MOCKGEN_VERSION}
@@ -54,3 +54,9 @@ test:
 
 test-e2e:
 	go test -mod=readonly -timeout=25m -v $(PACKAGES_E2E) -count=1 --tags=e2e
+
+mock-gen:
+	mkdir -p $(MOCKS_DIR)
+	$(MOCKGEN_CMD) -source=consumer/event_consumer.go -package mocks -destination $(MOCKS_DIR)/event_consumer.go
+
+.PHONY: mock-gen
