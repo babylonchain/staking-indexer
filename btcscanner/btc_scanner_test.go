@@ -22,7 +22,8 @@ func FuzzBootStrap(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, seed int64) {
 		r := rand.New(rand.NewSource(seed))
-		k := uint64(6)
+		cfg := config.DefaultBTCScannerConfig()
+		k := cfg.ConfirmationDepth
 		// Generate a random number of blocks
 		numBlocks := datagen.RandomIntOtherThan(r, 0, 50) + k // make sure we have at least k+1 entry
 		chainIndexedBlocks := vdatagen.GetRandomIndexedBlocks(r, numBlocks)
@@ -45,7 +46,6 @@ func FuzzBootStrap(f *testing.F) {
 			ConfChan:  make(chan *chainntnfs.TxConfirmation),
 		}
 
-		cfg := config.DefaultBTCScannerConfig()
 		btcScanner, err := btcscanner.NewBTCScanner(cfg, zap.NewNop(), mockBtcClient, mockBtcNotifier, uint64(baseHeight))
 		require.NoError(t, err)
 

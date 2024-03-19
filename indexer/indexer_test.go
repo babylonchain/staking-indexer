@@ -74,15 +74,13 @@ func FuzzIndexer(f *testing.F) {
 		// same as the data before being inserted into the block
 		stakingEventChan := stakingIndexer.StakingEventChan()
 		for i := 0; i < totalNumTxs; i++ {
-			select {
-			case ev := <-stakingEventChan:
-				expectedStakerKeyHex := hex.EncodeToString(schnorr.SerializePubKey(stakingDataList[i].StakerKey))
-				expectedFpKeyHex := hex.EncodeToString(schnorr.SerializePubKey(stakingDataList[i].FinalityProviderKeys[0]))
-				require.Equal(t, expectedStakerKeyHex, ev.StakerPkHex)
-				require.Equal(t, stakingDataList[0].StakingTime, ev.StakingLength)
-				require.Equal(t, uint64(stakingDataList[0].StakingAmount), ev.StakingValue)
-				require.Equal(t, expectedFpKeyHex, ev.FinalityProviderPkHex)
-			}
+			ev := <-stakingEventChan
+			expectedStakerKeyHex := hex.EncodeToString(schnorr.SerializePubKey(stakingDataList[i].StakerKey))
+			expectedFpKeyHex := hex.EncodeToString(schnorr.SerializePubKey(stakingDataList[i].FinalityProviderKeys[0]))
+			require.Equal(t, expectedStakerKeyHex, ev.StakerPkHex)
+			require.Equal(t, stakingDataList[0].StakingTime, ev.StakingLength)
+			require.Equal(t, uint64(stakingDataList[0].StakingAmount), ev.StakingValue)
+			require.Equal(t, expectedFpKeyHex, ev.FinalityProviderPkHex)
 		}
 	})
 }
