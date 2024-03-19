@@ -63,9 +63,8 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create BTC client and connect to BTC server
-	btcCfg := config.BTCConfigToVigilanteBTCConfig(cfg.BTCConfig)
 	btcClient, err := btcclient.NewWithBlockSubscriber(
-		btcCfg,
+		cfg.BTCConfig.ToVigilanteBTCConfig(),
 		cfg.BTCConfig.RetrySleepTime,
 		cfg.BTCConfig.MaxRetrySleepTime,
 		logger,
@@ -74,8 +73,17 @@ func start(ctx *cli.Context) error {
 		return fmt.Errorf("failed to initialize the BTC client: %w", err)
 	}
 
+	btcNotifier, err := btcclient.NewNodeBackend(
+		cfg.BTCConfig.ToBtcNodeBackendConfig(),
+		&cfg.BTCNetParams,
+		&btcclient.EmptyHintCache{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to initialize the BTC notifier: %w", err)
+	}
+
 	// create BTC scanner
-	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, uint64(startHeight))
+	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, btcNotifier, uint64(startHeight))
 	if err != nil {
 		return fmt.Errorf("failed to initialize the BTC scanner: %w", err)
 	}
@@ -93,7 +101,7 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create the server
-	indexerServer := service.NewStakingIndexerServer(cfg, scanner, si, logger, shutdownInterceptor)
+	indexerServer := service.NewStakingIndexerServer(cfg, btcNotifier, scanner, si, logger, shutdownInterceptor)
 
 	// run all the services until shutdown
 	return indexerServer.RunUntilShutdown()

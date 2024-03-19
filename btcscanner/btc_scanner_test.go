@@ -8,6 +8,8 @@ import (
 	vdatagen "github.com/babylonchain/vigilante/testutil/datagen"
 	"github.com/babylonchain/vigilante/testutil/mocks"
 	"github.com/golang/mock/gomock"
+	"github.com/lightningnetwork/lnd/chainntnfs"
+	"github.com/lightningnetwork/lnd/lntest/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
@@ -37,8 +39,14 @@ func FuzzBootStrap(f *testing.F) {
 				Return(chainIndexedBlocks[i], nil, nil).AnyTimes()
 		}
 
+		mockBtcNotifier := &mock.ChainNotifier{
+			EpochChan: make(chan *chainntnfs.BlockEpoch),
+			SpendChan: make(chan *chainntnfs.SpendDetail),
+			ConfChan:  make(chan *chainntnfs.TxConfirmation),
+		}
+
 		cfg := config.DefaultBTCScannerConfig()
-		btcScanner, err := btcscanner.NewBTCScanner(cfg, zap.NewNop(), mockBtcClient, uint64(baseHeight))
+		btcScanner, err := btcscanner.NewBTCScanner(cfg, zap.NewNop(), mockBtcClient, mockBtcNotifier, uint64(baseHeight))
 		require.NoError(t, err)
 
 		go func() {

@@ -1,9 +1,10 @@
-package service
+package server
 
 import (
 	"fmt"
 	"sync/atomic"
 
+	notifier "github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/signal"
 	"go.uber.org/zap"
 
@@ -17,8 +18,9 @@ import (
 type Server struct {
 	started int32
 
-	scanner *btcscanner.BtcScanner
-	si      *indexer.StakingIndexer
+	scanner     *btcscanner.BtcScanner
+	si          *indexer.StakingIndexer
+	btcNotifier notifier.ChainNotifier
 
 	cfg    *config.Config
 	logger *zap.Logger
@@ -27,11 +29,12 @@ type Server struct {
 }
 
 // NewStakingIndexerServer creates a new server with the given config.
-func NewStakingIndexerServer(cfg *config.Config, scanner *btcscanner.BtcScanner, si *indexer.StakingIndexer, l *zap.Logger, sig signal.Interceptor) *Server {
+func NewStakingIndexerServer(cfg *config.Config, btcNotifier notifier.ChainNotifier, scanner *btcscanner.BtcScanner, si *indexer.StakingIndexer, l *zap.Logger, sig signal.Interceptor) *Server {
 	return &Server{
 		cfg:         cfg,
 		scanner:     scanner,
 		si:          si,
+		btcNotifier: btcNotifier,
 		logger:      l,
 		interceptor: sig,
 	}
@@ -48,30 +51,31 @@ func (s *Server) RunUntilShutdown() error {
 		s.logger.Info("Shutdown complete")
 	}()
 
-	s.logger.Info("starting the BTC scanner...")
+	if err := s.btcNotifier.Start(); err != nil {
+		return fmt.Errorf("failed to start the BTC notifier: %w", err)
+	}
+	defer func() {
+		if err := s.btcNotifier.Stop(); err != nil {
+			s.logger.Error("failed to stop the BTC notifier")
+		}
+	}()
+
 	if err := s.scanner.Start(); err != nil {
 		return fmt.Errorf("failed to start the BTC scanner: %w", err)
 	}
-	s.logger.Info("the BTC scanner is successfully started")
 	defer func() {
-		s.logger.Info("stopping the BTC scanner...")
 		if err := s.scanner.Stop(); err != nil {
 			s.logger.Error("failed to stop the BTC scanner")
 		}
-		s.logger.Info("the BTC scanner is successfully stopped")
 	}()
 
-	s.logger.Info("starting the staking indexer app")
 	if err := s.si.Start(); err != nil {
 		return fmt.Errorf("failed to start the staking indexer app: %w", err)
 	}
-	s.logger.Info("the staking indexer app is successfully started")
 	defer func() {
-		s.logger.Info("stopping the staking indexer app...")
 		if err := s.si.Stop(); err != nil {
 			s.logger.Error("failed to stop the staking indexer app")
 		}
-		s.logger.Info("the staking indexer app is successfully stopped")
 	}()
 
 	s.logger.Info("Staking Indexer service is fully active!")
