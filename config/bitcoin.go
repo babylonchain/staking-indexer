@@ -79,6 +79,8 @@ func (cfg *BTCConfig) ToBtcNodeBackendConfig() *btcclient.BtcNodeBackendConfig {
 	defaultBitcoindCfg.ZMQPubRawBlock = cfg.ZMQPubRawBlock
 	defaultBitcoindCfg.ZMQPubRawTx = cfg.ZMQPubRawTx
 	defaultBitcoindCfg.RPCPolling = cfg.RPCPolling
+	defaultBitcoindCfg.TxPollingInterval = cfg.TxPollingInterval
+	defaultBitcoindCfg.BlockCacheSize = cfg.BlockCacheSize
 
 	return &btcclient.BtcNodeBackendConfig{
 		Bitcoind:          &defaultBitcoindCfg,
