@@ -46,7 +46,7 @@ func NewBTCScanner(
 	btcNotifier notifier.ChainNotifier,
 	baseHeight uint64,
 ) (*BtcScanner, error) {
-	confirmedBlocksChan := make(chan *vtypes.IndexedBlock, scannerCfg.BlockBufferSize)
+	confirmedBlocksChan := make(chan *vtypes.IndexedBlock, scannerCfg.ConfirmedBlocksBufferSize)
 	unconfirmedBlockCache, err := vtypes.NewBTCCache(scannerCfg.CacheSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create BTC cache for tail blocks: %w", err)
