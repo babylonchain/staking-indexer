@@ -10,8 +10,10 @@ import (
 
 	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
+	"github.com/babylonchain/staking-indexer/consumer"
 	"github.com/babylonchain/staking-indexer/indexer"
 	"github.com/babylonchain/staking-indexer/log"
+	"github.com/babylonchain/staking-indexer/params"
 	service "github.com/babylonchain/staking-indexer/server"
 	"github.com/babylonchain/staking-indexer/utils"
 )
@@ -88,8 +90,18 @@ func start(ctx *cli.Context) error {
 		return fmt.Errorf("failed to initialize the BTC scanner: %w", err)
 	}
 
+	// create event consumer
+	// TODO: will be replaced when we have concrete consumer implementation
+	cs := new(consumer.DumbConsumer)
+
+	// TODO: replace constant params
+	sysParams, err := params.NewLocalParamsRetriever().GetParams()
+	if err != nil {
+		return fmt.Errorf("failed to get system params: %w", err)
+	}
+
 	// create the staking indexer app
-	si, err := indexer.NewStakingIndexer(cfg, logger, scanner.ConfirmedBlocksChan())
+	si, err := indexer.NewStakingIndexer(cfg, logger, cs, sysParams, scanner.ConfirmedBlocksChan())
 	if err != nil {
 		return fmt.Errorf("failed to initialize the staking indexer app: %w", err)
 	}
