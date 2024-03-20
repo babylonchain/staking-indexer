@@ -4,7 +4,7 @@ go 1.21.4
 
 require (
 	github.com/babylonchain/babylon v0.8.6-0.20240315100614-79615c6b057d
-	github.com/babylonchain/vigilante v0.6.1-0.20240318135701-ab714deafc84
+	github.com/babylonchain/vigilante v0.6.1-0.20240320020303-d44b61bb9903
 	github.com/btcsuite/btcd v0.24.0
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/btcutil v1.1.5
