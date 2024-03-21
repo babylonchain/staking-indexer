@@ -15,43 +15,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/babylonchain/staking-indexer/indexerstore"
+	"github.com/babylonchain/staking-indexer/types"
 )
-
-type TestStakingParams struct {
-	CovenantKeys   []*btcec.PublicKey
-	CovenantQuorum uint32
-	MagicBytes     []byte
-	Net            *chaincfg.Params
-}
 
 type TestStakingData struct {
 	StakerKey            *btcec.PublicKey
 	FinalityProviderKeys []*btcec.PublicKey
 	StakingAmount        btcutil.Amount
 	StakingTime          uint16
-}
-
-func GenerateTestStakingParams(
-	t *testing.T,
-	r *rand.Rand,
-	numCovenantKeys int,
-	quorum uint32,
-) *TestStakingParams {
-	covenantKeys := make([]*btcec.PublicKey, numCovenantKeys)
-	for i := 0; i < numCovenantKeys; i++ {
-		covenantPrivKey, err := btcec.NewPrivateKey()
-		require.NoError(t, err)
-
-		covenantKeys[i] = covenantPrivKey.PubKey()
-	}
-	magicBytes := bbndatagen.GenRandomByteArray(r, btcstaking.MagicBytesLen)
-
-	return &TestStakingParams{
-		CovenantKeys:   covenantKeys,
-		CovenantQuorum: quorum,
-		MagicBytes:     magicBytes,
-		Net:            &chaincfg.SimNetParams,
-	}
 }
 
 func GenerateTestStakingData(
@@ -81,18 +52,29 @@ func GenerateTestStakingData(
 	}
 }
 
-func GenerateTxFromTestData(t *testing.T, params *TestStakingParams, stakingData *TestStakingData) (*btcstaking.IdentifiableStakingInfo, *btcutil.Tx) {
+func GenerateStakingTxFromTestData(t *testing.T, r *rand.Rand, params *types.Params, stakingData *TestStakingData) (*btcstaking.IdentifiableStakingInfo, *btcutil.Tx) {
 	stakingInfo, tx, err := btcstaking.BuildV0IdentifiableStakingOutputsAndTx(
 		params.MagicBytes,
 		stakingData.StakerKey,
 		stakingData.FinalityProviderKeys[0],
-		params.CovenantKeys,
+		params.CovenantPks,
 		params.CovenantQuorum,
 		stakingData.StakingTime,
 		stakingData.StakingAmount,
-		params.Net,
+		&chaincfg.SigNetParams,
 	)
 	require.NoError(t, err)
+
+	// an input is needed because btcd serialization does not work well if tx does not have inputs
+	txIn := &wire.TxIn{
+		PreviousOutPoint: wire.OutPoint{
+			Hash:  chainhash.HashH(bbndatagen.GenRandomByteArray(r, 10)),
+			Index: r.Uint32(),
+		},
+		SignatureScript: bbndatagen.GenRandomByteArray(r, 10),
+		Sequence:        r.Uint32(),
+	}
+	tx.AddTxIn(txIn)
 
 	return stakingInfo, btcutil.NewTx(tx)
 }

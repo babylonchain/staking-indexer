@@ -8,6 +8,7 @@ import (
 	"github.com/babylonchain/babylon/btcstaking"
 	vtypes "github.com/babylonchain/vigilante/types"
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/kvdb"
 	"go.uber.org/zap"
@@ -31,7 +32,6 @@ type StakingIndexer struct {
 	is *indexerstore.IndexerStore
 
 	confirmedBlocksChan chan *vtypes.IndexedBlock
-	stakingEvenChan     chan *types.ActiveStakingEvent
 
 	wg   sync.WaitGroup
 	quit chan struct{}
@@ -58,7 +58,6 @@ func NewStakingIndexer(
 		is:                  is,
 		params:              params,
 		confirmedBlocksChan: confirmedBlocksChan,
-		stakingEvenChan:     make(chan *types.ActiveStakingEvent),
 		quit:                make(chan struct{}),
 	}, nil
 }
@@ -176,8 +175,8 @@ func (si *StakingIndexer) tryParseStakingTx(tx *wire.MsgTx) (*btcstaking.ParsedV
 	return parsedData, nil
 }
 
-func (si *StakingIndexer) StakingEventChan() chan *types.ActiveStakingEvent {
-	return si.stakingEvenChan
+func (si *StakingIndexer) GetStakingTxByHash(hash *chainhash.Hash) (*indexerstore.StoredStakingTransaction, error) {
+	return si.is.GetTransaction(hash)
 }
 
 func (si *StakingIndexer) Stop() error {
