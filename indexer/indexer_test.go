@@ -35,13 +35,18 @@ func FuzzIndexer(f *testing.F) {
 		confirmedBlockChan := make(chan *vtypes.IndexedBlock)
 		sysParams, err := params.NewLocalParamsRetriever().GetParams()
 		require.NoError(t, err)
-		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), sysParams, confirmedBlockChan)
+
+		db, err := cfg.DatabaseConfig.GetDbBackend()
+		require.NoError(t, err)
+		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParams, confirmedBlockChan)
 		require.NoError(t, err)
 
 		err = stakingIndexer.Start()
 		require.NoError(t, err)
 		defer func() {
 			err := stakingIndexer.Stop()
+			require.NoError(t, err)
+			err = db.Close()
 			require.NoError(t, err)
 		}()
 

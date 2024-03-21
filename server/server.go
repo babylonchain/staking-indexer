@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	notifier "github.com/lightningnetwork/lnd/chainntnfs"
+	"github.com/lightningnetwork/lnd/kvdb"
 	"github.com/lightningnetwork/lnd/signal"
 	"go.uber.org/zap"
 
@@ -22,6 +23,8 @@ type Server struct {
 	si          *indexer.StakingIndexer
 	btcNotifier notifier.ChainNotifier
 
+	db kvdb.Backend
+
 	cfg    *config.Config
 	logger *zap.Logger
 
@@ -29,11 +32,20 @@ type Server struct {
 }
 
 // NewStakingIndexerServer creates a new server with the given config.
-func NewStakingIndexerServer(cfg *config.Config, btcNotifier notifier.ChainNotifier, scanner *btcscanner.BtcScanner, si *indexer.StakingIndexer, l *zap.Logger, sig signal.Interceptor) *Server {
+func NewStakingIndexerServer(
+	cfg *config.Config,
+	db kvdb.Backend,
+	btcNotifier notifier.ChainNotifier,
+	scanner *btcscanner.BtcScanner,
+	si *indexer.StakingIndexer,
+	l *zap.Logger,
+	sig signal.Interceptor,
+) *Server {
 	return &Server{
 		cfg:         cfg,
 		scanner:     scanner,
 		si:          si,
+		db:          db,
 		btcNotifier: btcNotifier,
 		logger:      l,
 		interceptor: sig,
@@ -49,6 +61,12 @@ func (s *Server) RunUntilShutdown() error {
 
 	defer func() {
 		s.logger.Info("Shutdown complete")
+	}()
+
+	defer func() {
+		s.logger.Info("Closing database...")
+		s.db.Close()
+		s.logger.Info("Database closed")
 	}()
 
 	if err := s.btcNotifier.Start(); err != nil {
