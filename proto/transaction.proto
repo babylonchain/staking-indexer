@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "github.com/babylonchain/staking-indexer/proto";
+
+message StakingTransaction {
+    // transaction_bytes is the full tx data
+    bytes transaction_bytes = 1;
+
+    // staking output data
+    uint32 staking_output_idx = 2;
+    uint32 staking_output_value = 3;
+    bytes staking_output_script = 4;
+
+    // inclusion_height is the height the tx included
+    // on BTC
+    uint32 inclusion_height = 5;
+
+    // staking info
+    bytes staker_pk = 6;
+    uint32 staking_time = 7;
+    repeated bytes finality_providers_pks = 8;
+}

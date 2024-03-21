@@ -60,3 +60,9 @@ mock-gen:
 	$(MOCKGEN_CMD) -source=consumer/event_consumer.go -package mocks -destination $(MOCKS_DIR)/event_consumer.go
 
 .PHONY: mock-gen
+
+proto-gen:
+	@$(call print, "Compiling protos.")
+	cd ./proto; ./gen_protos_docker.sh
+
+.PHONY: proto-gen
