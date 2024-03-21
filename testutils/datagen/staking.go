@@ -10,7 +10,11 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/stretchr/testify/require"
+
+	"github.com/babylonchain/staking-indexer/indexerstore"
 )
 
 type TestStakingParams struct {
@@ -91,4 +95,68 @@ func GenerateTxFromTestData(t *testing.T, params *TestStakingParams, stakingData
 	require.NoError(t, err)
 
 	return stakingInfo, btcutil.NewTx(tx)
+}
+
+func GenNStoredStakingTxs(t *testing.T, r *rand.Rand, n int, maxStakingTime uint16) []*indexerstore.StoredStakingTransaction {
+	storedTxs := make([]*indexerstore.StoredStakingTransaction, n)
+
+	startingHeight := uint64(r.Int63n(10000) + 1)
+
+	for i := 0; i < n; i++ {
+		storedTxs[i] = genStoredStakingTx(t, r, maxStakingTime, startingHeight+uint64(i))
+	}
+
+	return storedTxs
+}
+
+func GenRandomTx(r *rand.Rand) *wire.MsgTx {
+	// structure of the below tx is from https://github.com/btcsuite/btcd/blob/master/wire/msgtx_test.go
+	tx := &wire.MsgTx{
+		Version: 1,
+		TxIn: []*wire.TxIn{
+			{
+				PreviousOutPoint: wire.OutPoint{
+					Hash:  chainhash.HashH(bbndatagen.GenRandomByteArray(r, 10)),
+					Index: r.Uint32(),
+				},
+				SignatureScript: bbndatagen.GenRandomByteArray(r, 10),
+				Sequence:        r.Uint32(),
+			},
+		},
+		TxOut: []*wire.TxOut{
+			{
+				Value:    r.Int63(),
+				PkScript: bbndatagen.GenRandomByteArray(r, 80),
+			},
+		},
+		LockTime: 0,
+	}
+
+	return tx
+}
+
+func genStoredStakingTx(t *testing.T, r *rand.Rand, maxStakingTime uint16, inclusionHeight uint64) *indexerstore.StoredStakingTransaction {
+	btcTx := GenRandomTx(r)
+	outputIdx := r.Uint32()
+	stakingTime := r.Int31n(int32(maxStakingTime)) + 1
+
+	numPubKeys := r.Intn(3) + 1
+	stakerPrivKey, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+
+	fpBtcPks := make([]*btcec.PublicKey, numPubKeys)
+	for i := 0; i < numPubKeys; i++ {
+		fpPirvKey, err := btcec.NewPrivateKey()
+		require.NoError(t, err)
+		fpBtcPks[i] = fpPirvKey.PubKey()
+	}
+
+	return &indexerstore.StoredStakingTransaction{
+		Tx:                  btcTx,
+		StakingOutputIdx:    outputIdx,
+		StakingTime:         uint32(stakingTime),
+		FinalityProviderPks: fpBtcPks,
+		StakerPk:            stakerPrivKey.PubKey(),
+		InclusionHeight:     inclusionHeight,
+	}
 }

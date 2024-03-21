@@ -33,6 +33,7 @@ type Config struct {
 	BitcoinNetwork   string            `long:"bitcoinnetwork" description:"Bitcoin network to run on" choise:"mainnet" choice:"regtest" choice:"testnet" choice:"simnet" choice:"signet"`
 	BTCScannerConfig *BTCScannerConfig `group:"btcscannerconfig" namespace:"btcscannerconfig"`
 	BTCConfig        *BTCConfig        `group:"btcconfig" namespace:"btcconfig"`
+	DatabaseConfig   *DBConfig         `group:"dbconfig" namespace:"dbconfig"`
 
 	BTCNetParams chaincfg.Params
 }
@@ -43,6 +44,7 @@ func DefaultConfigWithHome(homePath string) *Config {
 		BitcoinNetwork:   defaultBitcoinNetwork,
 		BTCScannerConfig: DefaultBTCScannerConfig(),
 		BTCConfig:        DefaultBTCConfig(),
+		DatabaseConfig:   DefaultDBConfigWithHomePath(homePath),
 	}
 
 	if err := cfg.Validate(); err != nil {

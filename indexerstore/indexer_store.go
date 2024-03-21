@@ -33,8 +33,8 @@ type StoredStakingTransaction struct {
 	FinalityProviderPks []*btcec.PublicKey
 }
 
-// NewTransactionStore returns a new store backed by db
-func NewTransactionStore(db kvdb.Backend) (*IndexerStore,
+// NewIndexerStore returns a new store backed by db
+func NewIndexerStore(db kvdb.Backend) (*IndexerStore,
 	error) {
 
 	store := &IndexerStore{db}
