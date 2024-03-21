@@ -45,7 +45,7 @@ func FuzzStoringTxs(f *testing.F) {
 				storedTx.InclusionHeight,
 				storedTx.StakerPk,
 				storedTx.StakingTime,
-				storedTx.FinalityProviderPks,
+				storedTx.FinalityProviderPk,
 			)
 			require.NoError(t, err)
 		}
@@ -56,7 +56,7 @@ func FuzzStoringTxs(f *testing.F) {
 			require.Equal(t, storedTx.Tx, tx.Tx)
 			require.True(t, testutils.PubKeysEqual(storedTx.StakerPk, tx.StakerPk))
 			require.Equal(t, storedTx.StakingTime, tx.StakingTime)
-			require.True(t, testutils.PubKeysSliceEqual(storedTx.FinalityProviderPks, tx.FinalityProviderPks))
+			require.True(t, testutils.PubKeysEqual(storedTx.FinalityProviderPk, tx.FinalityProviderPk))
 		}
 
 	})

@@ -69,7 +69,7 @@ func FuzzIndexer(f *testing.F) {
 				totalNumTxs += numTxs
 				blockTxs := make([]*btcutil.Tx, 0)
 				for j := 0; j < numTxs; j++ {
-					stakingData := datagen.GenerateTestStakingData(t, r, 1)
+					stakingData := datagen.GenerateTestStakingData(t, r)
 					stakingDataList = append(stakingDataList, stakingData)
 					_, tx := datagen.GenerateStakingTxFromTestData(t, r, sysParams, stakingData)
 					blockTxs = append(blockTxs, tx)
@@ -98,7 +98,7 @@ func FuzzIndexer(f *testing.F) {
 			require.Equal(t, tx, storedTx.Tx)
 			require.True(t, testutils.PubKeysEqual(data.StakerKey, storedTx.StakerPk))
 			require.Equal(t, uint32(data.StakingTime), storedTx.StakingTime)
-			require.True(t, testutils.PubKeysSliceEqual(data.FinalityProviderKeys, storedTx.FinalityProviderPks))
+			require.True(t, testutils.PubKeysEqual(data.FinalityProviderKey, storedTx.FinalityProviderPk))
 		}
 	})
 }

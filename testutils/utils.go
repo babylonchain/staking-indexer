@@ -12,20 +12,6 @@ import (
 	"github.com/babylonchain/staking-indexer/config"
 )
 
-func PubKeysSliceEqual(pk1, pk2 []*btcec.PublicKey) bool {
-	if len(pk1) != len(pk2) {
-		return false
-	}
-
-	for i := 0; i < len(pk1); i++ {
-		if !PubKeysEqual(pk1[i], pk2[i]) {
-			return false
-		}
-	}
-
-	return true
-}
-
 func PubKeysEqual(pk1, pk2 *btcec.PublicKey) bool {
 	return bytes.Equal(schnorr.SerializePubKey(pk1), schnorr.SerializePubKey(pk2))
 }

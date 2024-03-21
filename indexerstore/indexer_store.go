@@ -25,12 +25,12 @@ type IndexerStore struct {
 }
 
 type StoredStakingTransaction struct {
-	Tx                  *wire.MsgTx
-	StakingOutputIdx    uint32
-	InclusionHeight     uint64
-	StakerPk            *btcec.PublicKey
-	StakingTime         uint32
-	FinalityProviderPks []*btcec.PublicKey
+	Tx                 *wire.MsgTx
+	StakingOutputIdx   uint32
+	InclusionHeight    uint64
+	StakerPk           *btcec.PublicKey
+	StakingTime        uint32
+	FinalityProviderPk *btcec.PublicKey
 }
 
 // NewIndexerStore returns a new store backed by db
@@ -62,7 +62,7 @@ func (is *IndexerStore) AddStakingTransaction(
 	inclusionHeight uint64,
 	stakerPk *btcec.PublicKey,
 	stakingTime uint32,
-	fpPks []*btcec.PublicKey,
+	fpPk *btcec.PublicKey,
 ) error {
 	txHash := tx.TxHash()
 	serializedTx, err := utils.SerializeBtcTransaction(tx)
@@ -71,23 +71,13 @@ func (is *IndexerStore) AddStakingTransaction(
 		return err
 	}
 
-	if len(fpPks) == 0 {
-		return fmt.Errorf("cannot add transaction without finality providers public keys")
-	}
-
-	fpPubKeysBytes := make([][]byte, len(fpPks))
-
-	for i, pk := range fpPks {
-		fpPubKeysBytes[i] = schnorr.SerializePubKey(pk)
-	}
-
 	msg := proto.StakingTransaction{
-		TransactionBytes:     serializedTx,
-		StakingOutputIdx:     stakingOutputIdx,
-		InclusionHeight:      inclusionHeight,
-		StakerPk:             schnorr.SerializePubKey(stakerPk),
-		StakingTime:          stakingTime,
-		FinalityProvidersPks: fpPubKeysBytes,
+		TransactionBytes:   serializedTx,
+		StakingOutputIdx:   stakingOutputIdx,
+		InclusionHeight:    inclusionHeight,
+		StakingTime:        stakingTime,
+		StakerPk:           schnorr.SerializePubKey(stakerPk),
+		FinalityProviderPk: schnorr.SerializePubKey(fpPk),
 	}
 
 	return is.addStakingTransaction(txHash[:], &msg)
@@ -165,20 +155,17 @@ func protoStakingTxToStoredStakingTx(protoTx *proto.StakingTransaction) (*Stored
 		return nil, fmt.Errorf("invalid staker pk: %w", err)
 	}
 
-	fpPubkeys := make([]*btcec.PublicKey, len(protoTx.FinalityProvidersPks))
-
-	for i, pk := range protoTx.FinalityProvidersPks {
-		fpPubkeys[i], err = schnorr.ParsePubKey(pk)
-		if err != nil {
-			return nil, fmt.Errorf("invalid finality provider pk: %w", err)
-		}
+	fpPk, err := schnorr.ParsePubKey(protoTx.FinalityProviderPk)
+	if err != nil {
+		return nil, fmt.Errorf("invalid finality provider pk: %w", err)
 	}
+
 	return &StoredStakingTransaction{
-		Tx:                  &stakingTx,
-		StakingOutputIdx:    protoTx.StakingOutputIdx,
-		InclusionHeight:     protoTx.InclusionHeight,
-		StakerPk:            stakerPk,
-		StakingTime:         protoTx.StakingTime,
-		FinalityProviderPks: fpPubkeys,
+		Tx:                 &stakingTx,
+		StakingOutputIdx:   protoTx.StakingOutputIdx,
+		InclusionHeight:    protoTx.InclusionHeight,
+		StakerPk:           stakerPk,
+		StakingTime:        protoTx.StakingTime,
+		FinalityProviderPk: fpPk,
 	}, nil
 }

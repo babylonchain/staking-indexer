@@ -16,6 +16,6 @@ message StakingTransaction {
 
     // staking info
     bytes staker_pk = 6;
+    bytes finality_provider_pk = 8;
     uint32 staking_time = 7;
-    repeated bytes finality_providers_pks = 8;
 }

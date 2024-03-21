@@ -7,7 +7,6 @@ import (
 
 	"github.com/babylonchain/babylon/btcstaking"
 	vtypes "github.com/babylonchain/vigilante/types"
-	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/kvdb"
@@ -145,7 +144,7 @@ func (si *StakingIndexer) processStakingTx(tx *wire.MsgTx, stakingData *btcstaki
 		height,
 		stakingData.OpReturnData.StakerPublicKey.PubKey,
 		uint32(stakingData.OpReturnData.StakingTime),
-		[]*btcec.PublicKey{stakingData.OpReturnData.FinalityProviderPublicKey.PubKey},
+		stakingData.OpReturnData.FinalityProviderPublicKey.PubKey,
 	); err != nil {
 		return fmt.Errorf("failed to add the staking tx to store: %w", err)
 	}

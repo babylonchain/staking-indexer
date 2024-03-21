@@ -19,36 +19,30 @@ import (
 )
 
 type TestStakingData struct {
-	StakerKey            *btcec.PublicKey
-	FinalityProviderKeys []*btcec.PublicKey
-	StakingAmount        btcutil.Amount
-	StakingTime          uint16
+	StakerKey           *btcec.PublicKey
+	FinalityProviderKey *btcec.PublicKey
+	StakingAmount       btcutil.Amount
+	StakingTime         uint16
 }
 
 func GenerateTestStakingData(
 	t *testing.T,
 	r *rand.Rand,
-	numFinalityProvider int,
 ) *TestStakingData {
 	stakerPrivKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
 
-	finalityProviderKeys := make([]*btcec.PublicKey, numFinalityProvider)
-	for i := 0; i < numFinalityProvider; i++ {
-		fpPrivKey, err := btcec.NewPrivateKey()
-		require.NoError(t, err)
-
-		finalityProviderKeys[i] = fpPrivKey.PubKey()
-	}
+	fpPrivKey, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
 
 	stakingAmount := btcutil.Amount(r.Int63n(1000000000) + 10000)
 	stakingTime := uint16(r.Int31n(math.MaxUint16-1) + 1)
 
 	return &TestStakingData{
-		StakerKey:            stakerPrivKey.PubKey(),
-		FinalityProviderKeys: finalityProviderKeys,
-		StakingAmount:        stakingAmount,
-		StakingTime:          stakingTime,
+		StakerKey:           stakerPrivKey.PubKey(),
+		FinalityProviderKey: fpPrivKey.PubKey(),
+		StakingAmount:       stakingAmount,
+		StakingTime:         stakingTime,
 	}
 }
 
@@ -56,7 +50,7 @@ func GenerateStakingTxFromTestData(t *testing.T, r *rand.Rand, params *types.Par
 	stakingInfo, tx, err := btcstaking.BuildV0IdentifiableStakingOutputsAndTx(
 		params.MagicBytes,
 		stakingData.StakerKey,
-		stakingData.FinalityProviderKeys[0],
+		stakingData.FinalityProviderKey,
 		params.CovenantPks,
 		params.CovenantQuorum,
 		stakingData.StakingTime,
@@ -122,23 +116,18 @@ func genStoredStakingTx(t *testing.T, r *rand.Rand, maxStakingTime uint16, inclu
 	outputIdx := r.Uint32()
 	stakingTime := r.Int31n(int32(maxStakingTime)) + 1
 
-	numPubKeys := r.Intn(3) + 1
 	stakerPrivKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
 
-	fpBtcPks := make([]*btcec.PublicKey, numPubKeys)
-	for i := 0; i < numPubKeys; i++ {
-		fpPirvKey, err := btcec.NewPrivateKey()
-		require.NoError(t, err)
-		fpBtcPks[i] = fpPirvKey.PubKey()
-	}
+	fpPirvKey, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
 
 	return &indexerstore.StoredStakingTransaction{
-		Tx:                  btcTx,
-		StakingOutputIdx:    outputIdx,
-		StakingTime:         uint32(stakingTime),
-		FinalityProviderPks: fpBtcPks,
-		StakerPk:            stakerPrivKey.PubKey(),
-		InclusionHeight:     inclusionHeight,
+		Tx:                 btcTx,
+		StakingOutputIdx:   outputIdx,
+		StakingTime:        uint32(stakingTime),
+		FinalityProviderPk: fpPirvKey.PubKey(),
+		StakerPk:           stakerPrivKey.PubKey(),
+		InclusionHeight:    inclusionHeight,
 	}
 }
