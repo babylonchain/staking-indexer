@@ -1,12 +1,14 @@
 package indexer
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"sync"
 
 	"github.com/babylonchain/babylon/btcstaking"
 	vtypes "github.com/babylonchain/vigilante/types"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/kvdb"
@@ -116,12 +118,79 @@ func (si *StakingIndexer) handleConfirmedBlock(b *vtypes.IndexedBlock) error {
 				return err
 			}
 
-			// TODO: add monitor for withdrawal tx
+			// should not use *continue* here as a special case is
+			// the tx could be a staking tx as well as a withdrawal
+			// tx that spends the previous staking tx
+		}
 
+		// check whether it spends a stored staking tx
+		stakingTx, spentInputIdx := si.getSpentStakingTx(msgTx)
+		if spentInputIdx >= 0 {
+			// check whether it is an unbonding tx
+			err := si.tryIdentifyUnbondingTx(msgTx, stakingTx)
+			if err != nil {
+				// TODO push withdraw event
+				continue
+			}
+			// TODO push unbonding event
+			continue
+
+		}
+		// TODO check whether it is a withdrawal from an unbonding tx
+	}
+
+	return nil
+}
+
+// getSpentStakingTx checks if the given tx spends any of the stored staking tx
+// if so, it returns the found staking tx and the spent staking input index,
+// otherwise, it returns nil and -1
+func (si *StakingIndexer) getSpentStakingTx(tx *wire.MsgTx) (*indexerstore.StoredStakingTransaction, int) {
+	for i, txIn := range tx.TxIn {
+		maybeStakingTxHash := txIn.PreviousOutPoint.Hash
+		stakingTx, err := si.GetStakingTxByHash(&maybeStakingTxHash)
+		if err != nil {
 			continue
 		}
 
-		// TODO: try to parse unbonding tx from here
+		return stakingTx, i
+	}
+
+	return nil, -1
+}
+
+// tryIdentifyUnbondingTx tries to identify a tx is an unbonding tx
+// if provided tx is not unbonding tx it returns error.
+func (si *StakingIndexer) tryIdentifyUnbondingTx(tx *wire.MsgTx, stakingTx *indexerstore.StoredStakingTransaction) error {
+	if len(tx.TxIn) != 1 {
+		return fmt.Errorf("unbonding tx must have exactly one input. Provided tx has %d inputs", len(tx.TxIn))
+	}
+	if len(tx.TxOut) != 1 {
+		return fmt.Errorf("unbonding tx must have exactly one output. Priovided tx has %d outputs", len(tx.TxOut))
+	}
+
+	stakingTxHash := stakingTx.Tx.TxHash()
+	if !tx.TxIn[0].PreviousOutPoint.Hash.IsEqual(&stakingTxHash) {
+		return fmt.Errorf("unbonding tx must spend the staking output")
+	}
+
+	// re-build unbonding output from params, unbonding amount could be 0 as it will
+	// not be considered as part of PkScript
+	expectedUnbondingOutput, err := btcstaking.BuildUnbondingInfo(
+		stakingTx.StakerPk,
+		[]*btcec.PublicKey{stakingTx.FinalityProviderPk},
+		si.params.CovenantPks,
+		si.params.CovenantQuorum,
+		si.params.UnbondingTime,
+		0,
+		&si.cfg.BTCNetParams,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to rebuild unbonding output: %w", err)
+	}
+
+	if !bytes.Equal(tx.TxOut[0].PkScript, expectedUnbondingOutput.UnbondingOutput.PkScript) {
+		return fmt.Errorf("unbonding tx must have output which matches expected output built from parameters")
 	}
 
 	return nil
