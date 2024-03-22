@@ -186,24 +186,32 @@ func (is *IndexerStore) AddUnbondingTransaction(
 		return err
 	}
 
+	stakingTxHashBytes := stakingTxHash.CloneBytes()
 	msg := proto.UnbondingTransaction{
 		TransactionBytes: serializedTx,
 		StakingTxHash:    stakingTxHash.CloneBytes(),
 	}
 
-	return is.addUnbondingTransaction(txHash[:], &msg)
+	return is.addUnbondingTransaction(txHash[:], stakingTxHashBytes, &msg)
 }
 
 func (is *IndexerStore) addUnbondingTransaction(
 	txHashBytes []byte,
+	stakingHashBytes []byte,
 	ut *proto.UnbondingTransaction,
 ) error {
 	return kvdb.Batch(is.db, func(tx kvdb.RwTx) error {
-
 		txBucket := tx.ReadWriteBucket(transactionBucketName)
 		if txBucket == nil {
 			return ErrCorruptedTransactionsDb
 		}
+
+		// we need to ensure the staking tx already exists
+		maybeStakingTx := txBucket.Get(stakingHashBytes)
+		if maybeStakingTx == nil {
+			return ErrTransactionNotFound
+		}
+
 		maybeTx := txBucket.Get(txHashBytes)
 		if maybeTx != nil {
 			return ErrDuplicateTransaction

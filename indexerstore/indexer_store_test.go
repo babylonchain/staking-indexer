@@ -37,8 +37,10 @@ func FuzzStoringTxs(f *testing.F) {
 		require.NoError(t, err)
 		maxCreatedTx := 30
 		numTx := r.Intn(maxCreatedTx) + 1
-		generatedStoredTxs := datagen.GenNStoredStakingTxs(t, r, numTx, 200)
-		for _, storedTx := range generatedStoredTxs {
+		stakingtxs := datagen.GenNStoredStakingTxs(t, r, numTx, 200)
+
+		// add staking txs to store
+		for _, storedTx := range stakingtxs {
 			err := s.AddStakingTransaction(
 				storedTx.Tx,
 				storedTx.StakingOutputIdx,
@@ -49,7 +51,9 @@ func FuzzStoringTxs(f *testing.F) {
 			)
 			require.NoError(t, err)
 		}
-		for _, storedTx := range generatedStoredTxs {
+
+		// check staking txs from store
+		for _, storedTx := range stakingtxs {
 			hash := storedTx.Tx.TxHash()
 			tx, err := s.GetStakingTransaction(&hash)
 			require.NoError(t, err)
@@ -59,5 +63,20 @@ func FuzzStoringTxs(f *testing.F) {
 			require.True(t, testutils.PubKeysEqual(storedTx.FinalityProviderPk, tx.FinalityProviderPk))
 		}
 
+		// add unbonding txs to store
+		unbondingTxs := datagen.GenStoredUnbondingTxs(r, stakingtxs)
+		for _, storedTx := range unbondingTxs {
+			err := s.AddUnbondingTransaction(storedTx.Tx, storedTx.StakingTxHash)
+			require.NoError(t, err)
+		}
+
+		// check unbonding txs from store
+		for _, storedTx := range unbondingTxs {
+			hash := storedTx.Tx.TxHash()
+			tx, err := s.GetUnbondingTransaction(&hash)
+			require.NoError(t, err)
+			require.Equal(t, storedTx.Tx, tx.Tx)
+			require.True(t, storedTx.StakingTxHash.IsEqual(tx.StakingTxHash))
+		}
 	})
 }

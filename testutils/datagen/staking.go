@@ -85,6 +85,18 @@ func GenNStoredStakingTxs(t *testing.T, r *rand.Rand, n int, maxStakingTime uint
 	return storedTxs
 }
 
+func GenStoredUnbondingTxs(r *rand.Rand, stakingTxs []*indexerstore.StoredStakingTransaction) []*indexerstore.StoredUnbondingTransaction {
+	n := len(stakingTxs)
+	storedTxs := make([]*indexerstore.StoredUnbondingTransaction, n)
+
+	for i := 0; i < n; i++ {
+		stakingHash := stakingTxs[i].Tx.TxHash()
+		storedTxs[i] = genStoredUnbondingTx(r, &stakingHash)
+	}
+
+	return storedTxs
+}
+
 func GenRandomTx(r *rand.Rand) *wire.MsgTx {
 	// structure of the below tx is from https://github.com/btcsuite/btcd/blob/master/wire/msgtx_test.go
 	tx := &wire.MsgTx{
@@ -129,5 +141,14 @@ func genStoredStakingTx(t *testing.T, r *rand.Rand, maxStakingTime uint16, inclu
 		FinalityProviderPk: fpPirvKey.PubKey(),
 		StakerPk:           stakerPrivKey.PubKey(),
 		InclusionHeight:    inclusionHeight,
+	}
+}
+
+func genStoredUnbondingTx(r *rand.Rand, stakingTxHash *chainhash.Hash) *indexerstore.StoredUnbondingTransaction {
+	btcTx := GenRandomTx(r)
+
+	return &indexerstore.StoredUnbondingTransaction{
+		Tx:            btcTx,
+		StakingTxHash: stakingTxHash,
 	}
 }
