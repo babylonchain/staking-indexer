@@ -73,6 +73,25 @@ func GenerateStakingTxFromTestData(t *testing.T, r *rand.Rand, params *types.Par
 	return stakingInfo, btcutil.NewTx(tx)
 }
 
+func GenerateUnbondingTxFromStaking(t *testing.T, params *types.Params, stakingData *TestStakingData, stakingTxHash *chainhash.Hash, stakingOutputIdx uint32) *btcutil.Tx {
+	unbondingInfo, err := btcstaking.BuildUnbondingInfo(
+		stakingData.StakerKey,
+		[]*btcec.PublicKey{stakingData.FinalityProviderKey},
+		params.CovenantPks,
+		params.CovenantQuorum,
+		params.UnbondingTime,
+		stakingData.StakingAmount.MulF64(0.9),
+		&chaincfg.SigNetParams,
+	)
+	require.NoError(t, err)
+
+	unbondingTx := wire.NewMsgTx(2)
+	unbondingTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(stakingTxHash, stakingOutputIdx), nil, nil))
+	unbondingTx.AddTxOut(unbondingInfo.UnbondingOutput)
+
+	return btcutil.NewTx(unbondingTx)
+}
+
 func GenNStoredStakingTxs(t *testing.T, r *rand.Rand, n int, maxStakingTime uint16) []*indexerstore.StoredStakingTransaction {
 	storedTxs := make([]*indexerstore.StoredStakingTransaction, n)
 

@@ -54,26 +54,28 @@ func FuzzIndexer(f *testing.F) {
 
 		// 1. build staking tx and insert them into blocks
 		// and send block to the confirmed block channel
-		totalNumTxs := 0
 		numBlocks := r.Intn(10) + 1
 		startingHeight := r.Int31n(1000) + 1
 
 		stakingDataList := make([]*datagen.TestStakingData, 0)
-		totalTxList := make([]*btcutil.Tx, 0)
+		stakingTxList := make([]*btcutil.Tx, 0)
+		unbondingTxList := make([]*btcutil.Tx, 0)
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for i := 0; i < numBlocks; i++ {
 				numTxs := r.Intn(10) + 1
-				totalNumTxs += numTxs
 				blockTxs := make([]*btcutil.Tx, 0)
 				for j := 0; j < numTxs; j++ {
 					stakingData := datagen.GenerateTestStakingData(t, r)
 					stakingDataList = append(stakingDataList, stakingData)
-					_, tx := datagen.GenerateStakingTxFromTestData(t, r, sysParams, stakingData)
-					blockTxs = append(blockTxs, tx)
-					totalTxList = append(totalTxList, tx)
+					_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, sysParams, stakingData)
+					unbondingTx := datagen.GenerateUnbondingTxFromStaking(t, sysParams, stakingData, stakingTx.Hash(), 0)
+					blockTxs = append(blockTxs, stakingTx)
+					blockTxs = append(blockTxs, unbondingTx)
+					stakingTxList = append(stakingTxList, stakingTx)
+					unbondingTxList = append(unbondingTxList, unbondingTx)
 				}
 				b := &vtypes.IndexedBlock{
 					Height: startingHeight + int32(i),
@@ -89,16 +91,34 @@ func FuzzIndexer(f *testing.F) {
 
 		// 2. read local store and expect them to be the
 		// same as the data before being stored
-		for i := 0; i < totalNumTxs; i++ {
-			tx := totalTxList[i].MsgTx()
+		for i := 0; i < len(stakingTxList); i++ {
+			tx := stakingTxList[i].MsgTx()
 			txHash := tx.TxHash()
 			data := stakingDataList[i]
 			storedTx, err := stakingIndexer.GetStakingTxByHash(&txHash)
 			require.NoError(t, err)
-			require.Equal(t, tx, storedTx.Tx)
+			require.Equal(t, tx.TxHash(), storedTx.Tx.TxHash())
 			require.True(t, testutils.PubKeysEqual(data.StakerKey, storedTx.StakerPk))
 			require.Equal(t, uint32(data.StakingTime), storedTx.StakingTime)
 			require.True(t, testutils.PubKeysEqual(data.FinalityProviderKey, storedTx.FinalityProviderPk))
+		}
+
+		for i := 0; i < len(unbondingTxList); i++ {
+			tx := unbondingTxList[i].MsgTx()
+			txHash := tx.TxHash()
+			expectedStakingTx := stakingTxList[i].MsgTx()
+			storedUnbondingTx, err := stakingIndexer.GetUnbondingTxByHash(&txHash)
+			require.NoError(t, err)
+			require.Equal(t, tx.TxHash(), storedUnbondingTx.Tx.TxHash())
+			require.Equal(t, expectedStakingTx.TxHash().String(), storedUnbondingTx.StakingTxHash.String())
+
+			expectedStakingData := stakingDataList[i]
+			storedStakingTx, err := stakingIndexer.GetStakingTxByHash(storedUnbondingTx.StakingTxHash)
+			require.NoError(t, err)
+			require.Equal(t, expectedStakingTx.TxHash(), storedStakingTx.Tx.TxHash())
+			require.True(t, testutils.PubKeysEqual(expectedStakingData.StakerKey, storedStakingTx.StakerPk))
+			require.Equal(t, uint32(expectedStakingData.StakingTime), storedStakingTx.StakingTime)
+			require.True(t, testutils.PubKeysEqual(expectedStakingData.FinalityProviderKey, storedStakingTx.FinalityProviderPk))
 		}
 	})
 }
