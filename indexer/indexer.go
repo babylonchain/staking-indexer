@@ -99,11 +99,12 @@ func (si *StakingIndexer) confirmedBlocksLoop() {
 }
 
 // handleConfirmedBlock iterates all the tx set in the block and
-// parse staking tx data if there are any
+// parse staking tx, unbonding tx, and withdrawal tx if there are any
 func (si *StakingIndexer) handleConfirmedBlock(b *vtypes.IndexedBlock) error {
 	for _, tx := range b.Txs {
 		msgTx := tx.MsgTx()
 
+		// 1. try to parse staking tx
 		stakingData, err := si.tryParseStakingTx(msgTx)
 		if err == nil {
 			if err := si.processStakingTx(msgTx, stakingData, uint64(b.Height)); err != nil {
@@ -122,21 +123,21 @@ func (si *StakingIndexer) handleConfirmedBlock(b *vtypes.IndexedBlock) error {
 			// tx that spends the previous staking tx
 		}
 
-		// check whether it spends a stored staking tx
+		// 2. not a staking tx, check whether it spends a stored staking tx
 		stakingTx, spentInputIdx := si.getSpentStakingTx(msgTx)
 		if spentInputIdx >= 0 {
 			stakingTxHash := stakingTx.Tx.TxHash()
-			// check whether it is an unbonding tx
+			// 3. is a spending tx, check whether it is an unbonding tx
 			err := si.tryIdentifyUnbondingTx(msgTx, stakingTx)
 			if err != nil {
-				// this is a withdraw tx from the staking
+				// 4. not a unbongidng tx, so this is a withdraw tx from the staking
 				if err := si.processWithdrawTx(msgTx, &stakingTxHash, nil); err != nil {
 					return err
 				}
 				continue
 			}
 
-			// this is an unbonding tx
+			// 5. this is an unbonding tx
 			if err := si.processUnbondingTx(msgTx, &stakingTxHash, uint64(b.Height)); err != nil {
 				if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
 					return err
@@ -149,9 +150,11 @@ func (si *StakingIndexer) handleConfirmedBlock(b *vtypes.IndexedBlock) error {
 			continue
 		}
 
+		// 6. it does not spend staking tx, check whether it spends stored
+		// unbonding tx
 		unbondingTx, spentInputIdx := si.getSpentUnbondingTx(msgTx)
 		if spentInputIdx >= 0 {
-			// this is a withdraw tx from the unbonding
+			// 7. this is a withdraw tx from the unbonding
 			unbondingTxHash := unbondingTx.Tx.TxHash()
 			if err := si.processWithdrawTx(msgTx, unbondingTx.StakingTxHash, &unbondingTxHash); err != nil {
 				return err
