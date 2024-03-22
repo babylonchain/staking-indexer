@@ -100,8 +100,13 @@ func start(ctx *cli.Context) error {
 		return fmt.Errorf("failed to get system params: %w", err)
 	}
 
+	dbBackend, err := cfg.DatabaseConfig.GetDbBackend()
+	if err != nil {
+		return fmt.Errorf("failed to create db backend: %w", err)
+	}
+
 	// create the staking indexer app
-	si, err := indexer.NewStakingIndexer(cfg, logger, cs, sysParams, scanner.ConfirmedBlocksChan())
+	si, err := indexer.NewStakingIndexer(cfg, logger, cs, dbBackend, sysParams, scanner.ConfirmedBlocksChan())
 	if err != nil {
 		return fmt.Errorf("failed to initialize the staking indexer app: %w", err)
 	}
@@ -113,7 +118,7 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create the server
-	indexerServer := service.NewStakingIndexerServer(cfg, btcNotifier, scanner, si, logger, shutdownInterceptor)
+	indexerServer := service.NewStakingIndexerServer(cfg, dbBackend, btcNotifier, scanner, si, logger, shutdownInterceptor)
 
 	// run all the services until shutdown
 	return indexerServer.RunUntilShutdown()

@@ -78,7 +78,9 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	sysParams, err := params.NewLocalParamsRetriever().GetParams()
 	require.NoError(t, err)
 
-	si, err := indexer.NewStakingIndexer(cfg, logger, cs, sysParams, scanner.ConfirmedBlocksChan())
+	db, err := cfg.DatabaseConfig.GetDbBackend()
+	require.NoError(t, err)
+	si, err := indexer.NewStakingIndexer(cfg, logger, cs, db, sysParams, scanner.ConfirmedBlocksChan())
 	require.NoError(t, err)
 
 	interceptor, err := signal.Intercept()
@@ -86,6 +88,7 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 
 	service := server.NewStakingIndexerServer(
 		cfg,
+		db,
 		btcNotifier,
 		scanner,
 		si,
