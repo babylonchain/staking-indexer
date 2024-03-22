@@ -20,7 +20,7 @@ func TestEmptyStore(t *testing.T) {
 	s, err := indexerstore.NewIndexerStore(db)
 	require.NoError(t, err)
 	hash := bbndatagen.GenRandomBtcdHash(r)
-	tx, err := s.GetTransaction(&hash)
+	tx, err := s.GetStakingTransaction(&hash)
 	require.Nil(t, tx)
 	require.Error(t, err)
 	require.True(t, errors.Is(err, indexerstore.ErrTransactionNotFound))
@@ -51,7 +51,7 @@ func FuzzStoringTxs(f *testing.F) {
 		}
 		for _, storedTx := range generatedStoredTxs {
 			hash := storedTx.Tx.TxHash()
-			tx, err := s.GetTransaction(&hash)
+			tx, err := s.GetStakingTransaction(&hash)
 			require.NoError(t, err)
 			require.Equal(t, storedTx.Tx, tx.Tx)
 			require.True(t, testutils.PubKeysEqual(storedTx.StakerPk, tx.StakerPk))

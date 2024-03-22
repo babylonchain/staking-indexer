@@ -48,6 +48,34 @@ func (mr *MockEventConsumerMockRecorder) PushStakingEvent(ev interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushStakingEvent", reflect.TypeOf((*MockEventConsumer)(nil).PushStakingEvent), ev)
 }
 
+// PushUnbondingEvent mocks base method.
+func (m *MockEventConsumer) PushUnbondingEvent(ev *types.UnbondingStakingEvent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PushUnbondingEvent", ev)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PushUnbondingEvent indicates an expected call of PushUnbondingEvent.
+func (mr *MockEventConsumerMockRecorder) PushUnbondingEvent(ev interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushUnbondingEvent", reflect.TypeOf((*MockEventConsumer)(nil).PushUnbondingEvent), ev)
+}
+
+// PushWithdrawEvent mocks base method.
+func (m *MockEventConsumer) PushWithdrawEvent(ev *types.WithdrawStakingEvent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PushWithdrawEvent", ev)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PushWithdrawEvent indicates an expected call of PushWithdrawEvent.
+func (mr *MockEventConsumerMockRecorder) PushWithdrawEvent(ev interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushWithdrawEvent", reflect.TypeOf((*MockEventConsumer)(nil).PushWithdrawEvent), ev)
+}
+
 // Start mocks base method.
 func (m *MockEventConsumer) Start() error {
 	m.ctrl.T.Helper()
