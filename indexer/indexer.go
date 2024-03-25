@@ -176,6 +176,11 @@ func (si *StakingIndexer) getSpentStakingTx(tx *wire.MsgTx) (*indexerstore.Store
 			continue
 		}
 
+		// this ensures the spending tx spends the correct staking output
+		if txIn.PreviousOutPoint.Index != stakingTx.StakingOutputIdx {
+			continue
+		}
+
 		return stakingTx, i
 	}
 
@@ -202,6 +207,7 @@ func (si *StakingIndexer) getSpentUnbondingTx(tx *wire.MsgTx) (*indexerstore.Sto
 // tryIdentifyUnbondingTx tries to identify a tx is an unbonding tx
 // if provided tx is not unbonding tx it returns error.
 func (si *StakingIndexer) tryIdentifyUnbondingTx(tx *wire.MsgTx, stakingTx *indexerstore.StoredStakingTransaction) error {
+	// 1. the tx must have exactly one input and output
 	if len(tx.TxIn) != 1 {
 		return fmt.Errorf("unbonding tx must have exactly one input. Provided tx has %d inputs", len(tx.TxIn))
 	}
@@ -209,11 +215,16 @@ func (si *StakingIndexer) tryIdentifyUnbondingTx(tx *wire.MsgTx, stakingTx *inde
 		return fmt.Errorf("unbonding tx must have exactly one output. Priovided tx has %d outputs", len(tx.TxOut))
 	}
 
+	// 2. the tx must spend the staking output
 	stakingTxHash := stakingTx.Tx.TxHash()
 	if !tx.TxIn[0].PreviousOutPoint.Hash.IsEqual(&stakingTxHash) {
 		return fmt.Errorf("unbonding tx must spend the staking output")
 	}
+	if tx.TxIn[0].PreviousOutPoint.Index != stakingTx.StakingOutputIdx {
+		return fmt.Errorf("unbonding tx must spend the staking output")
+	}
 
+	// 3. the script of the unbonding output must be as expected
 	// re-build unbonding output from params, unbonding amount could be 0 as it will
 	// not be considered as part of PkScript
 	expectedUnbondingOutput, err := btcstaking.BuildUnbondingInfo(
@@ -228,7 +239,6 @@ func (si *StakingIndexer) tryIdentifyUnbondingTx(tx *wire.MsgTx, stakingTx *inde
 	if err != nil {
 		return fmt.Errorf("failed to rebuild unbonding output: %w", err)
 	}
-
 	if !bytes.Equal(tx.TxOut[0].PkScript, expectedUnbondingOutput.UnbondingOutput.PkScript) {
 		return fmt.Errorf("unbonding tx must have output which matches expected output built from parameters")
 	}
