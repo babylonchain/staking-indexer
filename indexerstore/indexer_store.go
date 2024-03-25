@@ -16,8 +16,11 @@ import (
 )
 
 var (
-	// mapping tx hash -> Transaction
-	transactionBucketName = []byte("transactions")
+	// mapping tx hash -> staking transaction
+	stakingTxBucketName = []byte("stakingtxs")
+
+	// mapping tx hash -> unbonding transaction
+	unbondingTxBucketName = []byte("unbondingtxs")
 )
 
 type IndexerStore struct {
@@ -52,7 +55,12 @@ func NewIndexerStore(db kvdb.Backend) (*IndexerStore,
 
 func (c *IndexerStore) initBuckets() error {
 	return kvdb.Batch(c.db, func(tx kvdb.RwTx) error {
-		_, err := tx.CreateTopLevelBucket(transactionBucketName)
+		_, err := tx.CreateTopLevelBucket(stakingTxBucketName)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.CreateTopLevelBucket(unbondingTxBucketName)
 		if err != nil {
 			return err
 		}
@@ -94,7 +102,7 @@ func (is *IndexerStore) addStakingTransaction(
 ) error {
 	return kvdb.Batch(is.db, func(tx kvdb.RwTx) error {
 
-		txBucket := tx.ReadWriteBucket(transactionBucketName)
+		txBucket := tx.ReadWriteBucket(stakingTxBucketName)
 		if txBucket == nil {
 			return ErrCorruptedTransactionsDb
 		}
@@ -117,7 +125,7 @@ func (is *IndexerStore) GetStakingTransaction(txHash *chainhash.Hash) (*StoredSt
 	txHashBytes := txHash.CloneBytes()
 
 	err := is.db.View(func(tx kvdb.RTx) error {
-		txBucket := tx.ReadBucket(transactionBucketName)
+		txBucket := tx.ReadBucket(stakingTxBucketName)
 		if txBucket == nil {
 			return ErrCorruptedTransactionsDb
 		}
@@ -201,18 +209,24 @@ func (is *IndexerStore) addUnbondingTransaction(
 	ut *proto.UnbondingTransaction,
 ) error {
 	return kvdb.Batch(is.db, func(tx kvdb.RwTx) error {
-		txBucket := tx.ReadWriteBucket(transactionBucketName)
-		if txBucket == nil {
+		stakingTxBucket := tx.ReadWriteBucket(stakingTxBucketName)
+		if stakingTxBucket == nil {
 			return ErrCorruptedTransactionsDb
 		}
 
 		// we need to ensure the staking tx already exists
-		maybeStakingTx := txBucket.Get(stakingHashBytes)
+		maybeStakingTx := stakingTxBucket.Get(stakingHashBytes)
 		if maybeStakingTx == nil {
 			return ErrTransactionNotFound
 		}
 
-		maybeTx := txBucket.Get(txHashBytes)
+		unbondingTxBucket := tx.ReadWriteBucket(unbondingTxBucketName)
+		if unbondingTxBucket == nil {
+			return ErrCorruptedTransactionsDb
+		}
+
+		// check duplicate
+		maybeTx := unbondingTxBucket.Get(txHashBytes)
 		if maybeTx != nil {
 			return ErrDuplicateTransaction
 		}
@@ -222,7 +236,7 @@ func (is *IndexerStore) addUnbondingTransaction(
 			return err
 		}
 
-		return txBucket.Put(txHashBytes, marshalled)
+		return unbondingTxBucket.Put(txHashBytes, marshalled)
 	})
 }
 
@@ -231,7 +245,7 @@ func (is *IndexerStore) GetUnbondingTransaction(txHash *chainhash.Hash) (*Stored
 	txHashBytes := txHash.CloneBytes()
 
 	err := is.db.View(func(tx kvdb.RTx) error {
-		txBucket := tx.ReadBucket(transactionBucketName)
+		txBucket := tx.ReadBucket(unbondingTxBucketName)
 		if txBucket == nil {
 			return ErrCorruptedTransactionsDb
 		}
