@@ -15,7 +15,6 @@ import (
 
 	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
-	"github.com/babylonchain/staking-indexer/consumer"
 	"github.com/babylonchain/staking-indexer/indexer"
 	"github.com/babylonchain/staking-indexer/log"
 	"github.com/babylonchain/staking-indexer/params"
@@ -72,15 +71,15 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	require.NoError(t, err)
 
 	// create event consumer
-	// TODO: will be replaced when we have concrete consumer implementation
-	cs := new(consumer.DumbConsumer)
+	queueConsumer, err := setupTestQueueConsumer(t, cfg.QueueConfig)
+	require.NoError(t, err)
 
 	sysParams, err := params.NewLocalParamsRetriever().GetParams()
 	require.NoError(t, err)
 
 	db, err := cfg.DatabaseConfig.GetDbBackend()
 	require.NoError(t, err)
-	si, err := indexer.NewStakingIndexer(cfg, logger, cs, db, sysParams, scanner.ConfirmedBlocksChan())
+	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, db, sysParams, scanner.ConfirmedBlocksChan())
 	require.NoError(t, err)
 
 	interceptor, err := signal.Intercept()
@@ -88,6 +87,7 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 
 	service := server.NewStakingIndexerServer(
 		cfg,
+		queueConsumer,
 		db,
 		btcNotifier,
 		scanner,

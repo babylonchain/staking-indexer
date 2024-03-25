@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -238,9 +239,16 @@ func (si *StakingIndexer) tryIdentifyUnbondingTx(tx *wire.MsgTx, stakingTx *inde
 
 func (si *StakingIndexer) processStakingTx(tx *wire.MsgTx, stakingData *btcstaking.ParsedV0StakingTx, height uint64) error {
 
-	stakingEvent := types.StakingDataToEvent(stakingData, tx.TxHash(), height)
+	stakingEvent := types.NewActiveStakingEvent(
+		tx.TxHash().String(),
+		hex.EncodeToString(stakingData.OpReturnData.StakerPublicKey.Marshall()),
+		hex.EncodeToString(stakingData.OpReturnData.FinalityProviderPublicKey.Marshall()),
+		uint64(stakingData.StakingOutput.Value),
+		height,
+		uint64(stakingData.OpReturnData.StakingTime),
+	)
 
-	if err := si.consumer.PushStakingEvent(stakingEvent); err != nil {
+	if err := si.consumer.PushStakingEvent(&stakingEvent); err != nil {
 		return fmt.Errorf("failed to push the staking event to the consumer: %w", err)
 	}
 
@@ -271,9 +279,9 @@ func (si *StakingIndexer) processUnbondingTx(tx *wire.MsgTx, stakingTxHash *chai
 		zap.String("staking_tx_hash", stakingTxHash.String()),
 	)
 
-	unbondingEvent := types.NewUnbondingStakingEvent(stakingTxHash, height, si.params.UnbondingTime)
+	unbondingEvent := types.NewUnbondingStakingEvent(stakingTxHash.String(), height, si.params.UnbondingTime)
 
-	if err := si.consumer.PushUnbondingEvent(unbondingEvent); err != nil {
+	if err := si.consumer.PushUnbondingEvent(&unbondingEvent); err != nil {
 		return fmt.Errorf("failed to push the unbonding event to the consumer: %w", err)
 	}
 
@@ -307,9 +315,9 @@ func (si *StakingIndexer) processWithdrawTx(tx *wire.MsgTx, stakingTxHash *chain
 		)
 	}
 
-	withdrawEvent := types.NewWithdrawEvent(stakingTxHash)
+	withdrawEvent := types.NewWithdrawStakingEvent(stakingTxHash.String())
 
-	if err := si.consumer.PushWithdrawEvent(withdrawEvent); err != nil {
+	if err := si.consumer.PushWithdrawEvent(&withdrawEvent); err != nil {
 		return fmt.Errorf("failed to push the withdraw event to the consumer: %w", err)
 	}
 

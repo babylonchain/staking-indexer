@@ -1,4 +1,4 @@
-package types
+package client
 
 const (
 	ActiveStakingQueueName    string = "active_staking_queue"
