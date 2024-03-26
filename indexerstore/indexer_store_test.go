@@ -20,8 +20,12 @@ func TestEmptyStore(t *testing.T) {
 	s, err := indexerstore.NewIndexerStore(db)
 	require.NoError(t, err)
 	hash := bbndatagen.GenRandomBtcdHash(r)
-	tx, err := s.GetStakingTransaction(&hash)
-	require.Nil(t, tx)
+	stakingTx, err := s.GetStakingTransaction(&hash)
+	require.Nil(t, stakingTx)
+	require.Error(t, err)
+	require.True(t, errors.Is(err, indexerstore.ErrTransactionNotFound))
+	unbondingTx, err := s.GetUnbondingTransaction(&hash)
+	require.Nil(t, unbondingTx)
 	require.Error(t, err)
 	require.True(t, errors.Is(err, indexerstore.ErrTransactionNotFound))
 }
@@ -77,6 +81,16 @@ func FuzzStoringTxs(f *testing.F) {
 			require.NoError(t, err)
 			require.Equal(t, storedTx.Tx, tx.Tx)
 			require.True(t, storedTx.StakingTxHash.IsEqual(tx.StakingTxHash))
+		}
+
+		// add unbonding txs that do not spend previous staking tx
+		// should expect error
+		// add unbonding txs to store
+		notStoredStakingTxs := datagen.GenNStoredStakingTxs(t, r, numTx, 200)
+		wrongUnbondingTxs := datagen.GenStoredUnbondingTxs(r, notStoredStakingTxs)
+		for _, storedTx := range wrongUnbondingTxs {
+			err := s.AddUnbondingTransaction(storedTx.Tx, storedTx.StakingTxHash)
+			require.ErrorIs(t, err, indexerstore.ErrTransactionNotFound)
 		}
 	})
 }

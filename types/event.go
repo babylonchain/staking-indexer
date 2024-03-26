@@ -1,5 +1,7 @@
 package types
 
+import "github.com/btcsuite/btcd/chaincfg/chainhash"
+
 const (
 	ActiveStakingQueueName    string = "active_staking_queue"
 	UnbondingStakingQueueName string = "unbonding_staking_queue"
@@ -123,5 +125,12 @@ func NewUnbondStakingEvent(stakingTxHash string) UnbondStakingEvent {
 	return UnbondStakingEvent{
 		EventType:     UnbondStakingEventType,
 		StakingTxHash: stakingTxHash,
+	}
+}
+
+func NewWithdrawEvent(stakingTxHash *chainhash.Hash) *WithdrawStakingEvent {
+	return &WithdrawStakingEvent{
+		EventType:     UnbondingStakingEventType,
+		StakingTxHash: stakingTxHash.String(),
 	}
 }
