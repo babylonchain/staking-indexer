@@ -20,17 +20,17 @@ type QueueConsumer struct {
 }
 
 func NewQueueConsumer(cfg *config.QueueConfig, logger *zap.Logger) (*QueueConsumer, error) {
-	stakingQueue, err := client.NewQueueClient(cfg.Url, cfg.User, cfg.Password, client.ActiveStakingQueueName)
+	stakingQueue, err := client.NewQueueClient(cfg.Url, cfg.User, cfg.Password, types.ActiveStakingQueueName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create staking queue: %w", err)
 	}
 
-	unbondingQueue, err := client.NewQueueClient(cfg.Url, cfg.User, cfg.Password, client.UnbondingStakingQueueName)
+	unbondingQueue, err := client.NewQueueClient(cfg.Url, cfg.User, cfg.Password, types.UnbondingStakingQueueName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create unbonding queue: %w", err)
 	}
 
-	withdrawQueue, err := client.NewQueueClient(cfg.Url, cfg.User, cfg.Password, client.WithdrawStakingQueueName)
+	withdrawQueue, err := client.NewQueueClient(cfg.Url, cfg.User, cfg.Password, types.WithdrawStakingQueueName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create withdraw queue: %w", err)
 	}
