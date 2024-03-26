@@ -18,11 +18,15 @@ func setupTestQueueConsumer(t *testing.T, cfg *config.QueueConfig) (*consumer.Qu
 	conn, err := amqp091.Dial(amqpURI)
 	require.NoError(t, err)
 	defer conn.Close()
-	purgeQueues(conn, []string{
+	err = purgeQueues(conn, []string{
 		queueclient.ActiveStakingQueueName,
 		queueclient.UnbondingStakingQueueName,
 		queueclient.WithdrawStakingQueueName,
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	// Start the actual queue processing in our codebase
 	queues, err := consumer.NewQueueConsumer(cfg, zap.NewNop())

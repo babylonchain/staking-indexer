@@ -173,20 +173,6 @@ func defaultStakingIndexerConfig(homePath string) *config.Config {
 	return defaultConfig
 }
 
-func defaultBtcConnConfig(cfg *config.BTCConfig) *rpcclient.ConnConfig {
-	return &rpcclient.ConnConfig{
-		Host:                 cfg.RPCHost,
-		User:                 cfg.RPCUser,
-		Pass:                 cfg.RPCPass,
-		DisableTLS:           true,
-		DisableConnectOnNew:  true,
-		DisableAutoReconnect: false,
-		// we use post mode as it sure it works with either bitcoind or btcwallet
-		// we may need to re-consider it later if we need any notifications
-		HTTPPostMode: true,
-	}
-}
-
 func defaultStakerConfig(t *testing.T, passphrase string) (*stakercfg.Config, *rpcclient.Client) {
 	defaultConfig := stakercfg.DefaultConfig()
 
@@ -240,7 +226,7 @@ func defaultStakerConfig(t *testing.T, passphrase string) (*stakercfg.Config, *r
 	return &defaultConfig, testRpcClient
 }
 
-func (tm *TestManager) SendStakingTxWithNConfirmations(t *testing.T, tx *wire.MsgTx, n int) {
+func (tm *TestManager) SendTxWithNConfirmations(t *testing.T, tx *wire.MsgTx, n int) {
 	txHash, err := tm.StakerWallet.SendRawTransaction(tx, true)
 	require.NoError(t, err)
 
@@ -270,4 +256,13 @@ func (tm *TestManager) mineNBlock(t *testing.T, n int) *wire.MsgBlock {
 	header, err := tm.StakerWallet.GetBlock(hash)
 	require.NoError(t, err)
 	return header
+}
+
+func (tm *TestManager) WaitForConfirmedTipHeight(t *testing.T, k uint64) {
+	currentHeight, err := tm.BitcoindHandler.GetBlockCount()
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		confirmedTip := tm.BS.LastConfirmedHeight()
+		return confirmedTip == uint64(currentHeight)-k
+	}, eventuallyWaitTimeOut, eventuallyPollTime)
 }

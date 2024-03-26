@@ -6,7 +6,7 @@ import (
 	"github.com/babylonchain/staking-indexer/types"
 )
 
-var covenantPrivKey, _ = btcec.NewPrivateKey()
+var CovenantPrivKey, _ = btcec.NewPrivateKey()
 
 type ParamsRetriever interface {
 	GetParams() (*types.Params, error)
@@ -18,7 +18,7 @@ type LocalParamsRetriever struct {
 
 func NewLocalParamsRetriever() *LocalParamsRetriever {
 	magicBytes := []byte("1234")
-	covenantPks := []*btcec.PublicKey{covenantPrivKey.PubKey()}
+	covenantPks := []*btcec.PublicKey{CovenantPrivKey.PubKey()}
 	covenantQuorum := uint32(1)
 	unbondingTime := uint16(1000)
 

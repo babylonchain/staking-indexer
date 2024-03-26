@@ -127,7 +127,11 @@ func (c *RabbitMqClient) SendMessage(ctx context.Context, messageBody string) er
 	if confirmation == nil {
 		return fmt.Errorf("message not confirmed when publishing into queue %s", c.queueName)
 	}
-	confirmation.WaitContext(ctx)
+	_, err = confirmation.WaitContext(ctx)
+
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
