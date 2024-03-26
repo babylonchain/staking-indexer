@@ -240,7 +240,7 @@ func defaultStakerConfig(t *testing.T, passphrase string) (*stakercfg.Config, *r
 	return &defaultConfig, testRpcClient
 }
 
-func (tm *TestManager) SendStakingTx(t *testing.T, tx *wire.MsgTx) {
+func (tm *TestManager) SendStakingTxWithNConfirmations(t *testing.T, tx *wire.MsgTx, n int) {
 	txHash, err := tm.StakerWallet.SendRawTransaction(tx, true)
 	require.NoError(t, err)
 
@@ -249,7 +249,7 @@ func (tm *TestManager) SendStakingTx(t *testing.T, tx *wire.MsgTx) {
 		return len(txFromMempool) == 1
 	}, eventuallyWaitTimeOut, eventuallyPollTime)
 
-	mBlock := tm.mineNBlock(t, 20)
+	mBlock := tm.mineNBlock(t, n)
 	require.Equal(t, 2, len(mBlock.Transactions))
 }
 
