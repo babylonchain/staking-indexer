@@ -10,7 +10,6 @@ import (
 
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/consumer"
-	queueclient "github.com/babylonchain/staking-indexer/queue/client"
 )
 
 func setupTestQueueConsumer(t *testing.T, cfg *config.QueueConfig) (*consumer.QueueConsumer, error) {
@@ -18,37 +17,10 @@ func setupTestQueueConsumer(t *testing.T, cfg *config.QueueConfig) (*consumer.Qu
 	conn, err := amqp091.Dial(amqpURI)
 	require.NoError(t, err)
 	defer conn.Close()
-	err = purgeQueues(conn, []string{
-		queueclient.ActiveStakingQueueName,
-		queueclient.UnbondingStakingQueueName,
-		queueclient.WithdrawStakingQueueName,
-	})
-
-	if err != nil {
-		return nil, err
-	}
 
 	// Start the actual queue processing in our codebase
 	queues, err := consumer.NewQueueConsumer(cfg, zap.NewNop())
 	require.NoError(t, err)
 
 	return queues, nil
-}
-
-// purgeQueues purges all messages from the given list of queues.
-func purgeQueues(conn *amqp091.Connection, queues []string) error {
-	ch, err := conn.Channel()
-	if err != nil {
-		return fmt.Errorf("failed to open a channel in test: %w", err)
-	}
-	defer ch.Close()
-
-	for _, queue := range queues {
-		_, err := ch.QueuePurge(queue, false)
-		if err != nil {
-			return fmt.Errorf("failed to purge queue in test %s: %w", queue, err)
-		}
-	}
-
-	return nil
 }
