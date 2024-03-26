@@ -15,6 +15,18 @@ func (dc *DumbConsumer) PushStakingEvent(ev *types.ActiveStakingEvent) error {
 	return nil
 }
 
+func (dc *DumbConsumer) PushUnbondingEvent(ev *types.UnbondingStakingEvent) error {
+	fmt.Printf("staking tx hash of the unbonding event is %s", ev.StakingTxHash)
+
+	return nil
+}
+
+func (dc *DumbConsumer) PushWithdrawEvent(ev *types.WithdrawStakingEvent) error {
+	fmt.Printf("staking tx hash of the withdraw event is %s", ev.StakingTxHash)
+
+	return nil
+}
+
 func (dc *DumbConsumer) Start() error {
 	return nil
 }

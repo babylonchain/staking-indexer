@@ -1,12 +1,14 @@
 package indexer
 
 import (
-	"encoding/hex"
+	"bytes"
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/babylonchain/babylon/btcstaking"
 	vtypes "github.com/babylonchain/vigilante/types"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/kvdb"
@@ -97,34 +99,154 @@ func (si *StakingIndexer) confirmedBlocksLoop() {
 }
 
 // handleConfirmedBlock iterates all the tx set in the block and
-// parse staking tx data if there are any
+// parse staking tx, unbonding tx, and withdrawal tx if there are any
 func (si *StakingIndexer) handleConfirmedBlock(b *vtypes.IndexedBlock) error {
 	for _, tx := range b.Txs {
 		msgTx := tx.MsgTx()
 
+		// 1. try to parse staking tx
 		stakingData, err := si.tryParseStakingTx(msgTx)
 		if err == nil {
-			si.logger.Info("found a staking tx",
-				zap.Int32("height", b.Height),
-				zap.String("tx_hash", msgTx.TxHash().String()),
-				zap.String("staker_pk", hex.EncodeToString(stakingData.OpReturnData.StakerPublicKey.Marshall())),
-				zap.Int64("staking_value", msgTx.TxOut[stakingData.StakingOutputIdx].Value),
-				zap.Uint16("staking_time", stakingData.OpReturnData.StakingTime),
-			)
-
 			if err := si.processStakingTx(msgTx, stakingData, uint64(b.Height)); err != nil {
-				return err
+				if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
+					return err
+				}
+				// we don't consider duplicate error critical as it can happen
+				// when the indexer restarts
+				si.logger.Warn("found a duplicate tx",
+					zap.String("tx_hash", msgTx.TxHash().String()))
+				continue
 			}
 
-			// TODO: add monitor for withdrawal tx
+			// should not use *continue* here as a special case is
+			// the tx could be a staking tx as well as a withdrawal
+			// tx that spends the previous staking tx
+		}
 
+		// 2. not a staking tx, check whether it spends a stored staking tx
+		stakingTx, spentInputIdx := si.getSpentStakingTx(msgTx)
+		if spentInputIdx >= 0 {
+			stakingTxHash := stakingTx.Tx.TxHash()
+			// 3. is a spending tx, check whether it is an unbonding tx
+			isUnbonding, err := si.IsUnbondingTx(msgTx, stakingTx)
+			if err != nil {
+				return err
+			}
+			if !isUnbonding {
+				// 4. not a unbongidng tx, so this is a withdraw tx from the staking
+				if err := si.processWithdrawTx(msgTx, &stakingTxHash, nil); err != nil {
+					return err
+				}
+				continue
+			}
+
+			// 5. this is an unbonding tx
+			if err := si.processUnbondingTx(msgTx, &stakingTxHash, uint64(b.Height)); err != nil {
+				if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
+					return err
+				}
+				// we don't consider duplicate error critical as it can happen
+				// when the indexer restarts
+				si.logger.Warn("found a duplicate tx",
+					zap.String("tx_hash", msgTx.TxHash().String()))
+			}
 			continue
 		}
 
-		// TODO: try to parse unbonding tx from here
+		// 6. it does not spend staking tx, check whether it spends stored
+		// unbonding tx
+		unbondingTx, spentInputIdx := si.getSpentUnbondingTx(msgTx)
+		if spentInputIdx >= 0 {
+			// 7. this is a withdraw tx from the unbonding
+			unbondingTxHash := unbondingTx.Tx.TxHash()
+			if err := si.processWithdrawTx(msgTx, unbondingTx.StakingTxHash, &unbondingTxHash); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
+}
+
+// getSpentStakingTx checks if the given tx spends any of the stored staking tx
+// if so, it returns the found staking tx and the spent staking input index,
+// otherwise, it returns nil and -1
+func (si *StakingIndexer) getSpentStakingTx(tx *wire.MsgTx) (*indexerstore.StoredStakingTransaction, int) {
+	for i, txIn := range tx.TxIn {
+		maybeStakingTxHash := txIn.PreviousOutPoint.Hash
+		stakingTx, err := si.GetStakingTxByHash(&maybeStakingTxHash)
+		if err != nil {
+			continue
+		}
+
+		// this ensures the spending tx spends the correct staking output
+		if txIn.PreviousOutPoint.Index != stakingTx.StakingOutputIdx {
+			continue
+		}
+
+		return stakingTx, i
+	}
+
+	return nil, -1
+}
+
+// getSpentStakingTx checks if the given tx spends any of the stored staking tx
+// if so, it returns the found staking tx and the spent staking input index,
+// otherwise, it returns nil and -1
+func (si *StakingIndexer) getSpentUnbondingTx(tx *wire.MsgTx) (*indexerstore.StoredUnbondingTransaction, int) {
+	for i, txIn := range tx.TxIn {
+		maybeUnbondingTxHash := txIn.PreviousOutPoint.Hash
+		unbondingTx, err := si.GetUnbondingTxByHash(&maybeUnbondingTxHash)
+		if err != nil {
+			continue
+		}
+
+		return unbondingTx, i
+	}
+
+	return nil, -1
+}
+
+// IsUnbondingTx tries to identify a tx is an unbonding tx
+// if provided tx is not unbonding tx it returns error.
+func (si *StakingIndexer) IsUnbondingTx(tx *wire.MsgTx, stakingTx *indexerstore.StoredStakingTransaction) (bool, error) {
+	// 1. the tx must have exactly one input and output
+	if len(tx.TxIn) != 1 {
+		return false, nil
+	}
+	if len(tx.TxOut) != 1 {
+		return false, nil
+	}
+
+	// 2. the tx must spend the staking output
+	stakingTxHash := stakingTx.Tx.TxHash()
+	if !tx.TxIn[0].PreviousOutPoint.Hash.IsEqual(&stakingTxHash) {
+		return false, nil
+	}
+	if tx.TxIn[0].PreviousOutPoint.Index != stakingTx.StakingOutputIdx {
+		return false, nil
+	}
+
+	// 3. the script of the unbonding output must be as expected
+	// re-build unbonding output from params, unbonding amount could be 0 as it will
+	// not be considered as part of PkScript
+	expectedUnbondingOutput, err := btcstaking.BuildUnbondingInfo(
+		stakingTx.StakerPk,
+		[]*btcec.PublicKey{stakingTx.FinalityProviderPk},
+		si.params.CovenantPks,
+		si.params.CovenantQuorum,
+		si.params.UnbondingTime,
+		0,
+		&si.cfg.BTCNetParams,
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to rebuild unbonding output: %w", err)
+	}
+	if !bytes.Equal(tx.TxOut[0].PkScript, expectedUnbondingOutput.UnbondingOutput.PkScript) {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func (si *StakingIndexer) processStakingTx(tx *wire.MsgTx, stakingData *btcstaking.ParsedV0StakingTx, height uint64) error {
@@ -155,6 +277,61 @@ func (si *StakingIndexer) processStakingTx(tx *wire.MsgTx, stakingData *btcstaki
 	return nil
 }
 
+func (si *StakingIndexer) processUnbondingTx(tx *wire.MsgTx, stakingTxHash *chainhash.Hash, height uint64) error {
+	si.logger.Info("found an unbonding tx",
+		zap.Uint64("height", height),
+		zap.String("tx_hash", tx.TxHash().String()),
+		zap.String("staking_tx_hash", stakingTxHash.String()),
+	)
+
+	unbondingEvent := types.NewUnbondingStakingEvent(stakingTxHash, height, si.params.UnbondingTime)
+
+	if err := si.consumer.PushUnbondingEvent(unbondingEvent); err != nil {
+		return fmt.Errorf("failed to push the unbonding event to the consumer: %w", err)
+	}
+
+	si.logger.Info("successfully pushing the unbonding event",
+		zap.String("tx_hash", tx.TxHash().String()))
+
+	if err := si.is.AddUnbondingTransaction(
+		tx,
+		stakingTxHash,
+	); err != nil {
+		return fmt.Errorf("failed to add the unbonding tx to store: %w", err)
+	}
+
+	si.logger.Info("successfully saving the unbonding tx",
+		zap.String("tx_hash", tx.TxHash().String()))
+
+	return nil
+}
+
+func (si *StakingIndexer) processWithdrawTx(tx *wire.MsgTx, stakingTxHash *chainhash.Hash, unbondingTxHash *chainhash.Hash) error {
+	if unbondingTxHash == nil {
+		si.logger.Info("found a withdraw tx from staking",
+			zap.String("tx_hash", tx.TxHash().String()),
+			zap.String("staking_tx_hash", stakingTxHash.String()),
+		)
+	} else {
+		si.logger.Info("found a withdraw tx from unbonding",
+			zap.String("tx_hash", tx.TxHash().String()),
+			zap.String("staking_tx_hash", stakingTxHash.String()),
+			zap.String("unbonding_tx_hash", unbondingTxHash.String()),
+		)
+	}
+
+	withdrawEvent := types.NewWithdrawEvent(stakingTxHash)
+
+	if err := si.consumer.PushWithdrawEvent(withdrawEvent); err != nil {
+		return fmt.Errorf("failed to push the withdraw event to the consumer: %w", err)
+	}
+
+	si.logger.Info("successfully pushing the withdraw event",
+		zap.String("tx_hash", tx.TxHash().String()))
+
+	return nil
+}
+
 func (si *StakingIndexer) tryParseStakingTx(tx *wire.MsgTx) (*btcstaking.ParsedV0StakingTx, error) {
 	possible := btcstaking.IsPossibleV0StakingTx(tx, si.params.MagicBytes)
 	if !possible {
@@ -175,7 +352,11 @@ func (si *StakingIndexer) tryParseStakingTx(tx *wire.MsgTx) (*btcstaking.ParsedV
 }
 
 func (si *StakingIndexer) GetStakingTxByHash(hash *chainhash.Hash) (*indexerstore.StoredStakingTransaction, error) {
-	return si.is.GetTransaction(hash)
+	return si.is.GetStakingTransaction(hash)
+}
+
+func (si *StakingIndexer) GetUnbondingTxByHash(hash *chainhash.Hash) (*indexerstore.StoredUnbondingTransaction, error) {
+	return si.is.GetUnbondingTransaction(hash)
 }
 
 func (si *StakingIndexer) Stop() error {

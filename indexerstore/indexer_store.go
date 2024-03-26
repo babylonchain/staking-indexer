@@ -16,8 +16,11 @@ import (
 )
 
 var (
-	// mapping tx hash -> Transaction
-	transactionBucketName = []byte("transactions")
+	// mapping tx hash -> staking transaction
+	stakingTxBucketName = []byte("stakingtxs")
+
+	// mapping tx hash -> unbonding transaction
+	unbondingTxBucketName = []byte("unbondingtxs")
 )
 
 type IndexerStore struct {
@@ -31,6 +34,11 @@ type StoredStakingTransaction struct {
 	StakerPk           *btcec.PublicKey
 	StakingTime        uint32
 	FinalityProviderPk *btcec.PublicKey
+}
+
+type StoredUnbondingTransaction struct {
+	Tx            *wire.MsgTx
+	StakingTxHash *chainhash.Hash
 }
 
 // NewIndexerStore returns a new store backed by db
@@ -47,7 +55,12 @@ func NewIndexerStore(db kvdb.Backend) (*IndexerStore,
 
 func (c *IndexerStore) initBuckets() error {
 	return kvdb.Batch(c.db, func(tx kvdb.RwTx) error {
-		_, err := tx.CreateTopLevelBucket(transactionBucketName)
+		_, err := tx.CreateTopLevelBucket(stakingTxBucketName)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.CreateTopLevelBucket(unbondingTxBucketName)
 		if err != nil {
 			return err
 		}
@@ -89,7 +102,7 @@ func (is *IndexerStore) addStakingTransaction(
 ) error {
 	return kvdb.Batch(is.db, func(tx kvdb.RwTx) error {
 
-		txBucket := tx.ReadWriteBucket(transactionBucketName)
+		txBucket := tx.ReadWriteBucket(stakingTxBucketName)
 		if txBucket == nil {
 			return ErrCorruptedTransactionsDb
 		}
@@ -107,12 +120,12 @@ func (is *IndexerStore) addStakingTransaction(
 	})
 }
 
-func (is *IndexerStore) GetTransaction(txHash *chainhash.Hash) (*StoredStakingTransaction, error) {
+func (is *IndexerStore) GetStakingTransaction(txHash *chainhash.Hash) (*StoredStakingTransaction, error) {
 	var storedTx *StoredStakingTransaction
 	txHashBytes := txHash.CloneBytes()
 
 	err := is.db.View(func(tx kvdb.RTx) error {
-		txBucket := tx.ReadBucket(transactionBucketName)
+		txBucket := tx.ReadBucket(stakingTxBucketName)
 		if txBucket == nil {
 			return ErrCorruptedTransactionsDb
 		}
@@ -167,5 +180,116 @@ func protoStakingTxToStoredStakingTx(protoTx *proto.StakingTransaction) (*Stored
 		StakerPk:           stakerPk,
 		StakingTime:        protoTx.StakingTime,
 		FinalityProviderPk: fpPk,
+	}, nil
+}
+
+func (is *IndexerStore) AddUnbondingTransaction(
+	tx *wire.MsgTx,
+	stakingTxHash *chainhash.Hash,
+) error {
+	txHash := tx.TxHash()
+	serializedTx, err := utils.SerializeBtcTransaction(tx)
+
+	if err != nil {
+		return err
+	}
+
+	stakingTxHashBytes := stakingTxHash.CloneBytes()
+	msg := proto.UnbondingTransaction{
+		TransactionBytes: serializedTx,
+		StakingTxHash:    stakingTxHash.CloneBytes(),
+	}
+
+	return is.addUnbondingTransaction(txHash[:], stakingTxHashBytes, &msg)
+}
+
+func (is *IndexerStore) addUnbondingTransaction(
+	txHashBytes []byte,
+	stakingHashBytes []byte,
+	ut *proto.UnbondingTransaction,
+) error {
+	return kvdb.Batch(is.db, func(tx kvdb.RwTx) error {
+		stakingTxBucket := tx.ReadWriteBucket(stakingTxBucketName)
+		if stakingTxBucket == nil {
+			return ErrCorruptedTransactionsDb
+		}
+
+		// we need to ensure the staking tx already exists
+		maybeStakingTx := stakingTxBucket.Get(stakingHashBytes)
+		if maybeStakingTx == nil {
+			return ErrTransactionNotFound
+		}
+
+		unbondingTxBucket := tx.ReadWriteBucket(unbondingTxBucketName)
+		if unbondingTxBucket == nil {
+			return ErrCorruptedTransactionsDb
+		}
+
+		// check duplicate
+		maybeTx := unbondingTxBucket.Get(txHashBytes)
+		if maybeTx != nil {
+			return ErrDuplicateTransaction
+		}
+
+		marshalled, err := pm.Marshal(ut)
+		if err != nil {
+			return err
+		}
+
+		return unbondingTxBucket.Put(txHashBytes, marshalled)
+	})
+}
+
+func (is *IndexerStore) GetUnbondingTransaction(txHash *chainhash.Hash) (*StoredUnbondingTransaction, error) {
+	var storedTx *StoredUnbondingTransaction
+	txHashBytes := txHash.CloneBytes()
+
+	err := is.db.View(func(tx kvdb.RTx) error {
+		txBucket := tx.ReadBucket(unbondingTxBucketName)
+		if txBucket == nil {
+			return ErrCorruptedTransactionsDb
+		}
+
+		maybeTx := txBucket.Get(txHashBytes)
+		if maybeTx == nil {
+			return ErrTransactionNotFound
+		}
+
+		var storedTxProto proto.UnbondingTransaction
+		if err := pm.Unmarshal(maybeTx, &storedTxProto); err != nil {
+			return ErrCorruptedTransactionsDb
+		}
+
+		txFromDb, err := protoUnbondingTxToStoredUnbondingTx(&storedTxProto)
+		if err != nil {
+			return err
+		}
+
+		storedTx = txFromDb
+		return nil
+	}, func() {})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return storedTx, nil
+}
+
+func protoUnbondingTxToStoredUnbondingTx(protoTx *proto.UnbondingTransaction) (*StoredUnbondingTransaction, error) {
+	var unbondingTx wire.MsgTx
+	err := unbondingTx.Deserialize(bytes.NewReader(protoTx.TransactionBytes))
+	if err != nil {
+		return nil, fmt.Errorf("invalid unbonding tx: %w", err)
+	}
+
+	stakingTxHash, err := chainhash.NewHash(protoTx.StakingTxHash)
+	if err != nil {
+		return nil, fmt.Errorf("invalid staking tx hash")
+	}
+
+	return &StoredUnbondingTransaction{
+		Tx:            &unbondingTx,
+		StakingTxHash: stakingTxHash,
 	}, nil
 }

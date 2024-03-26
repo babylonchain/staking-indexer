@@ -6,4 +6,5 @@ type Params struct {
 	MagicBytes     []byte
 	CovenantPks    []*btcec.PublicKey
 	CovenantQuorum uint32
+	UnbondingTime  uint16
 }
