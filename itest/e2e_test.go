@@ -81,6 +81,9 @@ func TestStakingIndexer(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, stakingTx.TxHash().String(), storedStakingTx.Tx.TxHash().String())
 
+	// check the staking event is received by the queue
+	tm.CheckNextStakingEvent(t, stakingTx.TxHash().String())
+
 	// build and send unbonding tx from the previous staking tx
 	unbondingSpendInfo, err := stakingInfo.UnbondingPathSpendInfo()
 	require.NoError(t, err)
@@ -107,6 +110,9 @@ func TestStakingIndexer(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, unbondingTx.TxHash().String(), storedUnbondingTx.Tx.TxHash().String())
 	require.Equal(t, stakingTxHash.String(), storedUnbondingTx.StakingTxHash.String())
+
+	// check the unbonding event is received by the queue
+	tm.CheckNextUnbondingEvent(t, stakingTx.TxHash().String())
 }
 
 func buildUnbondingTx(

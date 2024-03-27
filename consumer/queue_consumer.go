@@ -13,9 +13,9 @@ import (
 )
 
 type QueueConsumer struct {
-	stakingQueue   client.QueueClient
-	unbondingQueue client.QueueClient
-	withdrawQueue  client.QueueClient
+	StakingQueue   client.QueueClient
+	UnbondingQueue client.QueueClient
+	WithdrawQueue  client.QueueClient
 	logger         *zap.Logger
 }
 
@@ -36,9 +36,9 @@ func NewQueueConsumer(cfg *config.QueueConfig, logger *zap.Logger) (*QueueConsum
 	}
 
 	return &QueueConsumer{
-		stakingQueue:   stakingQueue,
-		unbondingQueue: unbondingQueue,
-		withdrawQueue:  withdrawQueue,
+		StakingQueue:   stakingQueue,
+		UnbondingQueue: unbondingQueue,
+		WithdrawQueue:  withdrawQueue,
 		logger:         logger.With(zap.String("module", "queue consumer")),
 	}, nil
 }
@@ -55,7 +55,7 @@ func (qc *QueueConsumer) PushStakingEvent(ev *types.ActiveStakingEvent) error {
 	messageBody := string(jsonBytes)
 
 	qc.logger.Info("pushing staking event", zap.String("tx_hash", ev.StakingTxHex))
-	err = qc.stakingQueue.SendMessage(context.TODO(), messageBody)
+	err = qc.StakingQueue.SendMessage(context.TODO(), messageBody)
 	if err != nil {
 		return fmt.Errorf("failed to push staking event: %w", err)
 	}
@@ -72,7 +72,7 @@ func (qc *QueueConsumer) PushUnbondingEvent(ev *types.UnbondingStakingEvent) err
 	messageBody := string(jsonBytes)
 
 	qc.logger.Info("pushing unbonding event", zap.String("tx_hash", ev.StakingTxHashHex))
-	err = qc.unbondingQueue.SendMessage(context.TODO(), messageBody)
+	err = qc.UnbondingQueue.SendMessage(context.TODO(), messageBody)
 	if err != nil {
 		return fmt.Errorf("failed to push unbonding event: %w", err)
 	}
@@ -89,7 +89,7 @@ func (qc *QueueConsumer) PushWithdrawEvent(ev *types.WithdrawStakingEvent) error
 	messageBody := string(jsonBytes)
 
 	qc.logger.Info("pushing withdraw event", zap.String("tx_hash", ev.StakingTxHashHex))
-	err = qc.withdrawQueue.SendMessage(context.TODO(), messageBody)
+	err = qc.WithdrawQueue.SendMessage(context.TODO(), messageBody)
 	if err != nil {
 		return fmt.Errorf("failed to push withdraw event: %w", err)
 	}
@@ -99,9 +99,9 @@ func (qc *QueueConsumer) PushWithdrawEvent(ev *types.WithdrawStakingEvent) error
 }
 
 func (qc *QueueConsumer) Stop() error {
-	qc.stakingQueue.Stop()
-	qc.unbondingQueue.Stop()
-	qc.withdrawQueue.Stop()
+	qc.StakingQueue.Stop()
+	qc.UnbondingQueue.Stop()
+	qc.WithdrawQueue.Stop()
 
 	return nil
 }

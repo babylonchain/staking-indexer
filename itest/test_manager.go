@@ -1,6 +1,7 @@
 package e2etest
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"sync"
@@ -8,7 +9,7 @@ import (
 	"time"
 
 	"github.com/babylonchain/btc-staker/stakercfg"
-	"github.com/babylonchain/btc-staker/types"
+	stakertypes "github.com/babylonchain/btc-staker/types"
 	"github.com/babylonchain/btc-staker/walletcontroller"
 	"github.com/babylonchain/vigilante/btcclient"
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -26,21 +27,26 @@ import (
 	"github.com/babylonchain/staking-indexer/indexer"
 	"github.com/babylonchain/staking-indexer/log"
 	"github.com/babylonchain/staking-indexer/params"
+	"github.com/babylonchain/staking-indexer/queue/client"
 	"github.com/babylonchain/staking-indexer/server"
+	"github.com/babylonchain/staking-indexer/types"
 )
 
 type TestManager struct {
-	Config          *config.Config
-	Db              kvdb.Backend
-	Si              *indexer.StakingIndexer
-	BS              *btcscanner.BtcScanner
-	WalletPrivKey   *btcec.PrivateKey
-	serverStopper   *signal.Interceptor
-	wg              *sync.WaitGroup
-	BitcoindHandler *BitcoindTestHandler
-	BtcClient       *btcclient.Client
-	StakerWallet    *walletcontroller.RpcWalletController
-	MinerAddr       btcutil.Address
+	Config              *config.Config
+	Db                  kvdb.Backend
+	Si                  *indexer.StakingIndexer
+	BS                  *btcscanner.BtcScanner
+	WalletPrivKey       *btcec.PrivateKey
+	serverStopper       *signal.Interceptor
+	wg                  *sync.WaitGroup
+	BitcoindHandler     *BitcoindTestHandler
+	BtcClient           *btcclient.Client
+	StakerWallet        *walletcontroller.RpcWalletController
+	MinerAddr           btcutil.Address
+	StakingEventQueue   client.QueueClient
+	UnbondingEventQueue client.QueueClient
+	WithdrawEventQueue  client.QueueClient
 }
 
 // bitcoin params used for testing
@@ -135,16 +141,19 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	time.Sleep(3 * time.Second)
 
 	return &TestManager{
-		Config:          cfg,
-		Si:              si,
-		BS:              scanner,
-		serverStopper:   &interceptor,
-		wg:              &wg,
-		BitcoindHandler: h,
-		BtcClient:       btcClient,
-		StakerWallet:    stakerWallet,
-		WalletPrivKey:   walletPrivKey,
-		MinerAddr:       minerAddressDecoded,
+		Config:              cfg,
+		Si:                  si,
+		BS:                  scanner,
+		serverStopper:       &interceptor,
+		wg:                  &wg,
+		BitcoindHandler:     h,
+		BtcClient:           btcClient,
+		StakerWallet:        stakerWallet,
+		WalletPrivKey:       walletPrivKey,
+		MinerAddr:           minerAddressDecoded,
+		StakingEventQueue:   queueConsumer.StakingQueue,
+		UnbondingEventQueue: queueConsumer.UnbondingQueue,
+		WithdrawEventQueue:  queueConsumer.WithdrawQueue,
 	}
 }
 
@@ -177,13 +186,13 @@ func defaultStakerConfig(t *testing.T, passphrase string) (*stakercfg.Config, *r
 	defaultConfig := stakercfg.DefaultConfig()
 
 	// both wallet and node are bicoind
-	defaultConfig.BtcNodeBackendConfig.ActiveWalletBackend = types.BitcoindWalletBackend
-	defaultConfig.BtcNodeBackendConfig.ActiveNodeBackend = types.BitcoindNodeBackend
+	defaultConfig.BtcNodeBackendConfig.ActiveWalletBackend = stakertypes.BitcoindWalletBackend
+	defaultConfig.BtcNodeBackendConfig.ActiveNodeBackend = stakertypes.BitcoindNodeBackend
 	defaultConfig.ActiveNetParams = *regtestParams
 
 	// Fees configuration
 	defaultConfig.BtcNodeBackendConfig.FeeMode = "dynamic"
-	defaultConfig.BtcNodeBackendConfig.EstimationMode = types.DynamicFeeEstimation
+	defaultConfig.BtcNodeBackendConfig.EstimationMode = stakertypes.DynamicFeeEstimation
 
 	bitcoindHost := "127.0.0.1:18443"
 	bitcoindUser := "user"
@@ -265,4 +274,24 @@ func (tm *TestManager) WaitForConfirmedTipHeight(t *testing.T, k uint64) {
 		confirmedTip := tm.BS.LastConfirmedHeight()
 		return confirmedTip == uint64(currentHeight)-k
 	}, eventuallyWaitTimeOut, eventuallyPollTime)
+}
+
+func (tm *TestManager) CheckNextStakingEvent(t *testing.T, stakingTxHash string) {
+	stakingChan, err := tm.StakingEventQueue.ReceiveMessages()
+	require.NoError(t, err)
+	stakingEventBytes := <-stakingChan
+	var activeStakingEvent types.ActiveStakingEvent
+	err = json.Unmarshal([]byte(stakingEventBytes.Body), &activeStakingEvent)
+	require.NoError(t, err)
+	require.Equal(t, stakingTxHash, activeStakingEvent.StakingTxHashHex)
+}
+
+func (tm *TestManager) CheckNextUnbondingEvent(t *testing.T, stakingTxHash string) {
+	unbondingChan, err := tm.UnbondingEventQueue.ReceiveMessages()
+	require.NoError(t, err)
+	unbondingEventBytes := <-unbondingChan
+	var unbondingEvent types.UnbondingStakingEvent
+	err = json.Unmarshal([]byte(unbondingEventBytes.Body), &unbondingEvent)
+	require.NoError(t, err)
+	require.Equal(t, stakingTxHash, unbondingEvent.StakingTxHashHex)
 }
