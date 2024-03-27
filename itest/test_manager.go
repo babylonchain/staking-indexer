@@ -284,6 +284,9 @@ func (tm *TestManager) CheckNextStakingEvent(t *testing.T, stakingTxHash string)
 	err = json.Unmarshal([]byte(stakingEventBytes.Body), &activeStakingEvent)
 	require.NoError(t, err)
 	require.Equal(t, stakingTxHash, activeStakingEvent.StakingTxHashHex)
+
+	err = tm.StakingEventQueue.DeleteMessage(stakingEventBytes.Receipt)
+	require.NoError(t, err)
 }
 
 func (tm *TestManager) CheckNextUnbondingEvent(t *testing.T, stakingTxHash string) {
@@ -294,6 +297,9 @@ func (tm *TestManager) CheckNextUnbondingEvent(t *testing.T, stakingTxHash strin
 	err = json.Unmarshal([]byte(unbondingEventBytes.Body), &unbondingEvent)
 	require.NoError(t, err)
 	require.Equal(t, stakingTxHash, unbondingEvent.StakingTxHashHex)
+
+	err = tm.UnbondingEventQueue.DeleteMessage(unbondingEventBytes.Receipt)
+	require.NoError(t, err)
 }
 
 func (tm *TestManager) CheckNextWithdrawEvent(t *testing.T, stakingTxHash string) {
@@ -304,4 +310,7 @@ func (tm *TestManager) CheckNextWithdrawEvent(t *testing.T, stakingTxHash string
 	err = json.Unmarshal([]byte(withdrawEventBytes.Body), &withdrawEvent)
 	require.NoError(t, err)
 	require.Equal(t, stakingTxHash, withdrawEvent.StakingTxHashHex)
+
+	err = tm.WithdrawEventQueue.DeleteMessage(withdrawEventBytes.Receipt)
+	require.NoError(t, err)
 }

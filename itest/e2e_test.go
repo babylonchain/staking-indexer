@@ -1,3 +1,6 @@
+//go:build e2e
+// +build e2e
+
 package e2etest
 
 import (
@@ -98,7 +101,7 @@ func TestStakingLifeCycle(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, err)
-	withdrawTx := buildStakingWithdrawTx(
+	withdrawTx := buildWithdrawTx(
 		t,
 		tm.WalletPrivKey,
 		stakingTx.TxOut[storedStakingTx.StakingOutputIdx],
@@ -206,11 +209,37 @@ func TestStakingIndexer_StakingUnbondingLifeCycle(t *testing.T) {
 		tm.BitcoindHandler.GenerateBlocks(int(uint64(sysParams.UnbondingTime) - k))
 	}
 
-	// build and send withdraw tx
+	// build and send withdraw tx from the unbonding tx
+	unbondingInfo, err := btcstaking.BuildUnbondingInfo(
+		tm.WalletPrivKey.PubKey(),
+		[]*btcec.PublicKey{testStakingData.FinalityProviderKey},
+		sysParams.CovenantPks,
+		sysParams.CovenantQuorum,
+		sysParams.UnbondingTime,
+		testStakingData.StakingAmount.MulF64(0.9),
+		regtestParams,
+	)
+	require.NoError(t, err)
+	withdrawSpendInfo, err := unbondingInfo.TimeLockPathSpendInfo()
+	require.NoError(t, err)
+	withdrawTx := buildWithdrawTx(
+		t,
+		tm.WalletPrivKey,
+		// unbonding tx only has one ouput
+		unbondingTx.TxOut[0],
+		unbondingTx.TxHash(),
+		0,
+		withdrawSpendInfo,
+		sysParams.UnbondingTime,
+		testStakingData.StakingAmount,
+	)
+	tm.SendTxWithNConfirmations(t, withdrawTx, int(k+1))
 
 	// wait until the indexer identifies the withdraw tx
+	tm.WaitForNConfirmations(t, int(k))
 
 	// check the withdraw event is received
+	tm.CheckNextWithdrawEvent(t, stakingTx.TxHash().String())
 }
 
 func buildUnbondingTx(
@@ -269,13 +298,13 @@ func buildUnbondingTx(
 	return unbondingTx
 }
 
-func buildStakingWithdrawTx(
+func buildWithdrawTx(
 	t *testing.T,
 	stakerPrivKey *btcec.PrivateKey,
-	stakingOutput *wire.TxOut,
-	stakingHash chainhash.Hash,
-	stakingOutputIndex uint32,
-	stakingSpendInfo *btcstaking.SpendInfo,
+	fundTxOutput *wire.TxOut,
+	fundTxHash chainhash.Hash,
+	fundTxOutputIndex uint32,
+	fundTxSpendInfo *btcstaking.SpendInfo,
 	lockTime uint16,
 	lockedAmount btcutil.Amount,
 ) *wire.MsgTx {
@@ -287,7 +316,7 @@ func buildStakingWithdrawTx(
 
 	// to spend output with relative timelock transaction need to be version two or higher
 	withdrawTx := wire.NewMsgTx(2)
-	withdrawTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(&stakingHash, stakingOutputIndex), nil, nil))
+	withdrawTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(&fundTxHash, fundTxOutputIndex), nil, nil))
 	withdrawTx.AddTxOut(wire.NewTxOut(int64(lockedAmount.MulF64(0.5)), destAddressScript))
 
 	// we need to set sequence number before signing, as signing commits to sequence
@@ -296,14 +325,14 @@ func buildStakingWithdrawTx(
 
 	sig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
 		withdrawTx,
-		stakingOutput,
+		fundTxOutput,
 		stakerPrivKey,
-		stakingSpendInfo.RevealedLeaf,
+		fundTxSpendInfo.RevealedLeaf,
 	)
 
 	require.NoError(t, err)
 
-	witness, err := stakingSpendInfo.CreateTimeLockPathWitness(sig)
+	witness, err := fundTxSpendInfo.CreateTimeLockPathWitness(sig)
 
 	require.NoError(t, err)
 
