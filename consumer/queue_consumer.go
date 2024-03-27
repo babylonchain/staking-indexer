@@ -71,12 +71,12 @@ func (qc *QueueConsumer) PushUnbondingEvent(ev *types.UnbondingStakingEvent) err
 	}
 	messageBody := string(jsonBytes)
 
-	qc.logger.Info("pushing unbonding event", zap.String("tx_hash", ev.StakingTxHash))
+	qc.logger.Info("pushing unbonding event", zap.String("tx_hash", ev.StakingTxHashHex))
 	err = qc.unbondingQueue.SendMessage(context.TODO(), messageBody)
 	if err != nil {
 		return fmt.Errorf("failed to push unbonding event: %w", err)
 	}
-	qc.logger.Info("successfully pushed unbonding event", zap.String("tx_hash", ev.StakingTxHash))
+	qc.logger.Info("successfully pushed unbonding event", zap.String("tx_hash", ev.StakingTxHashHex))
 
 	return nil
 }
@@ -88,12 +88,12 @@ func (qc *QueueConsumer) PushWithdrawEvent(ev *types.WithdrawStakingEvent) error
 	}
 	messageBody := string(jsonBytes)
 
-	qc.logger.Info("pushing withdraw event", zap.String("tx_hash", ev.StakingTxHash))
+	qc.logger.Info("pushing withdraw event", zap.String("tx_hash", ev.StakingTxHashHex))
 	err = qc.withdrawQueue.SendMessage(context.TODO(), messageBody)
 	if err != nil {
 		return fmt.Errorf("failed to push withdraw event: %w", err)
 	}
-	qc.logger.Info("successfully pushed withdraw event", zap.String("tx_hash", ev.StakingTxHash))
+	qc.logger.Info("successfully pushed withdraw event", zap.String("tx_hash", ev.StakingTxHashHex))
 
 	return nil
 }

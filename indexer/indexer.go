@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/babylonchain/babylon/btcstaking"
 	vtypes "github.com/babylonchain/vigilante/types"
@@ -108,7 +109,7 @@ func (si *StakingIndexer) handleConfirmedBlock(b *vtypes.IndexedBlock) error {
 		// 1. try to parse staking tx
 		stakingData, err := si.tryParseStakingTx(msgTx)
 		if err == nil {
-			if err := si.processStakingTx(msgTx, stakingData, uint64(b.Height)); err != nil {
+			if err := si.processStakingTx(msgTx, stakingData, uint64(b.Height), b.Header.Timestamp); err != nil {
 				if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
 					return err
 				}
@@ -142,7 +143,7 @@ func (si *StakingIndexer) handleConfirmedBlock(b *vtypes.IndexedBlock) error {
 			}
 
 			// 5. this is an unbonding tx
-			if err := si.processUnbondingTx(msgTx, &stakingTxHash, uint64(b.Height)); err != nil {
+			if err := si.processUnbondingTx(msgTx, &stakingTxHash, uint64(b.Height), b.Header.Timestamp); err != nil {
 				if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
 					return err
 				}
@@ -250,7 +251,21 @@ func (si *StakingIndexer) IsUnbondingTx(tx *wire.MsgTx, stakingTx *indexerstore.
 	return true, nil
 }
 
-func (si *StakingIndexer) processStakingTx(tx *wire.MsgTx, stakingData *btcstaking.ParsedV0StakingTx, height uint64) error {
+func (si *StakingIndexer) processStakingTx(
+	tx *wire.MsgTx,
+	stakingData *btcstaking.ParsedV0StakingTx,
+	height uint64, timestamp time.Time,
+) error {
+
+	si.logger.Info("found a staking tx",
+		zap.Uint64("height", height),
+		zap.String("tx_hash", tx.TxHash().String()),
+	)
+
+	txHex, err := getTxHex(tx)
+	if err != nil {
+		return err
+	}
 
 	stakingEvent := types.NewActiveStakingEvent(
 		tx.TxHash().String(),
@@ -258,9 +273,13 @@ func (si *StakingIndexer) processStakingTx(tx *wire.MsgTx, stakingData *btcstaki
 		hex.EncodeToString(stakingData.OpReturnData.FinalityProviderPublicKey.Marshall()),
 		uint64(stakingData.StakingOutput.Value),
 		height,
+		timestamp.String(),
 		uint64(stakingData.OpReturnData.StakingTime),
+		uint64(stakingData.StakingOutputIdx),
+		txHex,
 	)
 
+	// push the events first with the assumption that the consumer can handle duplicate events
 	if err := si.consumer.PushStakingEvent(&stakingEvent); err != nil {
 		return fmt.Errorf("failed to push the staking event to the consumer: %w", err)
 	}
@@ -285,14 +304,33 @@ func (si *StakingIndexer) processStakingTx(tx *wire.MsgTx, stakingData *btcstaki
 	return nil
 }
 
-func (si *StakingIndexer) processUnbondingTx(tx *wire.MsgTx, stakingTxHash *chainhash.Hash, height uint64) error {
+func (si *StakingIndexer) processUnbondingTx(
+	tx *wire.MsgTx,
+	stakingTxHash *chainhash.Hash,
+	height uint64, timestamp time.Time,
+) error {
+
 	si.logger.Info("found an unbonding tx",
 		zap.Uint64("height", height),
 		zap.String("tx_hash", tx.TxHash().String()),
 		zap.String("staking_tx_hash", stakingTxHash.String()),
 	)
 
-	unbondingEvent := types.NewUnbondingStakingEvent(stakingTxHash.String(), height, si.params.UnbondingTime)
+	txHex, err := getTxHex(tx)
+	if err != nil {
+		return err
+	}
+
+	unbondingEvent := types.NewUnbondingStakingEvent(
+		tx.TxHash().String(),
+		stakingTxHash.String(),
+		height,
+		timestamp.String(),
+		uint64(si.params.UnbondingTime),
+		// valid unbonding tx always has one output
+		0,
+		txHex,
+	)
 
 	if err := si.consumer.PushUnbondingEvent(&unbondingEvent); err != nil {
 		return fmt.Errorf("failed to push the unbonding event to the consumer: %w", err)
@@ -379,4 +417,14 @@ func (si *StakingIndexer) Stop() error {
 
 	})
 	return stopErr
+}
+
+func getTxHex(tx *wire.MsgTx) (string, error) {
+	var buf bytes.Buffer
+	if err := tx.Serialize(&buf); err != nil {
+		return "", fmt.Errorf("failed to serialize the tx: %w", err)
+	}
+	txHex := hex.EncodeToString(buf.Bytes())
+
+	return txHex, nil
 }

@@ -10,6 +10,7 @@ import (
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
 	vtypes "github.com/babylonchain/vigilante/types"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -80,6 +81,7 @@ func FuzzIndexer(f *testing.F) {
 				b := &vtypes.IndexedBlock{
 					Height: startingHeight + int32(i),
 					Txs:    blockTxs,
+					Header: &wire.BlockHeader{Timestamp: time.Now()},
 				}
 				confirmedBlockChan <- b
 			}
