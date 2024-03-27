@@ -54,13 +54,13 @@ var (
 	regtestParams         = &chaincfg.RegressionNetParams
 	eventuallyWaitTimeOut = 1 * time.Minute
 	eventuallyPollTime    = 500 * time.Millisecond
+	passphrase            = "pass"
+	walletName            = "test-wallet"
 )
 
 func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	h := NewBitcoindHandler(t)
 	h.Start()
-	passphrase := "pass"
-	walletName := "test-wallet"
 	_ = h.CreateWallet(walletName, passphrase)
 	resp := h.GenerateBlocks(n)
 
@@ -267,12 +267,12 @@ func (tm *TestManager) mineNBlock(t *testing.T, n int) *wire.MsgBlock {
 	return header
 }
 
-func (tm *TestManager) WaitForConfirmedTipHeight(t *testing.T, k uint64) {
+func (tm *TestManager) WaitForNConfirmations(t *testing.T, n int) {
 	currentHeight, err := tm.BitcoindHandler.GetBlockCount()
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		confirmedTip := tm.BS.LastConfirmedHeight()
-		return confirmedTip == uint64(currentHeight)-k
+		return confirmedTip == uint64(currentHeight)-uint64(n)
 	}, eventuallyWaitTimeOut, eventuallyPollTime)
 }
 
@@ -294,4 +294,14 @@ func (tm *TestManager) CheckNextUnbondingEvent(t *testing.T, stakingTxHash strin
 	err = json.Unmarshal([]byte(unbondingEventBytes.Body), &unbondingEvent)
 	require.NoError(t, err)
 	require.Equal(t, stakingTxHash, unbondingEvent.StakingTxHashHex)
+}
+
+func (tm *TestManager) CheckNextWithdrawEvent(t *testing.T, stakingTxHash string) {
+	withdrawChan, err := tm.WithdrawEventQueue.ReceiveMessages()
+	require.NoError(t, err)
+	withdrawEventBytes := <-withdrawChan
+	var withdrawEvent types.WithdrawStakingEvent
+	err = json.Unmarshal([]byte(withdrawEventBytes.Body), &withdrawEvent)
+	require.NoError(t, err)
+	require.Equal(t, stakingTxHash, withdrawEvent.StakingTxHashHex)
 }
