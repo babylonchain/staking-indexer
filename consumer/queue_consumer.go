@@ -99,9 +99,17 @@ func (qc *QueueConsumer) PushWithdrawEvent(ev *types.WithdrawStakingEvent) error
 }
 
 func (qc *QueueConsumer) Stop() error {
-	qc.StakingQueue.Stop()
-	qc.UnbondingQueue.Stop()
-	qc.WithdrawQueue.Stop()
+	if err := qc.StakingQueue.Stop(); err != nil {
+		return err
+	}
+
+	if err := qc.UnbondingQueue.Stop(); err != nil {
+		return err
+	}
+
+	if err := qc.WithdrawQueue.Stop(); err != nil {
+		return err
+	}
 
 	return nil
 }

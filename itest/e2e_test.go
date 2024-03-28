@@ -4,11 +4,14 @@
 package e2etest
 
 import (
+	"encoding/hex"
+	"encoding/json"
 	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/babylonchain/babylon/btcstaking"
+	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -17,6 +20,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/stretchr/testify/require"
 
+	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/params"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
 	"github.com/babylonchain/staking-indexer/types"
@@ -36,6 +40,41 @@ func TestBTCScanner(t *testing.T) {
 	_ = tm.BitcoindHandler.GenerateBlocks(10)
 
 	tm.WaitForNConfirmations(t, int(tm.Config.BTCScannerConfig.ConfirmationDepth))
+}
+
+func TestQueueConsumer(t *testing.T) {
+	// create event consumer
+	queueCfg := config.DefaultQueueConfig()
+	queueConsumer, err := setupTestQueueConsumer(t, queueCfg)
+	require.NoError(t, err)
+	stakingChan, err := queueConsumer.StakingQueue.ReceiveMessages()
+	require.NoError(t, err)
+
+	defer queueConsumer.Stop()
+
+	n := 1
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	stakingEventList := make([]*types.ActiveStakingEvent, 0)
+	for i := 0; i < n; i++ {
+		stakingEvent := &types.ActiveStakingEvent{
+			EventType:        types.ActiveStakingEventType,
+			StakingTxHashHex: hex.EncodeToString(bbndatagen.GenRandomByteArray(r, 10)),
+		}
+		err = queueConsumer.PushStakingEvent(stakingEvent)
+		require.NoError(t, err)
+		stakingEventList = append(stakingEventList, stakingEvent)
+	}
+
+	for i := 0; i < n; i++ {
+		stakingEventBytes := <-stakingChan
+		var receivedStakingEvent types.ActiveStakingEvent
+		err = json.Unmarshal([]byte(stakingEventBytes.Body), &receivedStakingEvent)
+		require.NoError(t, err)
+		require.Equal(t, stakingEventList[i].StakingTxHashHex, receivedStakingEvent.StakingTxHashHex)
+		err = queueConsumer.StakingQueue.DeleteMessage(stakingEventBytes.Receipt)
+		require.NoError(t, err)
+	}
 }
 
 // TestStakingLifeCycle covers the following life cycle
@@ -209,7 +248,7 @@ func TestStakingIndexer_StakingUnbondingLifeCycle(t *testing.T) {
 	withdrawTx := buildWithdrawTx(
 		t,
 		tm.WalletPrivKey,
-		// unbonding tx only has one ouput
+		// unbonding tx only has one output
 		unbondingTx.TxOut[0],
 		unbondingTx.TxHash(),
 		0,
