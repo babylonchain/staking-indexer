@@ -153,14 +153,14 @@ func TestStakingLifeCycle(t *testing.T) {
 	tm.CheckNextWithdrawEvent(t, stakingTx.TxHash())
 }
 
-// TestStakingIndexer_StakingUnbondingLifeCycle covers the following life cycle
+// TestStakingUnbondingLifeCycle covers the following life cycle
 // 1. the staking tx is sent to BTC
 // 2. the staking tx is parsed by the indexer
 // 3. the subsequent unbonding tx is sent to BTC
 // 4. the unbonding tx is identified by the indexer
 // 5. the subsequent withdraw tx is sent to BTC
 // 6. the withdraw tx is identified by the indexer
-func TestStakingIndexer_StakingUnbondingLifeCycle(t *testing.T) {
+func TestStakingUnbondingLifeCycle(t *testing.T) {
 	// ensure we have UTXOs
 	n := 110
 	tm := StartManagerWithNBlocks(t, n)
