@@ -91,8 +91,10 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create event consumer
-	// TODO: will be replaced when we have concrete consumer implementation
-	cs := new(consumer.DumbConsumer)
+	queueConsumer, err := consumer.NewQueueConsumer(cfg.QueueConfig, logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize event consumer: %w", err)
+	}
 
 	// TODO: replace constant params
 	sysParams, err := params.NewLocalParamsRetriever().GetParams()
@@ -106,7 +108,7 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create the staking indexer app
-	si, err := indexer.NewStakingIndexer(cfg, logger, cs, dbBackend, sysParams, scanner.ConfirmedBlocksChan())
+	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, dbBackend, sysParams, scanner.ConfirmedBlocksChan())
 	if err != nil {
 		return fmt.Errorf("failed to initialize the staking indexer app: %w", err)
 	}
@@ -118,7 +120,7 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create the server
-	indexerServer := service.NewStakingIndexerServer(cfg, dbBackend, btcNotifier, scanner, si, logger, shutdownInterceptor)
+	indexerServer := service.NewStakingIndexerServer(cfg, queueConsumer, dbBackend, btcNotifier, scanner, si, logger, shutdownInterceptor)
 
 	// run all the services until shutdown
 	return indexerServer.RunUntilShutdown()

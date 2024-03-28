@@ -53,6 +53,7 @@ test:
 	go test ./...
 
 test-e2e:
+	./itest/scripts/start_rabbitmq.sh;
 	go test -mod=readonly -timeout=25m -v $(PACKAGES_E2E) -count=1 --tags=e2e
 
 mock-gen:

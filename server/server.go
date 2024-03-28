@@ -11,6 +11,7 @@ import (
 
 	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
+	"github.com/babylonchain/staking-indexer/consumer"
 	"github.com/babylonchain/staking-indexer/indexer"
 )
 
@@ -22,6 +23,7 @@ type Server struct {
 	scanner     *btcscanner.BtcScanner
 	si          *indexer.StakingIndexer
 	btcNotifier notifier.ChainNotifier
+	ec          consumer.EventConsumer
 
 	db kvdb.Backend
 
@@ -34,6 +36,7 @@ type Server struct {
 // NewStakingIndexerServer creates a new server with the given config.
 func NewStakingIndexerServer(
 	cfg *config.Config,
+	ec consumer.EventConsumer,
 	db kvdb.Backend,
 	btcNotifier notifier.ChainNotifier,
 	scanner *btcscanner.BtcScanner,
@@ -45,6 +48,7 @@ func NewStakingIndexerServer(
 		cfg:         cfg,
 		scanner:     scanner,
 		si:          si,
+		ec:          ec,
 		db:          db,
 		btcNotifier: btcNotifier,
 		logger:      l,
@@ -74,7 +78,16 @@ func (s *Server) RunUntilShutdown() error {
 	}
 	defer func() {
 		if err := s.btcNotifier.Stop(); err != nil {
-			s.logger.Error("failed to stop the BTC notifier")
+			s.logger.Error("failed to stop the BTC notifier", zap.Error(err))
+		}
+	}()
+
+	if err := s.ec.Start(); err != nil {
+		return fmt.Errorf("failed to start the event consumer: %w", err)
+	}
+	defer func() {
+		if err := s.ec.Stop(); err != nil {
+			s.logger.Error("failed to stop the event consumer", zap.Error(err))
 		}
 	}()
 
@@ -83,7 +96,7 @@ func (s *Server) RunUntilShutdown() error {
 	}
 	defer func() {
 		if err := s.si.Stop(); err != nil {
-			s.logger.Error("failed to stop the staking indexer app")
+			s.logger.Error("failed to stop the staking indexer app", zap.Error(err))
 		}
 	}()
 
@@ -92,7 +105,7 @@ func (s *Server) RunUntilShutdown() error {
 	}
 	defer func() {
 		if err := s.scanner.Stop(); err != nil {
-			s.logger.Error("failed to stop the BTC scanner")
+			s.logger.Error("failed to stop the BTC scanner", zap.Error(err))
 		}
 	}()
 

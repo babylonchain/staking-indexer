@@ -34,6 +34,7 @@ type Config struct {
 	BTCScannerConfig *BTCScannerConfig `group:"btcscannerconfig" namespace:"btcscannerconfig"`
 	BTCConfig        *BTCConfig        `group:"btcconfig" namespace:"btcconfig"`
 	DatabaseConfig   *DBConfig         `group:"dbconfig" namespace:"dbconfig"`
+	QueueConfig      *QueueConfig      `group:"queueconfig" namespace:"queueconfig"`
 
 	BTCNetParams chaincfg.Params
 }
@@ -45,6 +46,7 @@ func DefaultConfigWithHome(homePath string) *Config {
 		BTCScannerConfig: DefaultBTCScannerConfig(),
 		BTCConfig:        DefaultBTCConfig(),
 		DatabaseConfig:   DefaultDBConfigWithHomePath(homePath),
+		QueueConfig:      DefaultQueueConfig(),
 	}
 
 	if err := cfg.Validate(); err != nil {
