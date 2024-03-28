@@ -22,6 +22,7 @@ import (
 
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/params"
+	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
 	"github.com/babylonchain/staking-indexer/types"
 )
@@ -109,9 +110,9 @@ func TestStakingLifeCycle(t *testing.T) {
 	require.NoError(t, err)
 
 	// send the staking tx and mine blocks
-	err = tm.StakerWallet.UnlockWallet(20)
 	require.NoError(t, err)
-	stakingTx, err := tm.StakerWallet.CreateAndSignTx(
+	stakingTx, err := testutils.CreateTxFromOutputsAndSign(
+		tm.WalletClient,
 		[]*wire.TxOut{stakingInfo.OpReturnOutput, stakingInfo.StakingOutput},
 		1000,
 		tm.MinerAddr,
@@ -185,9 +186,9 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	require.NoError(t, err)
 
 	// send the staking tx and mine blocks
-	err = tm.StakerWallet.UnlockWallet(20)
 	require.NoError(t, err)
-	stakingTx, err := tm.StakerWallet.CreateAndSignTx(
+	stakingTx, err := testutils.CreateTxFromOutputsAndSign(
+		tm.WalletClient,
 		[]*wire.TxOut{stakingInfo.OpReturnOutput, stakingInfo.StakingOutput},
 		1000,
 		tm.MinerAddr,

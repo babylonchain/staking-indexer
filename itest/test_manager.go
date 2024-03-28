@@ -8,9 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/babylonchain/btc-staker/stakercfg"
-	stakertypes "github.com/babylonchain/btc-staker/types"
-	"github.com/babylonchain/btc-staker/walletcontroller"
 	"github.com/babylonchain/vigilante/btcclient"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
@@ -43,8 +40,7 @@ type TestManager struct {
 	serverStopper      *signal.Interceptor
 	wg                 *sync.WaitGroup
 	BitcoindHandler    *BitcoindTestHandler
-	BtcClient          *btcclient.Client
-	StakerWallet       *walletcontroller.RpcWalletController
+	WalletClient       *rpcclient.Client
 	MinerAddr          btcutil.Address
 	QueueConsumer      *consumer.QueueConsumer
 	StakingEventChan   <-chan client.QueueMessage
@@ -78,14 +74,11 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	logger, err := log.NewRootLoggerWithFile(config.LogFile(dirPath), "debug")
 	require.NoError(t, err)
 
-	stakerCfg, _ := defaultStakerConfig(t, passphrase)
-	stakerWallet, err := walletcontroller.NewRpcWalletController(stakerCfg)
+	rpcclient, err := rpcclient.New(cfg.BTCConfig.ToConnConfig(), nil)
 	require.NoError(t, err)
-
-	err = stakerWallet.UnlockWallet(20)
+	err = rpcclient.WalletPassphrase(passphrase, 200)
 	require.NoError(t, err)
-
-	walletPrivKey, err := stakerWallet.DumpPrivateKey(minerAddressDecoded)
+	walletPrivKey, err := rpcclient.DumpPrivKey(minerAddressDecoded)
 	require.NoError(t, err)
 
 	// TODO this is not needed after we remove dependency on vigilante
@@ -157,9 +150,8 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 		serverStopper:      &interceptor,
 		wg:                 &wg,
 		BitcoindHandler:    h,
-		BtcClient:          btcClient,
-		StakerWallet:       stakerWallet,
-		WalletPrivKey:      walletPrivKey,
+		WalletClient:       rpcclient,
+		WalletPrivKey:      walletPrivKey.PrivKey,
 		MinerAddr:          minerAddressDecoded,
 		QueueConsumer:      queueConsumer,
 		StakingEventChan:   stakingEventChan,
@@ -193,65 +185,12 @@ func defaultStakingIndexerConfig(homePath string) *config.Config {
 	return defaultConfig
 }
 
-func defaultStakerConfig(t *testing.T, passphrase string) (*stakercfg.Config, *rpcclient.Client) {
-	defaultConfig := stakercfg.DefaultConfig()
-
-	// both wallet and node are bicoind
-	defaultConfig.BtcNodeBackendConfig.ActiveWalletBackend = stakertypes.BitcoindWalletBackend
-	defaultConfig.BtcNodeBackendConfig.ActiveNodeBackend = stakertypes.BitcoindNodeBackend
-	defaultConfig.ActiveNetParams = *regtestParams
-
-	// Fees configuration
-	defaultConfig.BtcNodeBackendConfig.FeeMode = "dynamic"
-	defaultConfig.BtcNodeBackendConfig.EstimationMode = stakertypes.DynamicFeeEstimation
-
-	bitcoindHost := "127.0.0.1:18443"
-	bitcoindUser := "user"
-	bitcoindPass := "pass"
-
-	// Wallet configuration
-	defaultConfig.WalletRpcConfig.Host = bitcoindHost
-	defaultConfig.WalletRpcConfig.User = bitcoindUser
-	defaultConfig.WalletRpcConfig.Pass = bitcoindPass
-	defaultConfig.WalletRpcConfig.DisableTls = true
-	defaultConfig.WalletConfig.WalletPass = passphrase
-
-	// node configuration
-	defaultConfig.BtcNodeBackendConfig.Bitcoind.RPCHost = bitcoindHost
-	defaultConfig.BtcNodeBackendConfig.Bitcoind.RPCUser = bitcoindUser
-	defaultConfig.BtcNodeBackendConfig.Bitcoind.RPCPass = bitcoindPass
-
-	// Use rpc polling, as it is our default mode and it is a bit more troublesome
-	// to configure ZMQ from inside the bitcoind docker container
-	defaultConfig.BtcNodeBackendConfig.Bitcoind.RPCPolling = true
-	defaultConfig.BtcNodeBackendConfig.Bitcoind.BlockPollingInterval = 1 * time.Second
-	defaultConfig.BtcNodeBackendConfig.Bitcoind.TxPollingInterval = 1 * time.Second
-
-	defaultConfig.StakerConfig.BabylonStallingInterval = 1 * time.Second
-	defaultConfig.StakerConfig.UnbondingTxCheckInterval = 1 * time.Second
-
-	testRpcClient, err := rpcclient.New(&rpcclient.ConnConfig{
-		Host:                 bitcoindHost,
-		User:                 bitcoindUser,
-		Pass:                 bitcoindPass,
-		DisableTLS:           true,
-		DisableConnectOnNew:  true,
-		DisableAutoReconnect: false,
-		// we use post mode as it sure it works with either bitcoind or btcwallet
-		// we may need to re-consider it later if we need any notifications
-		HTTPPostMode: true,
-	}, nil)
-	require.NoError(t, err)
-
-	return &defaultConfig, testRpcClient
-}
-
 func (tm *TestManager) SendTxWithNConfirmations(t *testing.T, tx *wire.MsgTx, n int) {
-	txHash, err := tm.StakerWallet.SendRawTransaction(tx, true)
+	txHash, err := tm.WalletClient.SendRawTransaction(tx, true)
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
-		txFromMempool := retrieveTransactionFromMempool(t, tm.StakerWallet.Client, []*chainhash.Hash{txHash})
+		txFromMempool := retrieveTransactionFromMempool(t, tm.WalletClient, []*chainhash.Hash{txHash})
 		return len(txFromMempool) == 1
 	}, eventuallyWaitTimeOut, eventuallyPollTime)
 
@@ -274,7 +213,7 @@ func (tm *TestManager) mineNBlock(t *testing.T, n int) *wire.MsgBlock {
 	resp := tm.BitcoindHandler.GenerateBlocks(n)
 	hash, err := chainhash.NewHashFromStr(resp.Blocks[0])
 	require.NoError(t, err)
-	header, err := tm.StakerWallet.GetBlock(hash)
+	header, err := tm.WalletClient.GetBlock(hash)
 	require.NoError(t, err)
 	return header
 }
