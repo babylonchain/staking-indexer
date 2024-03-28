@@ -2,6 +2,7 @@ package e2etest
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/rabbitmq/amqp091-go"
@@ -10,17 +11,48 @@ import (
 
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/consumer"
+	"github.com/babylonchain/staking-indexer/types"
 )
 
 func setupTestQueueConsumer(t *testing.T, cfg *config.QueueConfig) (*consumer.QueueConsumer, error) {
 	amqpURI := fmt.Sprintf("amqp://%s:%s@%s", cfg.User, cfg.Password, cfg.Url)
 	conn, err := amqp091.Dial(amqpURI)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("failed to connect to RabbitMQ in test: %v", err)
+	}
 	defer conn.Close()
+	err = purgeQueues(conn, []string{
+		types.ActiveStakingQueueName,
+	})
+	if err != nil {
+		return nil, err
+	}
 
 	// Start the actual queue processing in our codebase
 	queues, err := consumer.NewQueueConsumer(cfg, zap.NewNop())
 	require.NoError(t, err)
 
 	return queues, nil
+}
+
+// purgeQueues purges all messages from the given list of queues.
+func purgeQueues(conn *amqp091.Connection, queues []string) error {
+	ch, err := conn.Channel()
+	if err != nil {
+		return fmt.Errorf("failed to open a channel in test: %w", err)
+	}
+	defer ch.Close()
+
+	for _, queue := range queues {
+		_, err := ch.QueuePurge(queue, false)
+		if err != nil {
+			if strings.Contains(err.Error(), "no queue") {
+				fmt.Printf("Queue '%s' not found, ignoring...\n", queue)
+				continue // Ignore this error and proceed with the next queue
+			}
+			return fmt.Errorf("failed to purge queue in test %s: %w", queue, err)
+		}
+	}
+
+	return nil
 }

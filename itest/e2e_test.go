@@ -31,10 +31,11 @@ func TestBTCScanner(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, n, count)
 
-	require.Eventually(t, func() bool {
-		confirmedTip := tm.BS.LastConfirmedHeight()
-		return confirmedTip == uint64(n-int(tm.Config.BTCScannerConfig.ConfirmationDepth))
-	}, eventuallyWaitTimeOut, eventuallyPollTime)
+	tm.WaitForNConfirmations(t, int(tm.Config.BTCScannerConfig.ConfirmationDepth))
+
+	_ = tm.BitcoindHandler.GenerateBlocks(10)
+
+	tm.WaitForNConfirmations(t, int(tm.Config.BTCScannerConfig.ConfirmationDepth))
 }
 
 // TestStakingLifeCycle covers the following life cycle
@@ -42,7 +43,7 @@ func TestBTCScanner(t *testing.T) {
 // 2. the staking tx is parsed by the indexer
 // 3. wait until the staking tx expires
 // 4. the subsequent withdraw tx is sent to BTC
-// 5. the withdraw tx is identified by the indexer
+// 5. the withdraw tx is identified by the indexer and consumed by the queue
 func TestStakingLifeCycle(t *testing.T) {
 	// ensure we have UTXOs
 	n := 110
@@ -77,29 +78,25 @@ func TestStakingLifeCycle(t *testing.T) {
 		tm.MinerAddr,
 	)
 	require.NoError(t, err)
+	stakingTxHash := stakingTx.TxHash()
 	tm.SendTxWithNConfirmations(t, stakingTx, int(k+1))
 
-	// wait for the indexer to process confirmed blocks
-	tm.WaitForNConfirmations(t, int(k))
-
 	// check that the staking tx is already stored
-	stakingTxHash := stakingTx.TxHash()
-	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
-	require.NoError(t, err)
-	require.Equal(t, stakingTx.TxHash().String(), storedStakingTx.Tx.TxHash().String())
+	tm.WaitForStakingTxStored(t, stakingTxHash)
 
 	// check the staking event is received by the queue
-	tm.CheckNextStakingEvent(t, stakingTx.TxHash().String())
+	tm.CheckNextStakingEvent(t, stakingTxHash)
 
 	// wait for the staking tx expires
 	if uint64(testStakingData.StakingTime) > k {
 		tm.BitcoindHandler.GenerateBlocks(int(uint64(testStakingData.StakingTime) - k))
 	}
 
-	// build and send withdraw tx
+	// build and send withdraw tx and mine blocks
 	withdrawSpendInfo, err := stakingInfo.TimeLockPathSpendInfo()
 	require.NoError(t, err)
 
+	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
 	require.NoError(t, err)
 	withdrawTx := buildWithdrawTx(
 		t,
@@ -113,11 +110,8 @@ func TestStakingLifeCycle(t *testing.T) {
 	)
 	tm.SendTxWithNConfirmations(t, withdrawTx, int(k+1))
 
-	// wait until the indexer identifies the withdraw tx
-	tm.WaitForNConfirmations(t, int(k))
-
 	// check the withdraw event is received
-	tm.CheckNextWithdrawEvent(t, stakingTx.TxHash().String())
+	tm.CheckNextWithdrawEvent(t, stakingTx.TxHash())
 }
 
 // TestStakingIndexer_StakingUnbondingLifeCycle covers the following life cycle
@@ -160,22 +154,19 @@ func TestStakingIndexer_StakingUnbondingLifeCycle(t *testing.T) {
 		tm.MinerAddr,
 	)
 	require.NoError(t, err)
+	stakingTxHash := stakingTx.TxHash()
 	tm.SendTxWithNConfirmations(t, stakingTx, int(k+1))
 
-	// wait for the indexer to process confirmed blocks
-	tm.WaitForNConfirmations(t, int(k))
-
 	// check that the staking tx is already stored
-	stakingTxHash := stakingTx.TxHash()
-	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
-	require.NoError(t, err)
-	require.Equal(t, stakingTx.TxHash().String(), storedStakingTx.Tx.TxHash().String())
+	tm.WaitForStakingTxStored(t, stakingTxHash)
 
 	// check the staking event is received by the queue
-	tm.CheckNextStakingEvent(t, stakingTx.TxHash().String())
+	tm.CheckNextStakingEvent(t, stakingTxHash)
 
 	// build and send unbonding tx from the previous staking tx
 	unbondingSpendInfo, err := stakingInfo.UnbondingPathSpendInfo()
+	require.NoError(t, err)
+	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
 	require.NoError(t, err)
 	unbondingTx := buildUnbondingTx(
 		t,
@@ -191,18 +182,11 @@ func TestStakingIndexer_StakingUnbondingLifeCycle(t *testing.T) {
 	)
 	tm.SendTxWithNConfirmations(t, unbondingTx, int(k+1))
 
-	// wait for the indexer to process confirmed blocks
-	tm.WaitForNConfirmations(t, int(k))
-
 	// check the unbonding tx is already stored
-	unbondingTxHash := unbondingTx.TxHash()
-	storedUnbondingTx, err := tm.Si.GetUnbondingTxByHash(&unbondingTxHash)
-	require.NoError(t, err)
-	require.Equal(t, unbondingTx.TxHash().String(), storedUnbondingTx.Tx.TxHash().String())
-	require.Equal(t, stakingTxHash.String(), storedUnbondingTx.StakingTxHash.String())
+	tm.WaitForUnbondingTxStored(t, unbondingTx.TxHash())
 
 	// check the unbonding event is received
-	tm.CheckNextUnbondingEvent(t, stakingTx.TxHash().String())
+	tm.CheckNextUnbondingEvent(t, unbondingTx.TxHash())
 
 	// wait for the unbonding tx expires
 	if uint64(sysParams.UnbondingTime) > k {
@@ -238,8 +222,8 @@ func TestStakingIndexer_StakingUnbondingLifeCycle(t *testing.T) {
 	// wait until the indexer identifies the withdraw tx
 	tm.WaitForNConfirmations(t, int(k))
 
-	// check the withdraw event is received
-	tm.CheckNextWithdrawEvent(t, stakingTx.TxHash().String())
+	// check the withdraw event is consumed
+	tm.CheckNextWithdrawEvent(t, stakingTx.TxHash())
 }
 
 func buildUnbondingTx(

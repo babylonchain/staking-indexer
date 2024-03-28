@@ -25,6 +25,7 @@ import (
 	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/indexer"
+	"github.com/babylonchain/staking-indexer/indexerstore"
 	"github.com/babylonchain/staking-indexer/log"
 	"github.com/babylonchain/staking-indexer/params"
 	"github.com/babylonchain/staking-indexer/queue/client"
@@ -246,6 +247,7 @@ func (tm *TestManager) SendTxWithNConfirmations(t *testing.T, tx *wire.MsgTx, n 
 
 	mBlock := tm.mineNBlock(t, n)
 	require.Equal(t, 2, len(mBlock.Transactions))
+	t.Logf("sent tx %s with %d confirmations", txHash.String(), n)
 }
 
 func retrieveTransactionFromMempool(t *testing.T, client *rpcclient.Client, hashes []*chainhash.Hash) []*btcutil.Tx {
@@ -276,41 +278,69 @@ func (tm *TestManager) WaitForNConfirmations(t *testing.T, n int) {
 	}, eventuallyWaitTimeOut, eventuallyPollTime)
 }
 
-func (tm *TestManager) CheckNextStakingEvent(t *testing.T, stakingTxHash string) {
+func (tm *TestManager) CheckNextStakingEvent(t *testing.T, stakingTxHash chainhash.Hash) {
 	stakingChan, err := tm.StakingEventQueue.ReceiveMessages()
 	require.NoError(t, err)
 	stakingEventBytes := <-stakingChan
 	var activeStakingEvent types.ActiveStakingEvent
 	err = json.Unmarshal([]byte(stakingEventBytes.Body), &activeStakingEvent)
 	require.NoError(t, err)
-	require.Equal(t, stakingTxHash, activeStakingEvent.StakingTxHashHex)
+	require.Equal(t, stakingTxHash.String(), activeStakingEvent.StakingTxHashHex)
 
 	err = tm.StakingEventQueue.DeleteMessage(stakingEventBytes.Receipt)
 	require.NoError(t, err)
 }
 
-func (tm *TestManager) CheckNextUnbondingEvent(t *testing.T, stakingTxHash string) {
+func (tm *TestManager) CheckNextUnbondingEvent(t *testing.T, unbondingTxHash chainhash.Hash) {
 	unbondingChan, err := tm.UnbondingEventQueue.ReceiveMessages()
 	require.NoError(t, err)
 	unbondingEventBytes := <-unbondingChan
 	var unbondingEvent types.UnbondingStakingEvent
 	err = json.Unmarshal([]byte(unbondingEventBytes.Body), &unbondingEvent)
 	require.NoError(t, err)
-	require.Equal(t, stakingTxHash, unbondingEvent.StakingTxHashHex)
+	require.Equal(t, unbondingTxHash.String(), unbondingEvent.UnbondingTxHashHex)
 
 	err = tm.UnbondingEventQueue.DeleteMessage(unbondingEventBytes.Receipt)
 	require.NoError(t, err)
 }
 
-func (tm *TestManager) CheckNextWithdrawEvent(t *testing.T, stakingTxHash string) {
+func (tm *TestManager) CheckNextWithdrawEvent(t *testing.T, stakingTxHash chainhash.Hash) {
 	withdrawChan, err := tm.WithdrawEventQueue.ReceiveMessages()
 	require.NoError(t, err)
 	withdrawEventBytes := <-withdrawChan
 	var withdrawEvent types.WithdrawStakingEvent
 	err = json.Unmarshal([]byte(withdrawEventBytes.Body), &withdrawEvent)
 	require.NoError(t, err)
-	require.Equal(t, stakingTxHash, withdrawEvent.StakingTxHashHex)
+	require.Equal(t, stakingTxHash.String(), withdrawEvent.StakingTxHashHex)
 
 	err = tm.WithdrawEventQueue.DeleteMessage(withdrawEventBytes.Receipt)
 	require.NoError(t, err)
+}
+
+func (tm *TestManager) WaitForStakingTxStored(t *testing.T, txHash chainhash.Hash) {
+	var storedTx indexerstore.StoredStakingTransaction
+	require.Eventually(t, func() bool {
+		storedStakingTx, err := tm.Si.GetStakingTxByHash(&txHash)
+		if err != nil {
+			return false
+		}
+		storedTx = *storedStakingTx
+		return true
+	}, eventuallyWaitTimeOut, eventuallyPollTime)
+
+	require.Equal(t, txHash.String(), storedTx.Tx.TxHash().String())
+}
+
+func (tm *TestManager) WaitForUnbondingTxStored(t *testing.T, txHash chainhash.Hash) {
+	var storedTx indexerstore.StoredUnbondingTransaction
+	require.Eventually(t, func() bool {
+		storedUnbondingTx, err := tm.Si.GetUnbondingTxByHash(&txHash)
+		if err != nil {
+			return false
+		}
+		storedTx = *storedUnbondingTx
+		return true
+	}, eventuallyWaitTimeOut, eventuallyPollTime)
+
+	require.Equal(t, txHash.String(), storedTx.Tx.TxHash().String())
 }
