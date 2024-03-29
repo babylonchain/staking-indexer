@@ -16,6 +16,7 @@ const (
 	defaultLogDirname     = "logs"
 	defaultLogFilename    = "sid.log"
 	defaultConfigFileName = "sid.conf"
+	defaultParamsFileName = "global_params.json"
 	defaultBitcoinNetwork = "signet"
 	defaultDataDirname    = "data"
 )
@@ -24,7 +25,8 @@ var (
 	//   C:\Users\<username>\AppData\Local\ on Windows
 	//   ~/.fpd on Linux
 	//   ~/Users/<username>/Library/Application Support/Sid on MacOS
-	DefaultHomeDir = btcutil.AppDataDir("sid", false)
+	DefaultHomeDir    = btcutil.AppDataDir("sid", false)
+	DefaultParamsPath = ParamsFile(DefaultHomeDir)
 )
 
 // Config is the main config for the fpd cli command
@@ -62,6 +64,10 @@ func DefaultConfig() *Config {
 
 func ConfigFile(homePath string) string {
 	return filepath.Join(homePath, defaultConfigFileName)
+}
+
+func ParamsFile(homePath string) string {
+	return filepath.Join(homePath, defaultParamsFileName)
 }
 
 func LogDir(homePath string) string {

@@ -95,10 +95,11 @@ func TestStakingLifeCycle(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	testStakingData := datagen.GenerateTestStakingData(t, r)
 	testStakingData.StakingTime = 120
-	sysParams, err := params.NewLocalParamsRetriever().GetParams()
+	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
+	sysParams := paramsRetriever.GetParams()
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
-		sysParams.MagicBytes,
+		sysParams.Tag,
 		tm.WalletPrivKey.PubKey(),
 		testStakingData.FinalityProviderKey,
 		sysParams.CovenantPks,
@@ -171,10 +172,11 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	testStakingData := datagen.GenerateTestStakingData(t, r)
-	sysParams, err := params.NewLocalParamsRetriever().GetParams()
+	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
+	sysParams := paramsRetriever.GetParams()
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
-		sysParams.MagicBytes,
+		sysParams.Tag,
 		tm.WalletPrivKey.PubKey(),
 		testStakingData.FinalityProviderKey,
 		sysParams.CovenantPks,
@@ -218,7 +220,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 		storedStakingTx.StakingOutputIdx,
 		unbondingSpendInfo,
 		stakingTx,
-		[]*btcec.PrivateKey{params.CovenantPrivKey},
+		getCovenantPrivKeys(t),
 	)
 	tm.SendTxWithNConfirmations(t, unbondingTx, int(k+1))
 
@@ -363,4 +365,21 @@ func buildWithdrawTx(
 	withdrawTx.TxIn[0].Witness = witness
 
 	return withdrawTx
+}
+
+func getCovenantPrivKeys(t *testing.T) []*btcec.PrivateKey {
+	// private keys of the covenant committee which correspond to the public keys in test_params.json
+	covenantPrivKeysHex := []string{
+		"6a2369c2c9f5cd3c4242834228acdc38b73e5b8930f5f4a9b69e6eaf557e60ed",
+	}
+
+	privKeys := make([]*btcec.PrivateKey, len(covenantPrivKeysHex))
+	for i, skHex := range covenantPrivKeysHex {
+		skBytes, err := hex.DecodeString(skHex)
+		require.NoError(t, err)
+		sk, _ := btcec.PrivKeyFromBytes(skBytes)
+		privKeys[i] = sk
+	}
+
+	return privKeys
 }

@@ -21,6 +21,7 @@ import (
 const (
 	homeFlag        = "home"
 	startHeightFlag = "start-height"
+	paramsPathFlag  = "params-path"
 )
 
 var startCommand = cli.Command{
@@ -37,6 +38,11 @@ var startCommand = cli.Command{
 			Name:     startHeightFlag,
 			Usage:    "The BTC height that the staking indexer starts from",
 			Required: true,
+		},
+		cli.StringFlag{
+			Name:  paramsPathFlag,
+			Usage: "The path to the global params file",
+			Value: config.DefaultParamsPath,
 		},
 	},
 	Action: start,
@@ -96,10 +102,9 @@ func start(ctx *cli.Context) error {
 		return fmt.Errorf("failed to initialize event consumer: %w", err)
 	}
 
-	// TODO: replace constant params
-	sysParams, err := params.NewLocalParamsRetriever().GetParams()
+	paramsRetriever, err := params.NewLocalParamsRetriever(ctx.String(paramsPathFlag))
 	if err != nil {
-		return fmt.Errorf("failed to get system params: %w", err)
+		return fmt.Errorf("failed to initialize params retriever: %w", err)
 	}
 
 	dbBackend, err := cfg.DatabaseConfig.GetDbBackend()
@@ -108,7 +113,7 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create the staking indexer app
-	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, dbBackend, sysParams, scanner.ConfirmedBlocksChan())
+	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, dbBackend, paramsRetriever.GetParams(), scanner.ConfirmedBlocksChan())
 	if err != nil {
 		return fmt.Errorf("failed to initialize the staking indexer app: %w", err)
 	}

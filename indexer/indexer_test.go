@@ -17,7 +17,6 @@ import (
 
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/indexer"
-	"github.com/babylonchain/staking-indexer/params"
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
 	"github.com/babylonchain/staking-indexer/testutils/mocks"
@@ -36,8 +35,7 @@ func FuzzIndexer(f *testing.F) {
 		cfg := config.DefaultConfigWithHome(homePath)
 
 		confirmedBlockChan := make(chan *vtypes.IndexedBlock)
-		sysParams, err := params.NewLocalParamsRetriever().GetParams()
-		require.NoError(t, err)
+		sysParams := datagen.GenerateGlobalParams(r, t)
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)

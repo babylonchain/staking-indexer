@@ -53,6 +53,7 @@ var (
 	regtestParams         = &chaincfg.RegressionNetParams
 	eventuallyWaitTimeOut = 1 * time.Minute
 	eventuallyPollTime    = 500 * time.Millisecond
+	testParamsPath        = "test_params.json"
 	passphrase            = "pass"
 	walletName            = "test-wallet"
 )
@@ -111,12 +112,11 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	withdrawEventChan, err := queueConsumer.WithdrawQueue.ReceiveMessages()
 	require.NoError(t, err)
 
-	sysParams, err := params.NewLocalParamsRetriever().GetParams()
-	require.NoError(t, err)
-
 	db, err := cfg.DatabaseConfig.GetDbBackend()
 	require.NoError(t, err)
-	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, db, sysParams, scanner.ConfirmedBlocksChan())
+	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
+	require.NoError(t, err)
+	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, db, paramsRetriever.GetParams(), scanner.ConfirmedBlocksChan())
 	require.NoError(t, err)
 
 	interceptor, err := signal.Intercept()

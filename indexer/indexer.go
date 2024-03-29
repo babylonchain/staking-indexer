@@ -379,14 +379,14 @@ func (si *StakingIndexer) processWithdrawTx(tx *wire.MsgTx, stakingTxHash *chain
 }
 
 func (si *StakingIndexer) tryParseStakingTx(tx *wire.MsgTx) (*btcstaking.ParsedV0StakingTx, error) {
-	possible := btcstaking.IsPossibleV0StakingTx(tx, si.params.MagicBytes)
+	possible := btcstaking.IsPossibleV0StakingTx(tx, si.params.Tag)
 	if !possible {
 		return nil, fmt.Errorf("not staking tx")
 	}
 
 	parsedData, err := btcstaking.ParseV0StakingTx(
 		tx,
-		si.params.MagicBytes,
+		si.params.Tag,
 		si.params.CovenantPks,
 		si.params.CovenantQuorum,
 		&si.cfg.BTCNetParams)
