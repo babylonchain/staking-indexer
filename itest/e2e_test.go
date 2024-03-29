@@ -175,9 +175,10 @@ func buildUnbondingTx(
 
 func getCovenantPrivKeys(t *testing.T) []*btcec.PrivateKey {
 	// private keys of the covenant committee which correspond to the public keys in test_params.json
-	covenantPrivKeysHex = []string{
+	covenantPrivKeysHex := []string{
 		"6a2369c2c9f5cd3c4242834228acdc38b73e5b8930f5f4a9b69e6eaf557e60ed",
 	}
+	
 	privKeys := make([]*btcec.PrivateKey, len(covenantPrivKeysHex))
 	for i, skHex := range covenantPrivKeysHex {
 		skBytes, err := hex.DecodeString(skHex)
