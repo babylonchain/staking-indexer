@@ -66,7 +66,9 @@ func ConfigFile(homePath string) string {
 	return filepath.Join(homePath, defaultConfigFileName)
 }
 
-func ParamsFile(homePath string) string { return filepath.Join(homePath, defaultParamsFileName) }
+func ParamsFile(homePath string) string {
+	return filepath.Join(homePath, defaultParamsFileName)
+}
 
 func LogDir(homePath string) string {
 	return filepath.Join(homePath, defaultLogDirname)
