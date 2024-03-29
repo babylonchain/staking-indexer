@@ -20,7 +20,7 @@ func NewLocalParamsRetriever() *LocalParamsRetriever {
 	magicBytes := []byte("1234")
 	covenantPks := []*btcec.PublicKey{CovenantPrivKey.PubKey()}
 	covenantQuorum := uint32(1)
-	unbondingTime := uint16(1000)
+	unbondingTime := uint16(120)
 
 	return &LocalParamsRetriever{params: &types.Params{
 		MagicBytes:     magicBytes,
