@@ -16,7 +16,7 @@ const (
 	defaultLogDirname     = "logs"
 	defaultLogFilename    = "sid.log"
 	defaultConfigFileName = "sid.conf"
-	defaultParamsFileName = "test_params.json"
+	defaultParamsFileName = "global_params.json"
 	defaultBitcoinNetwork = "signet"
 	defaultDataDirname    = "data"
 )

@@ -39,6 +39,14 @@ func FuzzParamsRetriever(f *testing.F) {
 		p := paramsRetriever.GetParams()
 
 		// check the values are expected
+		require.Equal(t, globalParams.Tag, p.Tag)
+		require.Equal(t, globalParams.MinStakingTime, p.MinStakingTime)
+		require.Equal(t, globalParams.MaxStakingTime, p.MaxStakingTime)
+		require.Equal(t, globalParams.MinStakingAmount, p.MinStakingAmount)
+		require.Equal(t, globalParams.MaxStakingAmount, p.MaxStakingAmount)
+		require.Equal(t, globalParams.CovenantQuorum, p.CovenantQuorum)
+		require.Equal(t, globalParams.UnbondingTime, p.UnbondingTime)
 		require.True(t, testutils.PubKeysSliceEqual(globalParams.CovenantPks, p.CovenantPks))
+		require.True(t, testutils.PubKeysSliceEqual(globalParams.FinalityProviderPks, p.FinalityProviderPks))
 	})
 }
