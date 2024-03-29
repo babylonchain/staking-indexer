@@ -59,10 +59,6 @@ var (
 	// private keys of the covenant committee which correspond to the public keys in test_params.json
 	covenantPrivKeysHex = []string{
 		"6a2369c2c9f5cd3c4242834228acdc38b73e5b8930f5f4a9b69e6eaf557e60ed",
-		"33156cd36d86078c68a4ef9ec22bda49e3b43b420c2b17c4b5d6e23c489a94b6",
-		"30e7da183805f9586ca6d3e3fd12450d45143040a14f3770b80aa5dff6243880",
-		"94ab69015d3c54867d385b871aebc32283525a16d17720167852e300fdc0761c",
-		"1801dae7d983687655ae5c351b836d1f5b3067b581d10058ad505847485bb117",
 	}
 )
 

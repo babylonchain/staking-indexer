@@ -1,18 +1,14 @@
 {
   "tag": "bbt6",
   "covenant_pks": [
-    "cecdb3f9b99e0d67e806a9d1abd9d8c7811602dc7653bcb657a3faff29b76047",
-    "38d591cded60e0ac64385390aa3e07babc1d88665a104d664f8910cb2700c732",
-    "65ef294cb452c26a86cb949a850dddb9e63775d3250792e08acc8b788957851a",
-    "ff36e972e7e33e39cecc2649816f0ac0e5ade659f16261301f61da8994f7c8a5",
-    "ac35f1dca617eeecdd2933f268b98bebc324566229cb71711b426b4fb2c88fcc"
+    "cecdb3f9b99e0d67e806a9d1abd9d8c7811602dc7653bcb657a3faff29b76047"
   ],
   "finality_provider_pks": [
     "af8f9608ad364850b107fc6289a062f754a52bd612f026dfaa6e366ffd96cf51",
     "133ea80727838609e398390d62f18706eec84c564893a4af47546c33ab1b8e5b",
     "d437b3fb2c28829663d06a0758c3f86e4ff9d7997054eb8103c3c27ef5053d3e"
   ],
-  "covenant_quorum": 3,
+  "covenant_quorum": 1,
   "unbonding_time": 1000,
   "max_staking_amount": 300000,
   "min_staking_amount": 3000,
