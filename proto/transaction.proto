@@ -27,16 +27,3 @@ message UnbondingTransaction {
     // that the unbonding tx spends
     bytes staking_tx_hash = 2;
 }
-
-// GlobalParams defines the global params used across the system
-message GlobalParams {
-    string tag = 1;
-    repeated string covenant_pks =2;
-    repeated string finality_provider_pks = 3;
-    uint32 covenant_quorum = 4;
-    uint32 unbonding_time = 5;
-    uint64 max_staking_amount = 6;
-    uint64 min_staking_amount = 7;
-    uint32 max_staking_time = 8;
-    uint32 min_staking_time = 9;
-}

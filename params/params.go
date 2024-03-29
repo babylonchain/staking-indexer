@@ -10,7 +10,6 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 
-	"github.com/babylonchain/staking-indexer/proto"
 	"github.com/babylonchain/staking-indexer/types"
 )
 
@@ -23,12 +22,24 @@ type LocalParamsRetriever struct {
 }
 
 func NewLocalParamsRetriever(filePath string) (*LocalParamsRetriever, error) {
+	type internalParams struct {
+		Tag                 string         `json:"tag"`
+		CovenantPks         []string       `json:"covenant_pks"`
+		FinalityProviderPks []string       `json:"finality_provider_pks"`
+		CovenantQuorum      uint32         `json:"covenant_quorum"`
+		UnbondingTime       uint16         `json:"unbonding_time"`
+		MaxStakingAmount    btcutil.Amount `json:"max_staking_amount"`
+		MinStakingAmount    btcutil.Amount `json:"min_staking_amount"`
+		MaxStakingTime      uint16         `json:"max_staking_time"`
+		MinStakingTime      uint16         `json:"min_staking_time"`
+	}
+
 	contents, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read params file %s: %w", filePath, err)
 	}
 
-	var p proto.GlobalParams
+	var p internalParams
 	err = json.Unmarshal(contents, &p)
 	if err != nil {
 		return nil, fmt.Errorf("invalid params content: %w", err)
@@ -77,11 +88,11 @@ func NewLocalParamsRetriever(filePath string) (*LocalParamsRetriever, error) {
 		CovenantPks:         covPks,
 		FinalityProviderPks: fpPks,
 		CovenantQuorum:      p.CovenantQuorum,
-		UnbondingTime:       uint16(p.UnbondingTime),
+		UnbondingTime:       p.UnbondingTime,
 		MaxStakingAmount:    btcutil.Amount(p.MaxStakingAmount),
 		MinStakingAmount:    btcutil.Amount(p.MinStakingAmount),
-		MaxStakingTime:      uint16(p.MaxStakingTime),
-		MinStakingTime:      uint16(p.MinStakingTime),
+		MaxStakingTime:      p.MaxStakingTime,
+		MinStakingTime:      p.MinStakingTime,
 	}
 
 	return &LocalParamsRetriever{params: params}, nil
