@@ -4,6 +4,7 @@
 package e2etest
 
 import (
+	"encoding/hex"
 	"math/rand"
 	"testing"
 	"time"
@@ -46,10 +47,11 @@ func TestStakingIndexer(t *testing.T) {
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	testStakingData := datagen.GenerateTestStakingData(t, r)
-	sysParams, err := params.NewLocalParamsRetriever().GetParams()
+	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
+	sysParams := paramsRetriever.GetParams()
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
-		sysParams.MagicBytes,
+		sysParams.Tag,
 		tm.WalletPrivKey.PubKey(),
 		testStakingData.FinalityProviderKey,
 		sysParams.CovenantPks,
@@ -97,7 +99,7 @@ func TestStakingIndexer(t *testing.T) {
 		storedStakingTx.StakingOutputIdx,
 		unbondingSpendInfo,
 		stakingTx,
-		[]*btcec.PrivateKey{params.CovenantPrivKey},
+		getCovenantPrivKeys(t),
 	)
 	tm.SendTxWithNConfirmations(t, unbondingTx, m)
 
@@ -169,4 +171,16 @@ func buildUnbondingTx(
 	unbondingTx.TxIn[0].Witness = witness
 
 	return unbondingTx
+}
+
+func getCovenantPrivKeys(t *testing.T) []*btcec.PrivateKey {
+	privKeys := make([]*btcec.PrivateKey, len(covenantPrivKeysHex))
+	for i, skHex := range covenantPrivKeysHex {
+		skBytes, err := hex.DecodeString(skHex)
+		require.NoError(t, err)
+		sk, _ := btcec.PrivKeyFromBytes(skBytes)
+		privKeys[i] = sk
+	}
+
+	return privKeys
 }

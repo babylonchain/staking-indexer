@@ -54,6 +54,16 @@ var (
 	regtestParams         = &chaincfg.RegressionNetParams
 	eventuallyWaitTimeOut = 1 * time.Minute
 	eventuallyPollTime    = 500 * time.Millisecond
+	testParamsPath        = "test_params.json"
+
+	// private keys of the covenant committee which correspond to the public keys in test_params.json
+	covenantPrivKeysHex = []string{
+		"6a2369c2c9f5cd3c4242834228acdc38b73e5b8930f5f4a9b69e6eaf557e60ed",
+		"33156cd36d86078c68a4ef9ec22bda49e3b43b420c2b17c4b5d6e23c489a94b6",
+		"30e7da183805f9586ca6d3e3fd12450d45143040a14f3770b80aa5dff6243880",
+		"94ab69015d3c54867d385b871aebc32283525a16d17720167852e300fdc0761c",
+		"1801dae7d983687655ae5c351b836d1f5b3067b581d10058ad505847485bb117",
+	}
 )
 
 func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
@@ -108,12 +118,12 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	queueConsumer, err := setupTestQueueConsumer(t, cfg.QueueConfig)
 	require.NoError(t, err)
 
-	sysParams, err := params.NewLocalParamsRetriever().GetParams()
+	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
 
 	db, err := cfg.DatabaseConfig.GetDbBackend()
 	require.NoError(t, err)
-	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, db, sysParams, scanner.ConfirmedBlocksChan())
+	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, db, paramsRetriever.GetParams(), scanner.ConfirmedBlocksChan())
 	require.NoError(t, err)
 
 	interceptor, err := signal.Intercept()

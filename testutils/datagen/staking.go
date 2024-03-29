@@ -48,7 +48,7 @@ func GenerateTestStakingData(
 
 func GenerateStakingTxFromTestData(t *testing.T, r *rand.Rand, params *types.Params, stakingData *TestStakingData) (*btcstaking.IdentifiableStakingInfo, *btcutil.Tx) {
 	stakingInfo, tx, err := btcstaking.BuildV0IdentifiableStakingOutputsAndTx(
-		params.MagicBytes,
+		params.Tag,
 		stakingData.StakerKey,
 		stakingData.FinalityProviderKey,
 		params.CovenantPks,

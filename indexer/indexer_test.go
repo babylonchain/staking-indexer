@@ -1,6 +1,7 @@
 package indexer_test
 
 import (
+	"encoding/hex"
 	"math/rand"
 	"path/filepath"
 	"sync"
@@ -8,7 +9,9 @@ import (
 	"time"
 
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
+	"github.com/babylonchain/babylon/types"
 	vtypes "github.com/babylonchain/vigilante/types"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/golang/mock/gomock"
@@ -17,7 +20,6 @@ import (
 
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/indexer"
-	"github.com/babylonchain/staking-indexer/params"
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
 	"github.com/babylonchain/staking-indexer/testutils/mocks"
@@ -36,8 +38,7 @@ func FuzzIndexer(f *testing.F) {
 		cfg := config.DefaultConfigWithHome(homePath)
 
 		confirmedBlockChan := make(chan *vtypes.IndexedBlock)
-		sysParams, err := params.NewLocalParamsRetriever().GetParams()
-		require.NoError(t, err)
+		sysParams := datagen.GenerateGlobalParams(r, t)
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
@@ -135,4 +136,31 @@ func NewMockedConsumer(t *testing.T) *mocks.MockEventConsumer {
 	mockedConsumer.EXPECT().Stop().Return(nil).AnyTimes()
 
 	return mockedConsumer
+}
+
+func Test1(t *testing.T) {
+	k1, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+	t.Logf("k1 private key: %s", hex.EncodeToString(k1.Serialize()))
+	t.Logf("k1 public key: %s", types.NewBIP340PubKeyFromBTCPK(k1.PubKey()).MarshalHex())
+
+	k2, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+	t.Logf("k2 private key: %s", hex.EncodeToString(k2.Serialize()))
+	t.Logf("k2 public key: %s", types.NewBIP340PubKeyFromBTCPK(k2.PubKey()).MarshalHex())
+
+	k3, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+	t.Logf("k3 private key: %s", hex.EncodeToString(k3.Serialize()))
+	t.Logf("k3 public key: %s", types.NewBIP340PubKeyFromBTCPK(k3.PubKey()).MarshalHex())
+
+	k4, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+	t.Logf("k4 private key: %s", hex.EncodeToString(k4.Serialize()))
+	t.Logf("k4 public key: %s", types.NewBIP340PubKeyFromBTCPK(k4.PubKey()).MarshalHex())
+
+	k5, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+	t.Logf("k5 private key: %s", hex.EncodeToString(k5.Serialize()))
+	t.Logf("k5 public key: %s", types.NewBIP340PubKeyFromBTCPK(k5.PubKey()).MarshalHex())
 }
