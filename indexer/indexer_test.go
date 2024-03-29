@@ -87,7 +87,7 @@ func FuzzIndexer(f *testing.F) {
 		wg.Wait()
 
 		// wait for db writes finished
-		time.Sleep(1 * time.Second)
+		time.Sleep(2 * time.Second)
 
 		// 2. read local store and expect them to be the
 		// same as the data before being stored

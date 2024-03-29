@@ -6,6 +6,7 @@ import (
 	"github.com/babylonchain/vigilante/btcclient"
 	vconfig "github.com/babylonchain/vigilante/config"
 	vtypes "github.com/babylonchain/vigilante/types"
+	"github.com/btcsuite/btcd/rpcclient"
 )
 
 const (
@@ -85,5 +86,19 @@ func (cfg *BTCConfig) ToBtcNodeBackendConfig() *btcclient.BtcNodeBackendConfig {
 	return &btcclient.BtcNodeBackendConfig{
 		Bitcoind:          &defaultBitcoindCfg,
 		ActiveNodeBackend: vtypes.Bitcoind,
+	}
+}
+
+func (cfg *BTCConfig) ToConnConfig() *rpcclient.ConnConfig {
+	return &rpcclient.ConnConfig{
+		Host:                 cfg.RPCHost,
+		User:                 cfg.RPCUser,
+		Pass:                 cfg.RPCPass,
+		DisableTLS:           true,
+		DisableConnectOnNew:  true,
+		DisableAutoReconnect: false,
+		// we use post mode as it sure it works with either bitcoind or btcwallet
+		// we may need to re-consider it later if we need any notifications
+		HTTPPostMode: true,
 	}
 }
