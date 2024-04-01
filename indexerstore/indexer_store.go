@@ -2,6 +2,7 @@ package indexerstore
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -21,6 +22,9 @@ var (
 
 	// mapping tx hash -> unbonding transaction
 	unbondingTxBucketName = []byte("unbondingtxs")
+
+	// stores indexer state
+	indexerStateBucketName = []byte("indexerstate")
 )
 
 type IndexerStore struct {
@@ -61,6 +65,11 @@ func (c *IndexerStore) initBuckets() error {
 		}
 
 		_, err = tx.CreateTopLevelBucket(unbondingTxBucketName)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.CreateTopLevelBucket(indexerStateBucketName)
 		if err != nil {
 			return err
 		}
@@ -292,4 +301,69 @@ func protoUnbondingTxToStoredUnbondingTx(protoTx *proto.UnbondingTransaction) (*
 		Tx:            &unbondingTx,
 		StakingTxHash: stakingTxHash,
 	}, nil
+}
+
+func getLastProcessedHeightKey() []byte {
+	return []byte("lastprocessedheight")
+}
+
+func (is *IndexerStore) SaveLastProcessedHeight(height uint64) error {
+	key := getLastProcessedHeightKey()
+	heightBytes := uint64ToBytes(height)
+
+	return kvdb.Batch(is.db, func(tx kvdb.RwTx) error {
+		stateBucket := tx.ReadWriteBucket(indexerStateBucketName)
+		if stateBucket == nil {
+			return ErrCorruptedStateDb
+		}
+
+		return stateBucket.Put(key, heightBytes)
+	})
+}
+
+func (is *IndexerStore) GetLastProcessedHeight() (uint64, error) {
+	key := getLastProcessedHeightKey()
+
+	var lastProcessedHeight uint64
+
+	err := is.db.View(func(tx kvdb.RTx) error {
+		stateBucket := tx.ReadBucket(indexerStateBucketName)
+		if stateBucket == nil {
+			return ErrCorruptedStateDb
+		}
+
+		v := stateBucket.Get(key)
+		if v == nil {
+			return ErrLastProcessedHeightNotFound
+		}
+
+		height, err := uint64FromBytes(v)
+		if err != nil {
+			return err
+		}
+
+		lastProcessedHeight = height
+
+		return nil
+	}, func() {})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return lastProcessedHeight, nil
+}
+
+func uint64ToBytes(v uint64) []byte {
+	var buf [4]byte
+	binary.BigEndian.PutUint64(buf[:], v)
+	return buf[:]
+}
+
+func uint64FromBytes(b []byte) (uint64, error) {
+	if len(b) != 8 {
+		return 0, fmt.Errorf("invalid uint64 bytes length: %d", len(b))
+	}
+
+	return binary.BigEndian.Uint64(b), nil
 }
