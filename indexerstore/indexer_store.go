@@ -355,7 +355,7 @@ func (is *IndexerStore) GetLastProcessedHeight() (uint64, error) {
 }
 
 func uint64ToBytes(v uint64) []byte {
-	var buf [4]byte
+	var buf [8]byte
 	binary.BigEndian.PutUint64(buf[:], v)
 	return buf[:]
 }

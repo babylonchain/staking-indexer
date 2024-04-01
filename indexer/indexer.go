@@ -13,7 +13,6 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightningnetwork/lnd/kvdb"
 	"go.uber.org/zap"
 
 	"github.com/babylonchain/staking-indexer/config"
@@ -44,15 +43,10 @@ func NewStakingIndexer(
 	cfg *config.Config,
 	logger *zap.Logger,
 	consumer consumer.EventConsumer,
-	db kvdb.Backend,
+	is *indexerstore.IndexerStore,
 	params *types.Params,
 	confirmedBlocksChan chan *vtypes.IndexedBlock,
 ) (*StakingIndexer, error) {
-
-	is, err := indexerstore.NewIndexerStore(db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initiate staking indexer store: %w", err)
-	}
 
 	return &StakingIndexer{
 		cfg:                 cfg,
@@ -92,6 +86,9 @@ func (si *StakingIndexer) confirmedBlocksLoop() {
 			if err := si.handleConfirmedBlock(b); err != nil {
 				// this indicates systematic failure
 				si.logger.Fatal("failed to handle block", zap.Error(err))
+			}
+			if err := si.is.SaveLastProcessedHeight(uint64(block.Height)); err != nil {
+				si.logger.Fatal("failed to save the last processed height", zap.Error(err))
 			}
 		case <-si.quit:
 			si.logger.Info("closing the confirmed blocks loop")

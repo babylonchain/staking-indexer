@@ -183,7 +183,6 @@ func (bs *BtcScanner) pollConfirmedBlocks(tipHeight uint64) error {
 
 func (bs *BtcScanner) sendConfirmedBlockToChan(block *vtypes.IndexedBlock) {
 	bs.confirmedBlocksChan <- block
-	// TODO persist the state
 	bs.lastConfirmedHeight = uint64(block.Height)
 }
 

@@ -17,6 +17,7 @@ import (
 
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/indexer"
+	"github.com/babylonchain/staking-indexer/indexerstore"
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
 	"github.com/babylonchain/staking-indexer/testutils/mocks"
@@ -39,7 +40,9 @@ func FuzzIndexer(f *testing.F) {
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
-		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParams, confirmedBlockChan)
+		is, err := indexerstore.NewIndexerStore(db)
+		require.NoError(t, err)
+		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), is, sysParams, confirmedBlockChan)
 		require.NoError(t, err)
 
 		err = stakingIndexer.Start()

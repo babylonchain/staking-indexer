@@ -114,9 +114,11 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 
 	db, err := cfg.DatabaseConfig.GetDbBackend()
 	require.NoError(t, err)
+	is, err := indexerstore.NewIndexerStore(db)
+	require.NoError(t, err)
 	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, db, paramsRetriever.GetParams(), scanner.ConfirmedBlocksChan())
+	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, is, paramsRetriever.GetParams(), scanner.ConfirmedBlocksChan())
 	require.NoError(t, err)
 
 	interceptor, err := signal.Intercept()
