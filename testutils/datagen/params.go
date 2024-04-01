@@ -24,14 +24,6 @@ func GenerateGlobalParams(r *rand.Rand, t *testing.T) *types.Params {
 		covPks[i] = privKey.PubKey()
 	}
 
-	numFinalityProviders := r.Intn(50) + 1
-	fpPks := make([]*btcec.PublicKey, numFinalityProviders)
-	for i := 0; i < numFinalityProviders; i++ {
-		privKey, err := btcec.NewPrivateKey()
-		require.NoError(t, err)
-		fpPks[i] = privKey.PubKey()
-	}
-
 	covQuorum := uint32(r.Intn(numCovenants) + 1)
 
 	unbondingTime := uint16(r.Intn(1000) + 100)
@@ -45,14 +37,13 @@ func GenerateGlobalParams(r *rand.Rand, t *testing.T) *types.Params {
 	maxStakingTime := uint16(r.Intn(10000)) + minStakingTime
 
 	return &types.Params{
-		Tag:                 []byte(tag),
-		CovenantPks:         covPks,
-		FinalityProviderPks: fpPks,
-		CovenantQuorum:      covQuorum,
-		UnbondingTime:       unbondingTime,
-		MaxStakingAmount:    maxStakingAmount,
-		MinStakingAmount:    minStakingAmount,
-		MaxStakingTime:      maxStakingTime,
-		MinStakingTime:      minStakingTime,
+		Tag:              []byte(tag),
+		CovenantPks:      covPks,
+		CovenantQuorum:   covQuorum,
+		UnbondingTime:    unbondingTime,
+		MaxStakingAmount: maxStakingAmount,
+		MinStakingAmount: minStakingAmount,
+		MaxStakingTime:   maxStakingTime,
+		MinStakingTime:   minStakingTime,
 	}
 }
