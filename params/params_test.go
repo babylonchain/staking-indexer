@@ -19,15 +19,14 @@ import (
 )
 
 type internalParams struct {
-	Tag                 string         `json:"tag"`
-	CovenantPks         []string       `json:"covenant_pks"`
-	FinalityProviderPks []string       `json:"finality_provider_pks"`
-	CovenantQuorum      uint32         `json:"covenant_quorum"`
-	UnbondingTime       uint16         `json:"unbonding_time"`
-	MaxStakingAmount    btcutil.Amount `json:"max_staking_amount"`
-	MinStakingAmount    btcutil.Amount `json:"min_staking_amount"`
-	MaxStakingTime      uint16         `json:"max_staking_time"`
-	MinStakingTime      uint16         `json:"min_staking_time"`
+	Tag              string         `json:"tag"`
+	CovenantPks      []string       `json:"covenant_pks"`
+	CovenantQuorum   uint32         `json:"covenant_quorum"`
+	UnbondingTime    uint16         `json:"unbonding_time"`
+	MaxStakingAmount btcutil.Amount `json:"max_staking_amount"`
+	MinStakingAmount btcutil.Amount `json:"min_staking_amount"`
+	MaxStakingTime   uint16         `json:"max_staking_time"`
+	MinStakingTime   uint16         `json:"min_staking_time"`
 }
 
 func FuzzParamsRetriever(f *testing.F) {
@@ -62,7 +61,6 @@ func FuzzParamsRetriever(f *testing.F) {
 		require.Equal(t, globalParams.CovenantQuorum, p.CovenantQuorum)
 		require.Equal(t, globalParams.UnbondingTime, p.UnbondingTime)
 		require.True(t, testutils.PubKeysSliceEqual(globalParams.CovenantPks, p.CovenantPks))
-		require.True(t, testutils.PubKeysSliceEqual(globalParams.FinalityProviderPks, p.FinalityProviderPks))
 	})
 }
 
@@ -72,20 +70,14 @@ func paramsToInternalParams(p *types.Params) *internalParams {
 		covPksHex[i] = bbntypes.NewBIP340PubKeyFromBTCPK(pk).MarshalHex()
 	}
 
-	fpPksHex := make([]string, len(p.FinalityProviderPks))
-	for i, pk := range p.FinalityProviderPks {
-		fpPksHex[i] = bbntypes.NewBIP340PubKeyFromBTCPK(pk).MarshalHex()
-	}
-
 	return &internalParams{
-		Tag:                 string(p.Tag),
-		CovenantPks:         covPksHex,
-		FinalityProviderPks: fpPksHex,
-		CovenantQuorum:      p.CovenantQuorum,
-		UnbondingTime:       p.UnbondingTime,
-		MaxStakingAmount:    p.MaxStakingAmount,
-		MinStakingAmount:    p.MinStakingAmount,
-		MaxStakingTime:      p.MaxStakingTime,
-		MinStakingTime:      p.MinStakingTime,
+		Tag:              string(p.Tag),
+		CovenantPks:      covPksHex,
+		CovenantQuorum:   p.CovenantQuorum,
+		UnbondingTime:    p.UnbondingTime,
+		MaxStakingAmount: p.MaxStakingAmount,
+		MinStakingAmount: p.MinStakingAmount,
+		MaxStakingTime:   p.MaxStakingTime,
+		MinStakingTime:   p.MinStakingTime,
 	}
 }
