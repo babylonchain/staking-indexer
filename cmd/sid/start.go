@@ -12,7 +12,6 @@ import (
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/consumer"
 	"github.com/babylonchain/staking-indexer/indexer"
-	"github.com/babylonchain/staking-indexer/indexerstore"
 	"github.com/babylonchain/staking-indexer/log"
 	"github.com/babylonchain/staking-indexer/params"
 	service "github.com/babylonchain/staking-indexer/server"
@@ -90,24 +89,8 @@ func start(ctx *cli.Context) error {
 		return fmt.Errorf("failed to create db backend: %w", err)
 	}
 
-	is, err := indexerstore.NewIndexerStore(dbBackend)
-	if err != nil {
-		return fmt.Errorf("failed to initiate staking indexer store: %w", err)
-	}
-
-	var startHeight uint64
-	lastProcessedHeight, err := is.GetLastProcessedHeight()
-	if err != nil && !ctx.IsSet(startHeightFlag) {
-		return fmt.Errorf("should specify %s", startHeightFlag)
-	}
-	if ctx.IsSet(startHeightFlag) {
-		startHeight = ctx.Uint64(startHeightFlag)
-	} else {
-		startHeight = lastProcessedHeight + 1
-	}
-
 	// create BTC scanner
-	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, btcNotifier, startHeight)
+	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, btcNotifier)
 	if err != nil {
 		return fmt.Errorf("failed to initialize the BTC scanner: %w", err)
 	}
@@ -124,7 +107,7 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create the staking indexer app
-	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, is, paramsRetriever.GetParams(), scanner.ConfirmedBlocksChan())
+	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, dbBackend, paramsRetriever.GetParams(), scanner)
 	if err != nil {
 		return fmt.Errorf("failed to initialize the staking indexer app: %w", err)
 	}
@@ -136,8 +119,9 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create the server
-	indexerServer := service.NewStakingIndexerServer(cfg, queueConsumer, dbBackend, btcNotifier, scanner, si, logger, shutdownInterceptor)
+	startHeight := ctx.Uint64(startHeightFlag)
+	indexerServer := service.NewStakingIndexerServer(cfg, queueConsumer, dbBackend, btcNotifier, si, logger, shutdownInterceptor)
 
 	// run all the services until shutdown
-	return indexerServer.RunUntilShutdown()
+	return indexerServer.RunUntilShutdown(startHeight)
 }

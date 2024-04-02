@@ -59,6 +59,7 @@ test-e2e:
 mock-gen:
 	mkdir -p $(MOCKS_DIR)
 	$(MOCKGEN_CMD) -source=consumer/event_consumer.go -package mocks -destination $(MOCKS_DIR)/event_consumer.go
+	$(MOCKGEN_CMD) -source=btcscanner/btc_scanner.go -package mocks -destination $(MOCKS_DIR)/btc_scanner.go
 
 .PHONY: mock-gen
 

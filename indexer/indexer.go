@@ -13,8 +13,10 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/lightningnetwork/lnd/kvdb"
 	"go.uber.org/zap"
 
+	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/consumer"
 	"github.com/babylonchain/staking-indexer/indexerstore"
@@ -33,7 +35,7 @@ type StakingIndexer struct {
 
 	is *indexerstore.IndexerStore
 
-	confirmedBlocksChan chan *vtypes.IndexedBlock
+	btcScanner btcscanner.BtcScanner
 
 	wg   sync.WaitGroup
 	quit chan struct{}
@@ -43,24 +45,28 @@ func NewStakingIndexer(
 	cfg *config.Config,
 	logger *zap.Logger,
 	consumer consumer.EventConsumer,
-	is *indexerstore.IndexerStore,
+	db kvdb.Backend,
 	params *types.Params,
-	confirmedBlocksChan chan *vtypes.IndexedBlock,
+	btcScanner btcscanner.BtcScanner,
 ) (*StakingIndexer, error) {
+	is, err := indexerstore.NewIndexerStore(db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initiate staking indexer store: %w", err)
+	}
 
 	return &StakingIndexer{
-		cfg:                 cfg,
-		logger:              logger.With(zap.String("module", "staking indexer")),
-		consumer:            consumer,
-		is:                  is,
-		params:              params,
-		confirmedBlocksChan: confirmedBlocksChan,
-		quit:                make(chan struct{}),
+		cfg:        cfg,
+		logger:     logger.With(zap.String("module", "staking indexer")),
+		consumer:   consumer,
+		is:         is,
+		params:     params,
+		btcScanner: btcScanner,
+		quit:       make(chan struct{}),
 	}, nil
 }
 
 // Start starts the staking indexer core
-func (si *StakingIndexer) Start() error {
+func (si *StakingIndexer) Start(startHeight uint64) error {
 	var startErr error
 	si.startOnce.Do(func() {
 		si.logger.Info("Starting Staking Indexer App")
@@ -68,10 +74,37 @@ func (si *StakingIndexer) Start() error {
 		si.wg.Add(1)
 		go si.confirmedBlocksLoop()
 
+		validatedStartHeight, err := si.validateStartHeight(startHeight)
+		if err != nil {
+			startErr = err
+			return
+		}
+
+		if err := si.btcScanner.Start(validatedStartHeight); err != nil {
+			startErr = err
+			return
+		}
+
 		si.logger.Info("Staking Indexer App is successfully started!")
 	})
 
 	return startErr
+}
+
+// validateStartHeight ensures that the returned start height is positive
+// if the given startHeight is not positive, it returns the lastProcessHeight + 1
+// from the local store
+func (si *StakingIndexer) validateStartHeight(startHeight uint64) (uint64, error) {
+	lastProcessedHeight, err := si.is.GetLastProcessedHeight()
+	if err != nil && startHeight == 0 {
+		return 0, fmt.Errorf("the last processed height not set, the specified start height must be positive")
+	}
+
+	if startHeight == 0 {
+		startHeight = lastProcessedHeight + 1
+	}
+
+	return startHeight, nil
 }
 
 func (si *StakingIndexer) confirmedBlocksLoop() {
@@ -79,7 +112,7 @@ func (si *StakingIndexer) confirmedBlocksLoop() {
 
 	for {
 		select {
-		case block := <-si.confirmedBlocksChan:
+		case block := <-si.btcScanner.ConfirmedBlocksChan():
 			b := block
 			si.logger.Info("received confirmed block",
 				zap.Int32("height", block.Height))
@@ -409,6 +442,11 @@ func (si *StakingIndexer) Stop() error {
 
 		close(si.quit)
 		si.wg.Wait()
+
+		if err := si.btcScanner.Stop(); err != nil {
+			stopErr = err
+			return
+		}
 
 		si.logger.Info("Staking Indexer App is successfully stopped!")
 

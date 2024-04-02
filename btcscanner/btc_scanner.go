@@ -14,7 +14,14 @@ import (
 	"github.com/babylonchain/staking-indexer/config"
 )
 
-type BtcScanner struct {
+type BtcScanner interface {
+	Start(startHeight uint64) error
+	ConfirmedBlocksChan() chan *vtypes.IndexedBlock
+	LastConfirmedHeight() uint64
+	Stop() error
+}
+
+type BtcPoller struct {
 	logger *zap.Logger
 
 	// connect to BTC node
@@ -39,15 +46,12 @@ func NewBTCScanner(
 	logger *zap.Logger,
 	btcClient btcclient.BTCClient,
 	btcNotifier notifier.ChainNotifier,
-	lastConfirmedHeight uint64,
-) (*BtcScanner, error) {
-
-	return &BtcScanner{
+) (*BtcPoller, error) {
+	return &BtcPoller{
 		logger:              logger.With(zap.String("module", "btcscanner")),
 		btcClient:           btcClient,
 		btcNotifier:         btcNotifier,
 		cfg:                 scannerCfg,
-		lastConfirmedHeight: lastConfirmedHeight,
 		confirmedBlocksChan: make(chan *vtypes.IndexedBlock),
 		isStarted:           atomic.NewBool(false),
 		quit:                make(chan struct{}),
@@ -55,10 +59,16 @@ func NewBTCScanner(
 }
 
 // Start starts the scanning process from the last confirmed height + 1
-func (bs *BtcScanner) Start() error {
+func (bs *BtcPoller) Start(startHeight uint64) error {
 	if bs.isStarted.Swap(true) {
 		return fmt.Errorf("the BTC scanner is already started")
 	}
+
+	if startHeight == 0 {
+		return fmt.Errorf("start height should be positive")
+	}
+
+	bs.lastConfirmedHeight = startHeight - 1
 
 	bs.logger.Info("starting the BTC scanner")
 
@@ -81,7 +91,7 @@ func (bs *BtcScanner) Start() error {
 	return nil
 }
 
-func (bs *BtcScanner) bootstrap(blockEventNotifier *notifier.BlockEpochEvent) error {
+func (bs *BtcPoller) bootstrap(blockEventNotifier *notifier.BlockEpochEvent) error {
 	var tipHeight uint64
 
 	bs.logger.Info("start bootstrapping",
@@ -107,7 +117,7 @@ func (bs *BtcScanner) bootstrap(blockEventNotifier *notifier.BlockEpochEvent) er
 }
 
 // pollBlocksLoop polls confirmed blocks upon new block event and timeout
-func (bs *BtcScanner) pollBlocksLoop(blockNotifier *notifier.BlockEpochEvent) {
+func (bs *BtcPoller) pollBlocksLoop(blockNotifier *notifier.BlockEpochEvent) {
 	defer bs.wg.Done()
 	defer blockNotifier.Cancel()
 
@@ -153,7 +163,7 @@ func (bs *BtcScanner) pollBlocksLoop(blockNotifier *notifier.BlockEpochEvent) {
 	}
 }
 
-func (bs *BtcScanner) pollConfirmedBlocks(tipHeight uint64) error {
+func (bs *BtcPoller) pollConfirmedBlocks(tipHeight uint64) error {
 	k := bs.cfg.ConfirmationDepth
 
 	if bs.lastConfirmedHeight+k >= tipHeight {
@@ -181,20 +191,20 @@ func (bs *BtcScanner) pollConfirmedBlocks(tipHeight uint64) error {
 	return nil
 }
 
-func (bs *BtcScanner) sendConfirmedBlockToChan(block *vtypes.IndexedBlock) {
+func (bs *BtcPoller) sendConfirmedBlockToChan(block *vtypes.IndexedBlock) {
 	bs.confirmedBlocksChan <- block
 	bs.lastConfirmedHeight = uint64(block.Height)
 }
 
-func (bs *BtcScanner) ConfirmedBlocksChan() chan *vtypes.IndexedBlock {
+func (bs *BtcPoller) ConfirmedBlocksChan() chan *vtypes.IndexedBlock {
 	return bs.confirmedBlocksChan
 }
 
-func (bs *BtcScanner) LastConfirmedHeight() uint64 {
+func (bs *BtcPoller) LastConfirmedHeight() uint64 {
 	return bs.lastConfirmedHeight
 }
 
-func (bs *BtcScanner) Stop() error {
+func (bs *BtcPoller) Stop() error {
 	if !bs.isStarted.Swap(false) {
 		return nil
 	}

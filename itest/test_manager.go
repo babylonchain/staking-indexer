@@ -35,7 +35,7 @@ type TestManager struct {
 	Config             *config.Config
 	Db                 kvdb.Backend
 	Si                 *indexer.StakingIndexer
-	BS                 *btcscanner.BtcScanner
+	BS                 *btcscanner.BtcPoller
 	WalletPrivKey      *btcec.PrivateKey
 	serverStopper      *signal.Interceptor
 	wg                 *sync.WaitGroup
@@ -43,6 +43,7 @@ type TestManager struct {
 	WalletClient       *rpcclient.Client
 	MinerAddr          btcutil.Address
 	QueueConsumer      *consumer.QueueConsumer
+	IndexerStore       *indexerstore.IndexerStore
 	StakingEventChan   <-chan client.QueueMessage
 	UnbondingEventChan <-chan client.QueueMessage
 	WithdrawEventChan  <-chan client.QueueMessage
@@ -98,7 +99,7 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	)
 	require.NoError(t, err)
 
-	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, btcNotifier, 1)
+	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, btcNotifier)
 	require.NoError(t, err)
 
 	// create event consumer
@@ -114,11 +115,9 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 
 	db, err := cfg.DatabaseConfig.GetDbBackend()
 	require.NoError(t, err)
-	is, err := indexerstore.NewIndexerStore(db)
-	require.NoError(t, err)
 	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, is, paramsRetriever.GetParams(), scanner.ConfirmedBlocksChan())
+	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, db, paramsRetriever.GetParams(), scanner)
 	require.NoError(t, err)
 
 	interceptor, err := signal.Intercept()
@@ -129,7 +128,6 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 		queueConsumer,
 		db,
 		btcNotifier,
-		scanner,
 		si,
 		logger,
 		interceptor,
@@ -139,7 +137,7 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := service.RunUntilShutdown()
+		err := service.RunUntilShutdown(1)
 		require.NoError(t, err)
 	}()
 	// Wait for the server to start
