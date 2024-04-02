@@ -206,6 +206,7 @@ func TestIndexerRestart(t *testing.T) {
 
 	// restart from a height before staking tx
 	restartedTm := ReStartFromHeight(t, tm, uint64(n))
+	defer restartedTm.Stop()
 
 	// check the staking event is replayed
 	restartedTm.CheckNextStakingEvent(t, stakingTxHash)
@@ -213,6 +214,7 @@ func TestIndexerRestart(t *testing.T) {
 	// restart the testing manager again from 0
 	// which means the start height should be from local store
 	restartedTm2 := ReStartFromHeight(t, restartedTm, 0)
+	defer restartedTm2.Stop()
 
 	// wait until catch up
 	restartedTm2.WaitForNConfirmations(t, int(k))
