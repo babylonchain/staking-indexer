@@ -1,3 +1,6 @@
+//go:build e2e
+// +build e2e
+
 package e2etest
 
 import (
@@ -380,6 +383,7 @@ func buildUnbondingTx(
 		stakerPrivKey,
 		unbondingSpendInfo.RevealedLeaf.Script,
 	)
+	require.NoError(t, err)
 
 	witness, err := unbondingSpendInfo.CreateUnbondingPathWitness(unbondingCovSigs, stakerUnbondingSig)
 	require.NoError(t, err)
