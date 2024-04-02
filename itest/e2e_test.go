@@ -1,6 +1,3 @@
-//go:build e2e
-// +build e2e
-
 package e2etest
 
 import (
@@ -153,6 +150,73 @@ func TestStakingLifeCycle(t *testing.T) {
 
 	// check the withdraw event is received
 	tm.CheckNextWithdrawEvent(t, stakingTx.TxHash())
+}
+
+// TestIndexerRestart tests following cases upon restart
+//  1. it restarts from a previous height before a staking tx is found.
+//     We expect the staking event to be replayed
+//  2. it restarts exactly from the height it just processed.
+//     We expect the staking event not to be replayed
+func TestIndexerRestart(t *testing.T) {
+	// ensure we have UTXOs
+	n := 110
+	tm := StartManagerWithNBlocks(t, n)
+	defer tm.Stop()
+	k := tm.Config.BTCScannerConfig.ConfirmationDepth
+
+	// generate valid staking tx data
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	testStakingData := datagen.GenerateTestStakingData(t, r)
+	testStakingData.StakingTime = 120
+	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
+	require.NoError(t, err)
+	sysParams := paramsRetriever.GetParams()
+	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
+		sysParams.Tag,
+		tm.WalletPrivKey.PubKey(),
+		testStakingData.FinalityProviderKey,
+		sysParams.CovenantPks,
+		sysParams.CovenantQuorum,
+		testStakingData.StakingTime,
+		testStakingData.StakingAmount,
+		regtestParams,
+	)
+	require.NoError(t, err)
+
+	// send the staking tx and mine blocks
+	require.NoError(t, err)
+	stakingTx, err := testutils.CreateTxFromOutputsAndSign(
+		tm.WalletClient,
+		[]*wire.TxOut{stakingInfo.OpReturnOutput, stakingInfo.StakingOutput},
+		1000,
+		tm.MinerAddr,
+	)
+	require.NoError(t, err)
+	stakingTxHash := stakingTx.TxHash()
+	tm.SendTxWithNConfirmations(t, stakingTx, int(k+1))
+
+	// check that the staking tx is already stored
+	tm.WaitForStakingTxStored(t, stakingTxHash)
+
+	// check the staking event is received by the queue
+	tm.CheckNextStakingEvent(t, stakingTxHash)
+
+	// restart from a height before staking tx
+	restartedTm := ReStartFromHeight(t, tm, uint64(n))
+
+	// check the staking event is replayed
+	restartedTm.CheckNextStakingEvent(t, stakingTxHash)
+
+	// restart the testing manager again from 0
+	// which means the start height should be from local store
+	restartedTm2 := ReStartFromHeight(t, restartedTm, 0)
+
+	// wait until catch up
+	restartedTm2.WaitForNConfirmations(t, int(k))
+
+	// no staking event should be replayed as
+	// the indexer starts from a higher height
+	restartedTm2.CheckNoStakingEvent(t)
 }
 
 // TestStakingUnbondingLifeCycle covers the following life cycle
