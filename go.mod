@@ -1,6 +1,6 @@
 module github.com/babylonchain/staking-indexer
 
-go 1.21.4
+go 1.21.6
 
 toolchain go1.22.0
 
