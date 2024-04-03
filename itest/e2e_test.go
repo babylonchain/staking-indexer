@@ -1,9 +1,7 @@
-//go:build e2e
-// +build e2e
-
 package e2etest
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"math/rand"
@@ -175,10 +173,14 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
 	sysParams := paramsRetriever.GetParams()
+	fpPkBytes, err := hex.DecodeString("03d5a0bb72d71993e435d6c5a70e2aa4db500a62cfaae33c56050deefee64ec0")
+	require.NoError(t, err)
+	fpPk, err := schnorr.ParsePubKey(fpPkBytes)
+	require.NoError(t, err)
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
 		sysParams.Tag,
 		tm.WalletPrivKey.PubKey(),
-		testStakingData.FinalityProviderKey,
+		fpPk,
 		sysParams.CovenantPks,
 		sysParams.CovenantQuorum,
 		testStakingData.StakingTime,
@@ -186,6 +188,8 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 		regtestParams,
 	)
 	require.NoError(t, err)
+
+	t.Logf("staker priv key hex: %s", hex.EncodeToString(tm.WalletPrivKey.Serialize()))
 
 	// send the staking tx and mine blocks
 	require.NoError(t, err)
@@ -222,6 +226,12 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 		stakingTx,
 		getCovenantPrivKeys(t),
 	)
+	var buf bytes.Buffer
+	err = unbondingTx.Serialize(&buf)
+	require.NoError(t, err)
+	txHex := hex.EncodeToString(buf.Bytes())
+	t.Logf("unbonding tx hex: %s", txHex)
+	t.Logf("unbonding tx hash hex: %s", unbondingTx.TxHash().String())
 	tm.SendTxWithNConfirmations(t, unbondingTx, int(k+1))
 
 	// check the unbonding tx is already stored
@@ -316,6 +326,9 @@ func buildUnbondingTx(
 		stakerPrivKey,
 		unbondingSpendInfo.RevealedLeaf.Script,
 	)
+
+	sigHex := hex.EncodeToString(stakerUnbondingSig.Serialize())
+	t.Logf("sig hex is: %s", sigHex)
 
 	witness, err := unbondingSpendInfo.CreateUnbondingPathWitness(unbondingCovSigs, stakerUnbondingSig)
 	require.NoError(t, err)
