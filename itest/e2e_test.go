@@ -12,6 +12,7 @@ import (
 
 	"github.com/babylonchain/babylon/btcstaking"
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
+	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -56,10 +57,10 @@ func TestQueueConsumer(t *testing.T) {
 	n := 1
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	stakingEventList := make([]*types.ActiveStakingEvent, 0)
+	stakingEventList := make([]*queuecli.ActiveStakingEvent, 0)
 	for i := 0; i < n; i++ {
-		stakingEvent := &types.ActiveStakingEvent{
-			EventType:        types.ActiveStakingEventType,
+		stakingEvent := &queuecli.ActiveStakingEvent{
+			EventType:        queuecli.ActiveStakingEventType,
 			StakingTxHashHex: hex.EncodeToString(bbndatagen.GenRandomByteArray(r, 10)),
 		}
 		err = queueConsumer.PushStakingEvent(stakingEvent)
@@ -69,7 +70,7 @@ func TestQueueConsumer(t *testing.T) {
 
 	for i := 0; i < n; i++ {
 		stakingEventBytes := <-stakingChan
-		var receivedStakingEvent types.ActiveStakingEvent
+		var receivedStakingEvent queuecli.ActiveStakingEvent
 		err = json.Unmarshal([]byte(stakingEventBytes.Body), &receivedStakingEvent)
 		require.NoError(t, err)
 		require.Equal(t, stakingEventList[i].StakingTxHashHex, receivedStakingEvent.StakingTxHashHex)

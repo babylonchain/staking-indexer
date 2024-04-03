@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	queuecli "github.com/babylonchain/staking-queue-client/client"
+	"github.com/babylonchain/staking-queue-client/queuemngr"
 	"github.com/babylonchain/vigilante/btcclient"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
@@ -21,14 +23,11 @@ import (
 
 	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
-	"github.com/babylonchain/staking-indexer/consumer"
 	"github.com/babylonchain/staking-indexer/indexer"
 	"github.com/babylonchain/staking-indexer/indexerstore"
 	"github.com/babylonchain/staking-indexer/log"
 	"github.com/babylonchain/staking-indexer/params"
-	"github.com/babylonchain/staking-indexer/queue/client"
 	"github.com/babylonchain/staking-indexer/server"
-	"github.com/babylonchain/staking-indexer/types"
 )
 
 type TestManager struct {
@@ -42,10 +41,10 @@ type TestManager struct {
 	BitcoindHandler    *BitcoindTestHandler
 	WalletClient       *rpcclient.Client
 	MinerAddr          btcutil.Address
-	QueueConsumer      *consumer.QueueConsumer
-	StakingEventChan   <-chan client.QueueMessage
-	UnbondingEventChan <-chan client.QueueMessage
-	WithdrawEventChan  <-chan client.QueueMessage
+	QueueConsumer      *queuemngr.QueueManager
+	StakingEventChan   <-chan queuecli.QueueMessage
+	UnbondingEventChan <-chan queuecli.QueueMessage
+	WithdrawEventChan  <-chan queuecli.QueueMessage
 }
 
 // bitcoin params used for testing
@@ -229,7 +228,7 @@ func (tm *TestManager) WaitForNConfirmations(t *testing.T, n int) {
 
 func (tm *TestManager) CheckNextStakingEvent(t *testing.T, stakingTxHash chainhash.Hash) {
 	stakingEventBytes := <-tm.StakingEventChan
-	var activeStakingEvent types.ActiveStakingEvent
+	var activeStakingEvent queuecli.ActiveStakingEvent
 	err := json.Unmarshal([]byte(stakingEventBytes.Body), &activeStakingEvent)
 	require.NoError(t, err)
 	require.Equal(t, stakingTxHash.String(), activeStakingEvent.StakingTxHashHex)
@@ -240,7 +239,7 @@ func (tm *TestManager) CheckNextStakingEvent(t *testing.T, stakingTxHash chainha
 
 func (tm *TestManager) CheckNextUnbondingEvent(t *testing.T, unbondingTxHash chainhash.Hash) {
 	unbondingEventBytes := <-tm.UnbondingEventChan
-	var unbondingEvent types.UnbondingStakingEvent
+	var unbondingEvent queuecli.UnbondingStakingEvent
 	err := json.Unmarshal([]byte(unbondingEventBytes.Body), &unbondingEvent)
 	require.NoError(t, err)
 	require.Equal(t, unbondingTxHash.String(), unbondingEvent.UnbondingTxHashHex)
@@ -251,7 +250,7 @@ func (tm *TestManager) CheckNextUnbondingEvent(t *testing.T, unbondingTxHash cha
 
 func (tm *TestManager) CheckNextWithdrawEvent(t *testing.T, stakingTxHash chainhash.Hash) {
 	withdrawEventBytes := <-tm.WithdrawEventChan
-	var withdrawEvent types.WithdrawStakingEvent
+	var withdrawEvent queuecli.WithdrawStakingEvent
 	err := json.Unmarshal([]byte(withdrawEventBytes.Body), &withdrawEvent)
 	require.NoError(t, err)
 	require.Equal(t, stakingTxHash.String(), withdrawEvent.StakingTxHashHex)

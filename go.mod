@@ -1,11 +1,12 @@
 module github.com/babylonchain/staking-indexer
 
-go 1.21.4
+go 1.21.6
 
 toolchain go1.22.0
 
 require (
 	github.com/babylonchain/babylon v0.8.6-0.20240319122043-bc4943f41c79
+	github.com/babylonchain/staking-queue-client v0.0.0-20240402081626-91b89f937e85
 	github.com/babylonchain/vigilante v0.6.1-0.20240320020303-d44b61bb9903
 	github.com/btcsuite/btcd v0.24.0
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
@@ -22,7 +23,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli v1.22.14
 	go.uber.org/atomic v1.10.0
-	go.uber.org/zap v1.26.0
+	go.uber.org/zap v1.27.0
 	google.golang.org/protobuf v1.32.0
 )
 

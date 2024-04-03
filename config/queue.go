@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"time"
+
+	clicfg "github.com/babylonchain/staking-queue-client/config"
 )
 
 const (
@@ -37,6 +39,15 @@ func (cfg *QueueConfig) Validate() error {
 	}
 
 	return nil
+}
+
+func (cfg *QueueConfig) ToQueueClientConfig() *clicfg.QueueConfig {
+	return &clicfg.QueueConfig{
+		QueueUser:              cfg.User,
+		QueuePassword:          cfg.Password,
+		Url:                    cfg.Url,
+		QueueProcessingTimeout: cfg.ProcessingTimeout,
+	}
 }
 
 func DefaultQueueConfig() *QueueConfig {

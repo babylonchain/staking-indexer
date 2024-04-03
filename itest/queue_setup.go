@@ -5,16 +5,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/babylonchain/staking-queue-client/client"
+	"github.com/babylonchain/staking-queue-client/queuemngr"
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	"github.com/babylonchain/staking-indexer/config"
-	"github.com/babylonchain/staking-indexer/consumer"
-	"github.com/babylonchain/staking-indexer/types"
 )
 
-func setupTestQueueConsumer(t *testing.T, cfg *config.QueueConfig) (*consumer.QueueConsumer, error) {
+func setupTestQueueConsumer(t *testing.T, cfg *config.QueueConfig) (*queuemngr.QueueManager, error) {
 	amqpURI := fmt.Sprintf("amqp://%s:%s@%s", cfg.User, cfg.Password, cfg.Url)
 	conn, err := amqp091.Dial(amqpURI)
 	if err != nil {
@@ -22,14 +22,14 @@ func setupTestQueueConsumer(t *testing.T, cfg *config.QueueConfig) (*consumer.Qu
 	}
 	defer conn.Close()
 	err = purgeQueues(conn, []string{
-		types.ActiveStakingQueueName,
+		client.ActiveStakingQueueName,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	// Start the actual queue processing in our codebase
-	queues, err := consumer.NewQueueConsumer(cfg, zap.NewNop())
+	queues, err := queuemngr.NewQueueManager(cfg.ToQueueClientConfig(), zap.NewNop())
 	require.NoError(t, err)
 
 	return queues, nil
