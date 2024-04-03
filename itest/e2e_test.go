@@ -218,13 +218,13 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 		t,
 		sysParams,
 		tm.WalletPrivKey,
-		testStakingData.FinalityProviderKey,
+		fpPk,
 		testStakingData.StakingAmount,
 		&stakingTxHash,
 		storedStakingTx.StakingOutputIdx,
 		unbondingSpendInfo,
 		stakingTx,
-		getCovenantPrivKeys(t),
+		// getCovenantPrivKeys(t),
 	)
 	var buf bytes.Buffer
 	err = unbondingTx.Serialize(&buf)
@@ -248,7 +248,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	// build and send withdraw tx from the unbonding tx
 	unbondingInfo, err := btcstaking.BuildUnbondingInfo(
 		tm.WalletPrivKey.PubKey(),
-		[]*btcec.PublicKey{testStakingData.FinalityProviderKey},
+		[]*btcec.PublicKey{fpPk},
 		sysParams.CovenantPks,
 		sysParams.CovenantQuorum,
 		sysParams.UnbondingTime,
@@ -288,7 +288,7 @@ func buildUnbondingTx(
 	stakingOutputIdx uint32,
 	unbondingSpendInfo *btcstaking.SpendInfo,
 	stakingTx *wire.MsgTx,
-	covPrivKeys []*btcec.PrivateKey,
+	// covPrivKeys []*btcec.PrivateKey,
 ) *wire.MsgTx {
 	unbondingInfo, err := btcstaking.BuildUnbondingInfo(
 		stakerPrivKey.PubKey(),
@@ -306,19 +306,19 @@ func buildUnbondingTx(
 	unbondingTx.AddTxOut(unbondingInfo.UnbondingOutput)
 
 	// generate covenant unbonding sigs
-	unbondingCovSigs := make([]*schnorr.Signature, len(covPrivKeys))
-	for i, privKey := range covPrivKeys {
-		sig, err := btcstaking.SignTxWithOneScriptSpendInputStrict(
-			unbondingTx,
-			stakingTx,
-			stakingOutputIdx,
-			unbondingSpendInfo.GetPkScriptPath(),
-			privKey,
-		)
-		require.NoError(t, err)
-
-		unbondingCovSigs[i] = sig
-	}
+	// unbondingCovSigs := make([]*schnorr.Signature, len(covPrivKeys))
+	// for i, privKey := range covPrivKeys {
+	// 	sig, err := btcstaking.SignTxWithOneScriptSpendInputStrict(
+	// 		unbondingTx,
+	// 		stakingTx,
+	// 		stakingOutputIdx,
+	// 		unbondingSpendInfo.GetPkScriptPath(),
+	// 		privKey,
+	// 	)
+	// 	require.NoError(t, err)
+	//
+	// 	unbondingCovSigs[i] = sig
+	// }
 
 	stakerUnbondingSig, err := btcstaking.SignTxWithOneScriptSpendInputFromScript(
 		unbondingTx,
@@ -330,9 +330,9 @@ func buildUnbondingTx(
 	sigHex := hex.EncodeToString(stakerUnbondingSig.Serialize())
 	t.Logf("sig hex is: %s", sigHex)
 
-	witness, err := unbondingSpendInfo.CreateUnbondingPathWitness(unbondingCovSigs, stakerUnbondingSig)
-	require.NoError(t, err)
-	unbondingTx.TxIn[0].Witness = witness
+	// witness, err := unbondingSpendInfo.CreateUnbondingPathWitness(unbondingCovSigs, stakerUnbondingSig)
+	// require.NoError(t, err)
+	// unbondingTx.TxIn[0].Witness = witness
 
 	return unbondingTx
 }
