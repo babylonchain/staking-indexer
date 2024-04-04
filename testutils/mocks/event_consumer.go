@@ -7,7 +7,7 @@ package mocks
 import (
 	reflect "reflect"
 
-	types "github.com/babylonchain/staking-indexer/types"
+	client "github.com/babylonchain/staking-queue-client/client"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -35,7 +35,7 @@ func (m *MockEventConsumer) EXPECT() *MockEventConsumerMockRecorder {
 }
 
 // PushStakingEvent mocks base method.
-func (m *MockEventConsumer) PushStakingEvent(ev *types.ActiveStakingEvent) error {
+func (m *MockEventConsumer) PushStakingEvent(ev *client.ActiveStakingEvent) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PushStakingEvent", ev)
 	ret0, _ := ret[0].(error)
@@ -49,7 +49,7 @@ func (mr *MockEventConsumerMockRecorder) PushStakingEvent(ev interface{}) *gomoc
 }
 
 // PushUnbondingEvent mocks base method.
-func (m *MockEventConsumer) PushUnbondingEvent(ev *types.UnbondingStakingEvent) error {
+func (m *MockEventConsumer) PushUnbondingEvent(ev *client.UnbondingStakingEvent) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PushUnbondingEvent", ev)
 	ret0, _ := ret[0].(error)
@@ -63,7 +63,7 @@ func (mr *MockEventConsumerMockRecorder) PushUnbondingEvent(ev interface{}) *gom
 }
 
 // PushWithdrawEvent mocks base method.
-func (m *MockEventConsumer) PushWithdrawEvent(ev *types.WithdrawStakingEvent) error {
+func (m *MockEventConsumer) PushWithdrawEvent(ev *client.WithdrawStakingEvent) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PushWithdrawEvent", ev)
 	ret0, _ := ret[0].(error)

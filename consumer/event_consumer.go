@@ -1,11 +1,13 @@
 package consumer
 
-import "github.com/babylonchain/staking-indexer/types"
+import (
+	"github.com/babylonchain/staking-queue-client/client"
+)
 
 type EventConsumer interface {
 	Start() error
-	PushStakingEvent(ev *types.ActiveStakingEvent) error
-	PushUnbondingEvent(ev *types.UnbondingStakingEvent) error
-	PushWithdrawEvent(ev *types.WithdrawStakingEvent) error
+	PushStakingEvent(ev *client.ActiveStakingEvent) error
+	PushUnbondingEvent(ev *client.UnbondingStakingEvent) error
+	PushWithdrawEvent(ev *client.WithdrawStakingEvent) error
 	Stop() error
 }

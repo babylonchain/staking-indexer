@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/babylonchain/staking-queue-client/queuemngr"
 	"github.com/babylonchain/vigilante/btcclient"
 	"github.com/lightningnetwork/lnd/signal"
 	"github.com/urfave/cli"
 
 	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
-	"github.com/babylonchain/staking-indexer/consumer"
 	"github.com/babylonchain/staking-indexer/indexer"
 	"github.com/babylonchain/staking-indexer/log"
 	"github.com/babylonchain/staking-indexer/params"
@@ -96,7 +96,7 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create event consumer
-	queueConsumer, err := consumer.NewQueueConsumer(cfg.QueueConfig, logger)
+	queueConsumer, err := queuemngr.NewQueueManager(cfg.QueueConfig.ToQueueClientConfig(), logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize event consumer: %w", err)
 	}
