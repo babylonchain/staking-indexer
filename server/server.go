@@ -9,7 +9,6 @@ import (
 	"github.com/lightningnetwork/lnd/signal"
 	"go.uber.org/zap"
 
-	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/consumer"
 	"github.com/babylonchain/staking-indexer/indexer"
@@ -20,7 +19,6 @@ import (
 type Server struct {
 	started int32
 
-	scanner     *btcscanner.BtcScanner
 	si          *indexer.StakingIndexer
 	btcNotifier notifier.ChainNotifier
 	ec          consumer.EventConsumer
@@ -39,14 +37,12 @@ func NewStakingIndexerServer(
 	ec consumer.EventConsumer,
 	db kvdb.Backend,
 	btcNotifier notifier.ChainNotifier,
-	scanner *btcscanner.BtcScanner,
 	si *indexer.StakingIndexer,
 	l *zap.Logger,
 	sig signal.Interceptor,
 ) *Server {
 	return &Server{
 		cfg:         cfg,
-		scanner:     scanner,
 		si:          si,
 		ec:          ec,
 		db:          db,
@@ -58,7 +54,7 @@ func NewStakingIndexerServer(
 
 // RunUntilShutdown runs the main EOTS manager server loop until a signal is
 // received to shut down the process.
-func (s *Server) RunUntilShutdown() error {
+func (s *Server) RunUntilShutdown(startHeight uint64) error {
 	if atomic.AddInt32(&s.started, 1) != 1 {
 		return nil
 	}
@@ -91,21 +87,12 @@ func (s *Server) RunUntilShutdown() error {
 		}
 	}()
 
-	if err := s.si.Start(); err != nil {
+	if err := s.si.Start(startHeight); err != nil {
 		return fmt.Errorf("failed to start the staking indexer app: %w", err)
 	}
 	defer func() {
 		if err := s.si.Stop(); err != nil {
 			s.logger.Error("failed to stop the staking indexer app", zap.Error(err))
-		}
-	}()
-
-	if err := s.scanner.Start(); err != nil {
-		return fmt.Errorf("failed to start the BTC scanner: %w", err)
-	}
-	defer func() {
-		if err := s.scanner.Stop(); err != nil {
-			s.logger.Error("failed to stop the BTC scanner", zap.Error(err))
 		}
 	}()
 

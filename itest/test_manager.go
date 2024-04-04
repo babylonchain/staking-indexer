@@ -34,13 +34,14 @@ type TestManager struct {
 	Config             *config.Config
 	Db                 kvdb.Backend
 	Si                 *indexer.StakingIndexer
-	BS                 *btcscanner.BtcScanner
+	BS                 *btcscanner.BtcPoller
 	WalletPrivKey      *btcec.PrivateKey
 	serverStopper      *signal.Interceptor
 	wg                 *sync.WaitGroup
 	BitcoindHandler    *BitcoindTestHandler
 	WalletClient       *rpcclient.Client
 	MinerAddr          btcutil.Address
+	DirPath            string
 	QueueConsumer      *queuemngr.QueueManager
 	StakingEventChan   <-chan queuecli.QueueMessage
 	UnbondingEventChan <-chan queuecli.QueueMessage
@@ -70,6 +71,10 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	err = os.MkdirAll(dirPath, 0755)
 	require.NoError(t, err)
 
+	return StartWithBitcoinHandler(t, h, minerAddressDecoded, dirPath, 1)
+}
+
+func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress btcutil.Address, dirPath string, startHeight uint64) *TestManager {
 	cfg := defaultStakingIndexerConfig(dirPath)
 	logger, err := log.NewRootLoggerWithFile(config.LogFile(dirPath), "debug")
 	require.NoError(t, err)
@@ -78,7 +83,7 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	require.NoError(t, err)
 	err = rpcclient.WalletPassphrase(passphrase, 200)
 	require.NoError(t, err)
-	walletPrivKey, err := rpcclient.DumpPrivKey(minerAddressDecoded)
+	walletPrivKey, err := rpcclient.DumpPrivKey(minerAddress)
 	require.NoError(t, err)
 
 	// TODO this is not needed after we remove dependency on vigilante
@@ -97,7 +102,7 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	)
 	require.NoError(t, err)
 
-	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, btcNotifier, 1)
+	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, btcNotifier)
 	require.NoError(t, err)
 
 	// create event consumer
@@ -115,7 +120,7 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	require.NoError(t, err)
 	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, db, paramsRetriever.GetParams(), scanner.ConfirmedBlocksChan())
+	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, db, paramsRetriever.GetParams(), scanner)
 	require.NoError(t, err)
 
 	interceptor, err := signal.Intercept()
@@ -126,7 +131,6 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 		queueConsumer,
 		db,
 		btcNotifier,
-		scanner,
 		si,
 		logger,
 		interceptor,
@@ -136,7 +140,7 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := service.RunUntilShutdown()
+		err := service.RunUntilShutdown(startHeight)
 		require.NoError(t, err)
 	}()
 	// Wait for the server to start
@@ -151,7 +155,8 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 		BitcoindHandler:    h,
 		WalletClient:       rpcclient,
 		WalletPrivKey:      walletPrivKey.PrivKey,
-		MinerAddr:          minerAddressDecoded,
+		MinerAddr:          minerAddress,
+		DirPath:            dirPath,
 		QueueConsumer:      queueConsumer,
 		StakingEventChan:   stakingEventChan,
 		UnbondingEventChan: unbondingEventChan,
@@ -162,6 +167,17 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 func (tm *TestManager) Stop() {
 	tm.serverStopper.RequestShutdown()
 	tm.wg.Wait()
+}
+
+func ReStartFromHeight(t *testing.T, tm *TestManager, height uint64) *TestManager {
+	t.Log("restarting the test manager...")
+	tm.Stop()
+
+	restartedTm := StartWithBitcoinHandler(t, tm.BitcoindHandler, tm.MinerAddr, tm.DirPath, height)
+
+	t.Log("the test manager is restarted")
+
+	return restartedTm
 }
 
 func defaultStakingIndexerConfig(homePath string) *config.Config {
@@ -235,6 +251,15 @@ func (tm *TestManager) CheckNextStakingEvent(t *testing.T, stakingTxHash chainha
 
 	err = tm.QueueConsumer.StakingQueue.DeleteMessage(stakingEventBytes.Receipt)
 	require.NoError(t, err)
+}
+
+func (tm *TestManager) CheckNoStakingEvent(t *testing.T) {
+	select {
+	case _, ok := <-tm.StakingEventChan:
+		require.False(t, ok)
+	default:
+		return
+	}
 }
 
 func (tm *TestManager) CheckNextUnbondingEvent(t *testing.T, unbondingTxHash chainhash.Hash) {

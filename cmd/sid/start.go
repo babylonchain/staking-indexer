@@ -35,9 +35,8 @@ var startCommand = cli.Command{
 			Value: config.DefaultHomeDir,
 		},
 		cli.StringFlag{
-			Name:     startHeightFlag,
-			Usage:    "The BTC height that the staking indexer starts from",
-			Required: true,
+			Name:  startHeightFlag,
+			Usage: "The BTC height that the staking indexer starts from",
 		},
 		cli.StringFlag{
 			Name:  paramsPathFlag,
@@ -54,11 +53,6 @@ func start(ctx *cli.Context) error {
 		return err
 	}
 	homePath = utils.CleanAndExpandPath(homePath)
-
-	startHeight := ctx.Int64(startHeightFlag)
-	if startHeight <= 0 {
-		return fmt.Errorf("invalid start height %d", startHeight)
-	}
 
 	cfg, err := config.LoadConfig(homePath)
 	if err != nil {
@@ -90,8 +84,13 @@ func start(ctx *cli.Context) error {
 		return fmt.Errorf("failed to initialize the BTC notifier: %w", err)
 	}
 
+	dbBackend, err := cfg.DatabaseConfig.GetDbBackend()
+	if err != nil {
+		return fmt.Errorf("failed to create db backend: %w", err)
+	}
+
 	// create BTC scanner
-	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, btcNotifier, uint64(startHeight))
+	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, btcNotifier)
 	if err != nil {
 		return fmt.Errorf("failed to initialize the BTC scanner: %w", err)
 	}
@@ -107,13 +106,8 @@ func start(ctx *cli.Context) error {
 		return fmt.Errorf("failed to initialize params retriever: %w", err)
 	}
 
-	dbBackend, err := cfg.DatabaseConfig.GetDbBackend()
-	if err != nil {
-		return fmt.Errorf("failed to create db backend: %w", err)
-	}
-
 	// create the staking indexer app
-	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, dbBackend, paramsRetriever.GetParams(), scanner.ConfirmedBlocksChan())
+	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, dbBackend, paramsRetriever.GetParams(), scanner)
 	if err != nil {
 		return fmt.Errorf("failed to initialize the staking indexer app: %w", err)
 	}
@@ -125,8 +119,9 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create the server
-	indexerServer := service.NewStakingIndexerServer(cfg, queueConsumer, dbBackend, btcNotifier, scanner, si, logger, shutdownInterceptor)
+	startHeight := ctx.Uint64(startHeightFlag)
+	indexerServer := service.NewStakingIndexerServer(cfg, queueConsumer, dbBackend, btcNotifier, si, logger, shutdownInterceptor)
 
 	// run all the services until shutdown
-	return indexerServer.RunUntilShutdown()
+	return indexerServer.RunUntilShutdown(startHeight)
 }

@@ -39,10 +39,11 @@ func FuzzIndexer(f *testing.F) {
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
-		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParams, confirmedBlockChan)
+		mockBtcScanner := NewMockedBtcScanner(t, confirmedBlockChan)
+		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParams, mockBtcScanner)
 		require.NoError(t, err)
 
-		err = stakingIndexer.Start()
+		err = stakingIndexer.Start(1)
 		require.NoError(t, err)
 		defer func() {
 			err := stakingIndexer.Stop()
@@ -133,4 +134,14 @@ func NewMockedConsumer(t *testing.T) *mocks.MockEventConsumer {
 	mockedConsumer.EXPECT().Stop().Return(nil).AnyTimes()
 
 	return mockedConsumer
+}
+
+func NewMockedBtcScanner(t *testing.T, confirmedBlocksChan chan *vtypes.IndexedBlock) *mocks.MockBtcScanner {
+	ctl := gomock.NewController(t)
+	mockBtcScanner := mocks.NewMockBtcScanner(ctl)
+	mockBtcScanner.EXPECT().Start(gomock.Any()).Return(nil).AnyTimes()
+	mockBtcScanner.EXPECT().ConfirmedBlocksChan().Return(confirmedBlocksChan).AnyTimes()
+	mockBtcScanner.EXPECT().Stop().Return(nil).AnyTimes()
+
+	return mockBtcScanner
 }

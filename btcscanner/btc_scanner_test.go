@@ -28,7 +28,7 @@ func FuzzPollConfirmedBlocks(f *testing.F) {
 		// Generate a random number of blocks
 		numBlocks := datagen.RandomIntOtherThan(r, 0, 50) + k // make sure we have at least k+1 entry
 		chainIndexedBlocks := vdatagen.GetRandomIndexedBlocks(r, numBlocks)
-		lastConfirmedHeight := chainIndexedBlocks[0].Height - 1
+		startHeight := chainIndexedBlocks[0].Height
 		bestHeight := chainIndexedBlocks[len(chainIndexedBlocks)-1].Height
 
 		ctl := gomock.NewController(t)
@@ -48,7 +48,7 @@ func FuzzPollConfirmedBlocks(f *testing.F) {
 			ConfChan:  make(chan *chainntnfs.TxConfirmation),
 		}
 
-		btcScanner, err := btcscanner.NewBTCScanner(cfg, zap.NewNop(), mockBtcClient, mockBtcNotifier, uint64(lastConfirmedHeight))
+		btcScanner, err := btcscanner.NewBTCScanner(cfg, zap.NewNop(), mockBtcClient, mockBtcNotifier)
 		require.NoError(t, err)
 
 		var wg sync.WaitGroup
@@ -60,7 +60,7 @@ func FuzzPollConfirmedBlocks(f *testing.F) {
 				require.Equal(t, confirmedBlocks[i].BlockHash(), b.BlockHash())
 			}
 		}()
-		err = btcScanner.Start()
+		err = btcScanner.Start(uint64(startHeight))
 		require.NoError(t, err)
 		defer func() {
 			err := btcScanner.Stop()

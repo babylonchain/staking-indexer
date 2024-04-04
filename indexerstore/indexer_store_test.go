@@ -94,3 +94,26 @@ func FuzzStoringTxs(f *testing.F) {
 		}
 	})
 }
+
+func FuzzStoringIndexerState(f *testing.F) {
+	// only 3 seeds as this is pretty slow test opening/closing db
+	bbndatagen.AddRandomSeedsToFuzzer(f, 3)
+
+	f.Fuzz(func(t *testing.T, seed int64) {
+		r := rand.New(rand.NewSource(seed))
+		db := testutils.MakeTestBackend(t)
+		s, err := indexerstore.NewIndexerStore(db)
+		require.NoError(t, err)
+
+		_, err = s.GetLastProcessedHeight()
+		require.ErrorIs(t, err, indexerstore.ErrLastProcessedHeightNotFound)
+
+		lastProcessedHeight := uint64(r.Int63n(1000) + 1)
+		err = s.SaveLastProcessedHeight(lastProcessedHeight)
+		require.NoError(t, err)
+
+		storedLastProcessedHeight, err := s.GetLastProcessedHeight()
+		require.NoError(t, err)
+		require.Equal(t, lastProcessedHeight, storedLastProcessedHeight)
+	})
+}
