@@ -5,10 +5,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/babylonchain/babylon/btcstaking"
+	queuecli "github.com/babylonchain/staking-queue-client/client"
 	vtypes "github.com/babylonchain/vigilante/types"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -267,7 +269,7 @@ func (si *StakingIndexer) processStakingTx(
 		return err
 	}
 
-	stakingEvent := types.NewActiveStakingEvent(
+	stakingEvent := queuecli.NewActiveStakingEvent(
 		tx.TxHash().String(),
 		hex.EncodeToString(stakingData.OpReturnData.StakerPublicKey.Marshall()),
 		hex.EncodeToString(stakingData.OpReturnData.FinalityProviderPublicKey.Marshall()),
@@ -321,15 +323,15 @@ func (si *StakingIndexer) processUnbondingTx(
 		return err
 	}
 
-	unbondingEvent := types.NewUnbondingStakingEvent(
-		tx.TxHash().String(),
+	unbondingEvent := queuecli.NewUnbondingStakingEvent(
 		stakingTxHash.String(),
 		height,
-		timestamp.String(),
+		strconv.FormatInt(timestamp.Unix(), 10),
 		uint64(si.params.UnbondingTime),
 		// valid unbonding tx always has one output
 		0,
 		txHex,
+		tx.TxHash().String(),
 	)
 
 	if err := si.consumer.PushUnbondingEvent(&unbondingEvent); err != nil {
@@ -366,7 +368,7 @@ func (si *StakingIndexer) processWithdrawTx(tx *wire.MsgTx, stakingTxHash *chain
 		)
 	}
 
-	withdrawEvent := types.NewWithdrawStakingEvent(stakingTxHash.String())
+	withdrawEvent := queuecli.NewWithdrawStakingEvent(stakingTxHash.String())
 
 	if err := si.consumer.PushWithdrawEvent(&withdrawEvent); err != nil {
 		return fmt.Errorf("failed to push the withdraw event to the consumer: %w", err)
