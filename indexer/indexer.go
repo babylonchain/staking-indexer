@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
@@ -305,7 +304,7 @@ func (si *StakingIndexer) processStakingTx(
 		hex.EncodeToString(stakingData.OpReturnData.FinalityProviderPublicKey.Marshall()),
 		uint64(stakingData.StakingOutput.Value),
 		height,
-		timestamp.String(),
+		timestamp.Unix(),
 		uint64(stakingData.OpReturnData.StakingTime),
 		uint64(stakingData.StakingOutputIdx),
 		txHex,
@@ -356,7 +355,7 @@ func (si *StakingIndexer) processUnbondingTx(
 	unbondingEvent := queuecli.NewUnbondingStakingEvent(
 		stakingTxHash.String(),
 		height,
-		strconv.FormatInt(timestamp.Unix(), 10),
+		timestamp.Unix(),
 		uint64(si.params.UnbondingTime),
 		// valid unbonding tx always has one output
 		0,
