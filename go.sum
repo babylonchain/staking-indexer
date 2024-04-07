@@ -293,8 +293,8 @@ github.com/babylonchain/babylon v0.8.6-0.20240319122043-bc4943f41c79 h1:YKSkDbW4
 github.com/babylonchain/babylon v0.8.6-0.20240319122043-bc4943f41c79/go.mod h1:jR1b+5mA7BkRrXfd/PMHwk7W/RpoeQtunvjal+tKeHY=
 github.com/babylonchain/rpc-client v0.8.0 h1:H7VN7dTR1Z6uffRrziFRD9FTj+1Jf3u9gL2RLm3z9Jo=
 github.com/babylonchain/rpc-client v0.8.0/go.mod h1:+7IiKHmIAmfM888hPpfAVmGs85yZRxfbJym4swmgKG8=
-github.com/babylonchain/staking-queue-client v0.0.0-20240402081626-91b89f937e85 h1:sh3rGO3M70a9J4WqGNswqBn4dZKu0D+z7/ytSDbhq0Q=
-github.com/babylonchain/staking-queue-client v0.0.0-20240402081626-91b89f937e85/go.mod h1:TpiAQWNlCiHcDp7eiu6FJZDLYElV8NdksI1TzUmf3og=
+github.com/babylonchain/staking-queue-client v0.0.0-20240405021545-21bf91bfa8af h1:gLiulZgJ72aDRSn7QdyDg2Mbp6ve16HJpFJc6guZ+Rs=
+github.com/babylonchain/staking-queue-client v0.0.0-20240405021545-21bf91bfa8af/go.mod h1:TpiAQWNlCiHcDp7eiu6FJZDLYElV8NdksI1TzUmf3og=
 github.com/babylonchain/vigilante v0.6.1-0.20240320020303-d44b61bb9903 h1:14msuskaKIBWAt1lCu/rUbfEd243I1wWbI6eyGCiFbM=
 github.com/babylonchain/vigilante v0.6.1-0.20240320020303-d44b61bb9903/go.mod h1:fFGQPIY3rL9iMAsv4MWfjrMinPpj/tnq5lVmV9JgCc8=
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
