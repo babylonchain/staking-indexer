@@ -5,9 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/babylonchain/babylon/testutil/datagen"
-	vdatagen "github.com/babylonchain/vigilante/testutil/datagen"
-	"github.com/babylonchain/vigilante/testutil/mocks"
+	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
 	"github.com/golang/mock/gomock"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/lntest/mock"
@@ -16,27 +14,29 @@ import (
 
 	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
+	"github.com/babylonchain/staking-indexer/testutils/datagen"
+	"github.com/babylonchain/staking-indexer/testutils/mocks"
 )
 
 func FuzzPollConfirmedBlocks(f *testing.F) {
-	datagen.AddRandomSeedsToFuzzer(f, 10)
+	bbndatagen.AddRandomSeedsToFuzzer(f, 10)
 
 	f.Fuzz(func(t *testing.T, seed int64) {
 		r := rand.New(rand.NewSource(seed))
 		cfg := config.DefaultBTCScannerConfig()
 		k := cfg.ConfirmationDepth
 		// Generate a random number of blocks
-		numBlocks := datagen.RandomIntOtherThan(r, 0, 50) + k // make sure we have at least k+1 entry
-		chainIndexedBlocks := vdatagen.GetRandomIndexedBlocks(r, numBlocks)
+		numBlocks := bbndatagen.RandomIntOtherThan(r, 0, 50) + k // make sure we have at least k+1 entry
+		chainIndexedBlocks := datagen.GetRandomIndexedBlocks(r, numBlocks)
 		startHeight := chainIndexedBlocks[0].Height
 		bestHeight := chainIndexedBlocks[len(chainIndexedBlocks)-1].Height
 
 		ctl := gomock.NewController(t)
-		mockBtcClient := mocks.NewMockBTCClient(ctl)
+		mockBtcClient := mocks.NewMockClient(ctl)
 		confirmedBlocks := chainIndexedBlocks[:numBlocks-k]
 		for i := 0; i < int(numBlocks); i++ {
 			mockBtcClient.EXPECT().GetBlockByHeight(gomock.Eq(uint64(chainIndexedBlocks[i].Height))).
-				Return(chainIndexedBlocks[i], nil, nil).AnyTimes()
+				Return(chainIndexedBlocks[i], nil).AnyTimes()
 		}
 
 		epochChan := make(chan *chainntnfs.BlockEpoch, 1)

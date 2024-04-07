@@ -8,7 +8,6 @@ import (
 	"time"
 
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
-	vtypes "github.com/babylonchain/vigilante/types"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/golang/mock/gomock"
@@ -20,6 +19,7 @@ import (
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
 	"github.com/babylonchain/staking-indexer/testutils/mocks"
+	"github.com/babylonchain/staking-indexer/types"
 )
 
 // FuzzIndexer tests the property that the indexer can correctly
@@ -34,7 +34,7 @@ func FuzzIndexer(f *testing.F) {
 		homePath := filepath.Join(t.TempDir(), "indexer")
 		cfg := config.DefaultConfigWithHome(homePath)
 
-		confirmedBlockChan := make(chan *vtypes.IndexedBlock)
+		confirmedBlockChan := make(chan *types.IndexedBlock)
 		sysParams := datagen.GenerateGlobalParams(r, t)
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
@@ -77,7 +77,7 @@ func FuzzIndexer(f *testing.F) {
 					stakingTxList = append(stakingTxList, stakingTx)
 					unbondingTxList = append(unbondingTxList, unbondingTx)
 				}
-				b := &vtypes.IndexedBlock{
+				b := &types.IndexedBlock{
 					Height: startingHeight + int32(i),
 					Txs:    blockTxs,
 					Header: &wire.BlockHeader{Timestamp: time.Now()},
@@ -136,7 +136,7 @@ func NewMockedConsumer(t *testing.T) *mocks.MockEventConsumer {
 	return mockedConsumer
 }
 
-func NewMockedBtcScanner(t *testing.T, confirmedBlocksChan chan *vtypes.IndexedBlock) *mocks.MockBtcScanner {
+func NewMockedBtcScanner(t *testing.T, confirmedBlocksChan chan *types.IndexedBlock) *mocks.MockBtcScanner {
 	ctl := gomock.NewController(t)
 	mockBtcScanner := mocks.NewMockBtcScanner(ctl)
 	mockBtcScanner.EXPECT().Start(gomock.Any()).Return(nil).AnyTimes()

@@ -87,11 +87,8 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 	require.NoError(t, err)
 
 	// TODO this is not needed after we remove dependency on vigilante
-	btcClient, err := btcclient.NewWithBlockSubscriber(
-		cfg.BTCConfig.ToVigilanteBTCConfig(),
-		cfg.BTCConfig.RetrySleepTime,
-		cfg.BTCConfig.MaxRetrySleepTime,
-		logger,
+	btcClient, err := btcscanner.NewBTCClient(
+		cfg.BTCConfig,
 	)
 	require.NoError(t, err)
 

@@ -60,6 +60,7 @@ mock-gen:
 	mkdir -p $(MOCKS_DIR)
 	$(MOCKGEN_CMD) -source=consumer/event_consumer.go -package mocks -destination $(MOCKS_DIR)/event_consumer.go
 	$(MOCKGEN_CMD) -source=btcscanner/btc_scanner.go -package mocks -destination $(MOCKS_DIR)/btc_scanner.go
+	$(MOCKGEN_CMD) -source=btcscanner/btc_client.go -package mocks -destination $(MOCKS_DIR)/btc_client.go
 
 .PHONY: mock-gen
 

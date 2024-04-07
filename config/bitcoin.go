@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/babylonchain/vigilante/btcclient"
-	vconfig "github.com/babylonchain/vigilante/config"
-	vtypes "github.com/babylonchain/vigilante/types"
 	"github.com/btcsuite/btcd/rpcclient"
 )
 
@@ -59,19 +57,6 @@ func DefaultBTCConfig() *BTCConfig {
 	}
 }
 
-func (cfg *BTCConfig) ToVigilanteBTCConfig() *vconfig.BTCConfig {
-	defaultVBTCCfg := vconfig.DefaultBTCConfig()
-	defaultVBTCCfg.BtcBackend = vtypes.Bitcoind
-	defaultVBTCCfg.Endpoint = cfg.RPCHost
-	defaultVBTCCfg.Username = cfg.RPCUser
-	defaultVBTCCfg.Password = cfg.RPCPass
-	defaultVBTCCfg.ZmqBlockEndpoint = cfg.ZMQPubRawBlock
-	defaultVBTCCfg.ZmqTxEndpoint = cfg.ZMQPubRawTx
-	defaultVBTCCfg.DisableClientTLS = true
-
-	return &defaultVBTCCfg
-}
-
 func (cfg *BTCConfig) ToBtcNodeBackendConfig() *btcclient.BtcNodeBackendConfig {
 	defaultBitcoindCfg := btcclient.DefaultBitcoindConfig()
 	defaultBitcoindCfg.RPCHost = cfg.RPCHost
@@ -85,7 +70,7 @@ func (cfg *BTCConfig) ToBtcNodeBackendConfig() *btcclient.BtcNodeBackendConfig {
 
 	return &btcclient.BtcNodeBackendConfig{
 		Bitcoind:          &defaultBitcoindCfg,
-		ActiveNodeBackend: vtypes.Bitcoind,
+		ActiveNodeBackend: "bitcoind",
 	}
 }
 
