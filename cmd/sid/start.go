@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 
 	"github.com/babylonchain/staking-queue-client/queuemngr"
-	"github.com/babylonchain/vigilante/btcclient"
 	"github.com/lightningnetwork/lnd/signal"
 	"github.com/urfave/cli"
 
@@ -72,10 +71,10 @@ func start(ctx *cli.Context) error {
 		return fmt.Errorf("failed to initialize the BTC client: %w", err)
 	}
 
-	btcNotifier, err := btcclient.NewNodeBackend(
-		cfg.BTCConfig.ToBtcNodeBackendConfig(),
+	btcNotifier, err := btcscanner.NewBTCNotifier(
+		cfg.BTCConfig,
 		&cfg.BTCNetParams,
-		&btcclient.EmptyHintCache{},
+		&btcscanner.EmptyHintCache{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize the BTC notifier: %w", err)

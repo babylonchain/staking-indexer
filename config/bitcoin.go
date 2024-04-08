@@ -3,7 +3,6 @@ package config
 import (
 	"time"
 
-	"github.com/babylonchain/vigilante/btcclient"
 	"github.com/btcsuite/btcd/rpcclient"
 )
 
@@ -54,23 +53,6 @@ func DefaultBTCConfig() *BTCConfig {
 		ZMQReadDeadline:      defaultZMQReadDeadline,
 		RetrySleepTime:       defaultRetrySleepTime,
 		MaxRetrySleepTime:    defaultMaxRetrySleepTime,
-	}
-}
-
-func (cfg *BTCConfig) ToBtcNodeBackendConfig() *btcclient.BtcNodeBackendConfig {
-	defaultBitcoindCfg := btcclient.DefaultBitcoindConfig()
-	defaultBitcoindCfg.RPCHost = cfg.RPCHost
-	defaultBitcoindCfg.RPCUser = cfg.RPCUser
-	defaultBitcoindCfg.RPCPass = cfg.RPCPass
-	defaultBitcoindCfg.ZMQPubRawBlock = cfg.ZMQPubRawBlock
-	defaultBitcoindCfg.ZMQPubRawTx = cfg.ZMQPubRawTx
-	defaultBitcoindCfg.RPCPolling = cfg.RPCPolling
-	defaultBitcoindCfg.TxPollingInterval = cfg.TxPollingInterval
-	defaultBitcoindCfg.BlockCacheSize = cfg.BlockCacheSize
-
-	return &btcclient.BtcNodeBackendConfig{
-		Bitcoind:          &defaultBitcoindCfg,
-		ActiveNodeBackend: "bitcoind",
 	}
 }
 

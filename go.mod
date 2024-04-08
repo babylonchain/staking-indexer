@@ -7,11 +7,11 @@ toolchain go1.22.0
 require (
 	github.com/babylonchain/babylon v0.8.6-0.20240319122043-bc4943f41c79
 	github.com/babylonchain/staking-queue-client v0.0.0-20240405021545-21bf91bfa8af
-	github.com/babylonchain/vigilante v0.6.1-0.20240320020303-d44b61bb9903
 	github.com/btcsuite/btcd v0.24.0
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/btcutil v1.1.5
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
+	github.com/btcsuite/btcwallet v0.16.10-0.20230621165747-9c21f464ce13
 	github.com/btcsuite/btcwallet/wallet/txauthor v1.3.2
 	github.com/golang/mock v1.6.0
 	github.com/jessevdk/go-flags v1.5.0
@@ -61,9 +61,7 @@ require (
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da // indirect
 	github.com/aead/siphash v1.0.1 // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect
-	github.com/avast/retry-go/v4 v4.5.1 // indirect
 	github.com/aws/aws-sdk-go v1.44.312 // indirect
-	github.com/babylonchain/rpc-client v0.8.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/bgentry/speakeasy v0.1.1-0.20220910012023-760eaf8b6816 // indirect
@@ -71,7 +69,6 @@ require (
 	github.com/boljen/go-bitmap v0.0.0-20151001105940-23cd2fb0ce7d // indirect
 	github.com/btcsuite/btcd/btcutil/psbt v1.1.8 // indirect
 	github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f // indirect
-	github.com/btcsuite/btcwallet v0.16.10-0.20230621165747-9c21f464ce13 // indirect
 	github.com/btcsuite/btcwallet/wallet/txrules v1.2.0 // indirect
 	github.com/btcsuite/btcwallet/wallet/txsizes v1.2.3 // indirect
 	github.com/btcsuite/btcwallet/walletdb v1.4.0 // indirect
@@ -91,8 +88,6 @@ require (
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/cometbft/cometbft v0.38.5 // indirect
 	github.com/cometbft/cometbft-db v0.9.1 // indirect
-	github.com/consensys/bavard v0.1.13 // indirect
-	github.com/consensys/gnark-crypto v0.12.1 // indirect
 	github.com/containerd/continuity v0.3.0 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
@@ -109,9 +104,7 @@ require (
 	github.com/cosmos/ibc-go/v8 v8.0.0 // indirect
 	github.com/cosmos/ics23/go v0.10.0 // indirect
 	github.com/cosmos/ledger-cosmos-go v0.13.3 // indirect
-	github.com/cosmos/relayer/v2 v2.4.3-0.20231227002143-820caf5ab483 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
-	github.com/crate-crypto/go-kzg-4844 v0.7.0 // indirect
 	github.com/danieljoos/wincred v1.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/crypto/blake256 v1.0.1 // indirect
@@ -130,8 +123,6 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/dvsekhvalnov/jose2go v1.6.0 // indirect
 	github.com/emicklei/dot v1.6.0 // indirect
-	github.com/ethereum/c-kzg-4844 v0.4.0 // indirect
-	github.com/ethereum/go-ethereum v1.13.5 // indirect
 	github.com/fatih/color v1.15.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fergusstrange/embedded-postgres v1.10.0 // indirect
@@ -143,7 +134,7 @@ require (
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/go-stack/stack v1.8.1 // indirect
+	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 // indirect
 	github.com/gogo/googleapis v1.4.1 // indirect
 	github.com/gogo/protobuf v1.3.3 // indirect
@@ -169,7 +160,6 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3 // indirect
 	github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c // indirect
-	github.com/gtank/merlin v0.1.1 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-getter v1.7.2 // indirect
 	github.com/hashicorp/go-hclog v1.5.0 // indirect
@@ -182,7 +172,6 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/yamux v0.1.1 // indirect
 	github.com/hdevalence/ed25519consensus v0.1.0 // indirect
-	github.com/holiman/uint256 v1.2.3 // indirect
 	github.com/huandu/skiplist v1.2.0 // indirect
 	github.com/iancoleman/strcase v0.3.0 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
@@ -229,12 +218,10 @@ require (
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/mholt/archiver/v3 v3.5.0 // indirect
 	github.com/miekg/dns v1.1.43 // indirect
-	github.com/mimoo/StrobeGo v0.0.0-20210601165009-122bf33a46e0 // indirect
 	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
-	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/moby/term v0.0.0-20221205130635-1aeaba878587 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
@@ -245,7 +232,6 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0-rc2 // indirect
 	github.com/opencontainers/runc v1.1.5 // indirect
-	github.com/pebbe/zmq4 v1.2.9 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.0 // indirect
 	github.com/petermattis/goid v0.0.0-20230904192822-1876fd5063bc // indirect
 	github.com/pierrec/lz4/v4 v4.1.15 // indirect
@@ -272,7 +258,6 @@ require (
 	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.18.2 // indirect
-	github.com/strangelove-ventures/cometbft v0.37.3-0.20231004194858-c01e8d5bcac3 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/supranational/blst v0.3.11 // indirect
@@ -280,7 +265,6 @@ require (
 	github.com/tendermint/go-amino v0.16.0 // indirect
 	github.com/tidwall/btree v1.7.0 // indirect
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20201229170055-e5319fda7802 // indirect
-	github.com/tyler-smith/go-bip39 v1.1.0 // indirect
 	github.com/ulikunitz/xz v0.5.11 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
@@ -341,7 +325,6 @@ require (
 	modernc.org/token v1.0.1 // indirect
 	nhooyr.io/websocket v1.8.6 // indirect
 	pgregory.net/rapid v1.1.0 // indirect
-	rsc.io/tmplfunc v0.0.3 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 

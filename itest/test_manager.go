@@ -10,7 +10,6 @@ import (
 
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/babylonchain/staking-queue-client/queuemngr"
-	"github.com/babylonchain/vigilante/btcclient"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -92,10 +91,10 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 	)
 	require.NoError(t, err)
 
-	btcNotifier, err := btcclient.NewNodeBackend(
-		cfg.BTCConfig.ToBtcNodeBackendConfig(),
+	btcNotifier, err := btcscanner.NewBTCNotifier(
+		cfg.BTCConfig,
 		&cfg.BTCNetParams,
-		&btcclient.EmptyHintCache{},
+		&btcscanner.EmptyHintCache{},
 	)
 	require.NoError(t, err)
 
