@@ -5,7 +5,6 @@ ldflags := $(LDFLAGS)
 build_tags := $(BUILD_TAGS)
 build_args := $(BUILD_ARGS)
 
-DOCKER := $(shell which docker)
 CUR_DIR := $(shell pwd)
 MOCKS_DIR=$(CUR_DIR)/testutils/mocks
 MOCKGEN_REPO=github.com/golang/mock/mockgen
@@ -44,8 +43,7 @@ $(BUILDDIR)/:
 	mkdir -p $(BUILDDIR)/
 
 build-docker:
-	$(DOCKER) build --tag babylonchain/staking-indexer -f Dockerfile \
-		$(shell git rev-parse --show-toplevel)
+	$(MAKE) -C contrib/images staking-indexer
 
 .PHONY: build build-docker
 

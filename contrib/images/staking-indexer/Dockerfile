@@ -15,10 +15,10 @@ RUN apk add --no-cache --update openssh git make build-base linux-headers libc-d
 # Build
 WORKDIR /go/src/github.com/babylonchain/staking-indexer
 # Cache dependencies
-COPY go.mod go.sum /go/src/github.com/babylonchain/staking-indexer/
+COPY ../../../go.mod go.sum /go/src/github.com/babylonchain/staking-indexer/
 RUN go mod download
 # Copy the rest of the files
-COPY ./ /go/src/github.com/babylonchain/staking-indexer/
+COPY ../../.. /go/src/github.com/babylonchain/staking-indexer/
 # If version is set, then checkout this version
 RUN if [ -n "${VERSION}" ]; then \
         git checkout -f ${VERSION}; \
@@ -47,7 +47,12 @@ RUN addgroup --gid 1138 -S staking-indexer && adduser --uid 1138 -S staking-inde
 RUN apk add bash curl jq
 
 COPY --from=builder /go/src/github.com/babylonchain/staking-indexer/build/sid /bin/sid
+COPY --from=builder /go/src/github.com/babylonchain/staking-indexer/contrib/images/staking-indexer/entrypoint.sh /bin/entrypoint.sh
 
 WORKDIR /home/staking-indexer
 RUN chown -R staking-indexer /home/staking-indexer
 USER staking-indexer
+
+ENTRYPOINT ["/bin/entrypoint.sh"]
+CMD []
+STOPSIGNAL SIGTERM
