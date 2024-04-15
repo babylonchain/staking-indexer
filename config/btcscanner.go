@@ -17,11 +17,11 @@ type BTCScannerConfig struct {
 
 func (cfg *BTCScannerConfig) Validate() error {
 	if cfg.ConfirmationDepth == 0 {
-		return fmt.Errorf("btc-confirmation-depth %d must be positive", cfg.ConfirmationDepth)
+		return fmt.Errorf("confirmation-depth %d must be positive", cfg.ConfirmationDepth)
 	}
 
 	if cfg.PollingInterval <= 0 {
-		return fmt.Errorf("downtime jail duration %v must be positive", cfg.PollingInterval)
+		return fmt.Errorf("polling-interval %v must be positive", cfg.PollingInterval)
 	}
 	return nil
 }
