@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -86,6 +87,9 @@ func (si *StakingIndexer) Start(startHeight uint64) error {
 			return
 		}
 
+		// record metrics
+		startBtcHeight.Set(float64(validatedStartHeight))
+
 		si.logger.Info("Staking Indexer App is successfully started!")
 	})
 
@@ -121,9 +125,6 @@ func (si *StakingIndexer) confirmedBlocksLoop() {
 				// this indicates systematic failure
 				si.logger.Fatal("failed to handle block", zap.Error(err))
 			}
-			if err := si.is.SaveLastProcessedHeight(uint64(block.Height)); err != nil {
-				si.logger.Fatal("failed to save the last processed height", zap.Error(err))
-			}
 		case <-si.quit:
 			si.logger.Info("closing the confirmed blocks loop")
 			return
@@ -142,6 +143,9 @@ func (si *StakingIndexer) handleConfirmedBlock(b *vtypes.IndexedBlock) error {
 		if err == nil {
 			if err := si.processStakingTx(msgTx, stakingData, uint64(b.Height), b.Header.Timestamp); err != nil {
 				if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
+					// record metrics
+					failedProcessingStakingTxsCounter.Inc()
+
 					return err
 				}
 				// we don't consider duplicate error critical as it can happen
@@ -163,11 +167,17 @@ func (si *StakingIndexer) handleConfirmedBlock(b *vtypes.IndexedBlock) error {
 			// 3. is a spending tx, check whether it is an unbonding tx
 			isUnbonding, err := si.IsUnbondingTx(msgTx, stakingTx)
 			if err != nil {
+				// record metrics
+				failedCheckingUnbondingTxsCounter.Inc()
+
 				return err
 			}
 			if !isUnbonding {
 				// 4. not a unbongidng tx, so this is a withdraw tx from the staking
-				if err := si.processWithdrawTx(msgTx, &stakingTxHash, nil); err != nil {
+				if err := si.processWithdrawTx(msgTx, &stakingTxHash, nil, uint64(b.Height)); err != nil {
+					// record metrics
+					failedProcessingWithdrawTxsFromStakingCounter.Inc()
+
 					return err
 				}
 				continue
@@ -176,6 +186,9 @@ func (si *StakingIndexer) handleConfirmedBlock(b *vtypes.IndexedBlock) error {
 			// 5. this is an unbonding tx
 			if err := si.processUnbondingTx(msgTx, &stakingTxHash, uint64(b.Height), b.Header.Timestamp); err != nil {
 				if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
+					// record metrics
+					failedProcessingUnbondingTxsCounter.Inc()
+
 					return err
 				}
 				// we don't consider duplicate error critical as it can happen
@@ -192,11 +205,21 @@ func (si *StakingIndexer) handleConfirmedBlock(b *vtypes.IndexedBlock) error {
 		if spentInputIdx >= 0 {
 			// 7. this is a withdraw tx from the unbonding
 			unbondingTxHash := unbondingTx.Tx.TxHash()
-			if err := si.processWithdrawTx(msgTx, unbondingTx.StakingTxHash, &unbondingTxHash); err != nil {
+			if err := si.processWithdrawTx(msgTx, unbondingTx.StakingTxHash, &unbondingTxHash, uint64(b.Height)); err != nil {
+				// record metrics
+				failedProcessingWithdrawTxsFromUnbondingCounter.Inc()
+
 				return err
 			}
 		}
 	}
+
+	if err := si.is.SaveLastProcessedHeight(uint64(b.Height)); err != nil {
+		return fmt.Errorf("failed to save the last processed height: %w", err)
+	}
+
+	// record metrics
+	lastProcessedBtcHeight.Set(float64(b.Height))
 
 	return nil
 }
@@ -298,10 +321,12 @@ func (si *StakingIndexer) processStakingTx(
 		return err
 	}
 
+	stakerPkHex := hex.EncodeToString(stakingData.OpReturnData.StakerPublicKey.Marshall())
+	fpPkHex := hex.EncodeToString(stakingData.OpReturnData.FinalityProviderPublicKey.Marshall())
 	stakingEvent := queuecli.NewActiveStakingEvent(
 		tx.TxHash().String(),
-		hex.EncodeToString(stakingData.OpReturnData.StakerPublicKey.Marshall()),
-		hex.EncodeToString(stakingData.OpReturnData.FinalityProviderPublicKey.Marshall()),
+		stakerPkHex,
+		fpPkHex,
 		uint64(stakingData.StakingOutput.Value),
 		height,
 		timestamp.Unix(),
@@ -315,8 +340,9 @@ func (si *StakingIndexer) processStakingTx(
 		return fmt.Errorf("failed to push the staking event to the consumer: %w", err)
 	}
 
+	txHashHex := tx.TxHash().String()
 	si.logger.Info("successfully pushing the staking event",
-		zap.String("tx_hash", tx.TxHash().String()))
+		zap.String("tx_hash", txHashHex))
 
 	if err := si.is.AddStakingTransaction(
 		tx,
@@ -330,7 +356,18 @@ func (si *StakingIndexer) processStakingTx(
 	}
 
 	si.logger.Info("successfully saving the staking tx",
-		zap.String("tx_hash", tx.TxHash().String()))
+		zap.String("tx_hash", txHashHex))
+
+	// record metrics
+	totalStakingTxs.Inc()
+	lastFoundStakingTx.WithLabelValues(
+		strconv.Itoa(int(height)),
+		tx.TxHash().String(),
+		stakerPkHex,
+		strconv.Itoa(int(stakingData.StakingOutput.Value)),
+		strconv.Itoa(int(stakingData.OpReturnData.StakingTime)),
+		fpPkHex,
+	).SetToCurrentTime()
 
 	return nil
 }
@@ -380,18 +417,27 @@ func (si *StakingIndexer) processUnbondingTx(
 	si.logger.Info("successfully saving the unbonding tx",
 		zap.String("tx_hash", tx.TxHash().String()))
 
+	// record metrics
+	totalUnbondingTxs.Inc()
+	lastFoundUnbondingTx.WithLabelValues(
+		strconv.Itoa(int(height)),
+		tx.TxHash().String(),
+		stakingTxHash.String(),
+	).SetToCurrentTime()
+
 	return nil
 }
 
-func (si *StakingIndexer) processWithdrawTx(tx *wire.MsgTx, stakingTxHash *chainhash.Hash, unbondingTxHash *chainhash.Hash) error {
+func (si *StakingIndexer) processWithdrawTx(tx *wire.MsgTx, stakingTxHash *chainhash.Hash, unbondingTxHash *chainhash.Hash, height uint64) error {
+	txHashHex := tx.TxHash().String()
 	if unbondingTxHash == nil {
 		si.logger.Info("found a withdraw tx from staking",
-			zap.String("tx_hash", tx.TxHash().String()),
+			zap.String("tx_hash", txHashHex),
 			zap.String("staking_tx_hash", stakingTxHash.String()),
 		)
 	} else {
 		si.logger.Info("found a withdraw tx from unbonding",
-			zap.String("tx_hash", tx.TxHash().String()),
+			zap.String("tx_hash", txHashHex),
 			zap.String("staking_tx_hash", stakingTxHash.String()),
 			zap.String("unbonding_tx_hash", unbondingTxHash.String()),
 		)
@@ -404,7 +450,25 @@ func (si *StakingIndexer) processWithdrawTx(tx *wire.MsgTx, stakingTxHash *chain
 	}
 
 	si.logger.Info("successfully pushing the withdraw event",
-		zap.String("tx_hash", tx.TxHash().String()))
+		zap.String("tx_hash", txHashHex))
+
+	// record metrics
+	if unbondingTxHash == nil {
+		totalWithdrawTxsFromStaking.Inc()
+		lastFoundWithdrawTxFromStaking.WithLabelValues(
+			strconv.Itoa(int(height)),
+			txHashHex,
+			stakingTxHash.String(),
+		).SetToCurrentTime()
+	} else {
+		totalWithdrawTxsFromUnbonding.Inc()
+		lastFoundWithdrawTxFromUnbonding.WithLabelValues(
+			strconv.Itoa(int(height)),
+			txHashHex,
+			unbondingTxHash.String(),
+			stakingTxHash.String(),
+		).SetToCurrentTime()
+	}
 
 	return nil
 }
