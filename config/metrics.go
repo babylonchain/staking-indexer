@@ -3,20 +3,17 @@ package config
 import (
 	"fmt"
 	"net"
-	"time"
 )
 
 const (
-	defaultMetricsPort           = 2112
-	defaultMetricsHost           = "127.0.0.1"
-	defaultMetricsUpdateInterval = 100 * time.Millisecond
+	defaultMetricsPort = 2112
+	defaultMetricsHost = "127.0.0.1"
 )
 
 // MetricsConfig defines the server's basic configuration
 type MetricsConfig struct {
-	Host           string        `long:"host" description:"IP of the Prometheus server"`
-	Port           int           `long:"port" description:"Port of the Prometheus server"`
-	UpdateInterval time.Duration `long:"updateinterval" description:"The interval of Prometheus metrics updated"`
+	Host string `long:"host" description:"IP of the Prometheus server"`
+	Port int    `long:"port" description:"Port of the Prometheus server"`
 }
 
 func (cfg *MetricsConfig) Validate() error {
@@ -41,8 +38,7 @@ func (cfg *MetricsConfig) Address() (string, error) {
 
 func DefaultMetricsConfig() *MetricsConfig {
 	return &MetricsConfig{
-		Port:           defaultMetricsPort,
-		Host:           defaultMetricsHost,
-		UpdateInterval: defaultMetricsUpdateInterval,
+		Port: defaultMetricsPort,
+		Host: defaultMetricsHost,
 	}
 }

@@ -15,12 +15,10 @@ type PrometheusServer struct {
 
 	logger *zap.Logger
 
-	interval time.Duration
-
 	quit chan struct{}
 }
 
-func NewPrometheusServer(addr string, interval time.Duration, logger *zap.Logger) *PrometheusServer {
+func NewPrometheusServer(addr string, logger *zap.Logger) *PrometheusServer {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 
@@ -33,9 +31,8 @@ func NewPrometheusServer(addr string, interval time.Duration, logger *zap.Logger
 			IdleTimeout:       30 * time.Second,
 			ReadHeaderTimeout: 2 * time.Second,
 		},
-		interval: interval,
-		logger:   logger,
-		quit:     make(chan struct{}, 1),
+		logger: logger,
+		quit:   make(chan struct{}, 1),
 	}
 }
 
