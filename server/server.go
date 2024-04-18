@@ -69,6 +69,21 @@ func (s *Server) RunUntilShutdown(startHeight uint64) error {
 		s.logger.Info("Database closed")
 	}()
 
+	metricsCfg := s.cfg.MetricsConfig
+	promAddr, err := metricsCfg.Address()
+	if err != nil {
+		return err
+	}
+
+	ps := NewPrometheusServer(promAddr, metricsCfg.UpdateInterval, s.logger)
+
+	defer func() {
+		ps.Stop()
+		s.logger.Info("Shutdown Prometheus server complete")
+	}()
+
+	go ps.Start()
+
 	if err := s.btcNotifier.Start(); err != nil {
 		return fmt.Errorf("failed to start the BTC notifier: %w", err)
 	}
