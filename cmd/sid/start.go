@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 
 	"github.com/babylonchain/staking-queue-client/queuemngr"
-	"github.com/babylonchain/vigilante/btcclient"
 	"github.com/lightningnetwork/lnd/signal"
 	"github.com/urfave/cli"
 
+	"github.com/babylonchain/staking-indexer/btcclient"
 	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/indexer"
@@ -65,20 +65,17 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create BTC client and connect to BTC server
-	btcClient, err := btcclient.NewWithBlockSubscriber(
-		cfg.BTCConfig.ToVigilanteBTCConfig(),
-		cfg.BTCConfig.RetrySleepTime,
-		cfg.BTCConfig.MaxRetrySleepTime,
-		logger,
+	btcClient, err := btcclient.NewBTCClient(
+		cfg.BTCConfig,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize the BTC client: %w", err)
 	}
 
-	btcNotifier, err := btcclient.NewNodeBackend(
-		cfg.BTCConfig.ToBtcNodeBackendConfig(),
+	btcNotifier, err := btcscanner.NewBTCNotifier(
+		cfg.BTCConfig,
 		&cfg.BTCNetParams,
-		&btcclient.EmptyHintCache{},
+		&btcscanner.EmptyHintCache{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize the BTC notifier: %w", err)

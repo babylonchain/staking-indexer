@@ -11,7 +11,6 @@ import (
 
 	"github.com/babylonchain/babylon/btcstaking"
 	queuecli "github.com/babylonchain/staking-queue-client/client"
-	vtypes "github.com/babylonchain/vigilante/types"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
@@ -134,7 +133,7 @@ func (si *StakingIndexer) confirmedBlocksLoop() {
 
 // handleConfirmedBlock iterates all the tx set in the block and
 // parse staking tx, unbonding tx, and withdrawal tx if there are any
-func (si *StakingIndexer) handleConfirmedBlock(b *vtypes.IndexedBlock) error {
+func (si *StakingIndexer) handleConfirmedBlock(b *types.IndexedBlock) error {
 	for _, tx := range b.Txs {
 		msgTx := tx.MsgTx()
 

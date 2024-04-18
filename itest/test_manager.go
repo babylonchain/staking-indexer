@@ -10,7 +10,6 @@ import (
 
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/babylonchain/staking-queue-client/queuemngr"
-	"github.com/babylonchain/vigilante/btcclient"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -21,6 +20,7 @@ import (
 	"github.com/lightningnetwork/lnd/signal"
 	"github.com/stretchr/testify/require"
 
+	"github.com/babylonchain/staking-indexer/btcclient"
 	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/indexer"
@@ -86,19 +86,15 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 	walletPrivKey, err := rpcclient.DumpPrivKey(minerAddress)
 	require.NoError(t, err)
 
-	// TODO this is not needed after we remove dependency on vigilante
-	btcClient, err := btcclient.NewWithBlockSubscriber(
-		cfg.BTCConfig.ToVigilanteBTCConfig(),
-		cfg.BTCConfig.RetrySleepTime,
-		cfg.BTCConfig.MaxRetrySleepTime,
-		logger,
+	btcClient, err := btcclient.NewBTCClient(
+		cfg.BTCConfig,
 	)
 	require.NoError(t, err)
 
-	btcNotifier, err := btcclient.NewNodeBackend(
-		cfg.BTCConfig.ToBtcNodeBackendConfig(),
+	btcNotifier, err := btcscanner.NewBTCNotifier(
+		cfg.BTCConfig,
 		&cfg.BTCNetParams,
-		&btcclient.EmptyHintCache{},
+		&btcscanner.EmptyHintCache{},
 	)
 	require.NoError(t, err)
 

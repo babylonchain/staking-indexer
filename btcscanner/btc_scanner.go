@@ -5,18 +5,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/babylonchain/vigilante/btcclient"
-	vtypes "github.com/babylonchain/vigilante/types"
 	notifier "github.com/lightningnetwork/lnd/chainntnfs"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/babylonchain/staking-indexer/config"
+	"github.com/babylonchain/staking-indexer/types"
 )
 
 type BtcScanner interface {
 	Start(startHeight uint64) error
-	ConfirmedBlocksChan() chan *vtypes.IndexedBlock
+	ConfirmedBlocksChan() chan *types.IndexedBlock
 	LastConfirmedHeight() uint64
 	Stop() error
 }
@@ -25,7 +24,7 @@ type BtcPoller struct {
 	logger *zap.Logger
 
 	// connect to BTC node
-	btcClient   btcclient.BTCClient
+	btcClient   Client
 	btcNotifier notifier.ChainNotifier
 
 	cfg *config.BTCScannerConfig
@@ -34,7 +33,7 @@ type BtcPoller struct {
 	lastConfirmedHeight uint64
 
 	// communicate with the consumer
-	confirmedBlocksChan chan *vtypes.IndexedBlock
+	confirmedBlocksChan chan *types.IndexedBlock
 
 	wg        sync.WaitGroup
 	isStarted *atomic.Bool
@@ -44,7 +43,7 @@ type BtcPoller struct {
 func NewBTCScanner(
 	scannerCfg *config.BTCScannerConfig,
 	logger *zap.Logger,
-	btcClient btcclient.BTCClient,
+	btcClient Client,
 	btcNotifier notifier.ChainNotifier,
 ) (*BtcPoller, error) {
 	return &BtcPoller{
@@ -52,7 +51,7 @@ func NewBTCScanner(
 		btcClient:           btcClient,
 		btcNotifier:         btcNotifier,
 		cfg:                 scannerCfg,
-		confirmedBlocksChan: make(chan *vtypes.IndexedBlock),
+		confirmedBlocksChan: make(chan *types.IndexedBlock),
 		isStarted:           atomic.NewBool(false),
 		quit:                make(chan struct{}),
 	}, nil
@@ -143,7 +142,7 @@ func (bs *BtcPoller) pollBlocksLoop(blockNotifier *notifier.BlockEpochEvent) {
 			}
 
 		case <-pollBlocksTicker.C:
-			_, tipHeight, err := bs.btcClient.GetBestBlock()
+			tipHeight, err := bs.btcClient.GetTipHeight()
 			if err != nil {
 				bs.logger.Error("failed to get the best block", zap.Error(err))
 				continue
@@ -177,7 +176,7 @@ func (bs *BtcPoller) pollConfirmedBlocks(tipHeight uint64) error {
 	// start to poll confirmed blocks from the last confirmed height + 1
 	// until tipHeight - k
 	for i := bs.lastConfirmedHeight + 1; i+k <= tipHeight; i++ {
-		block, _, err := bs.btcClient.GetBlockByHeight(i)
+		block, err := bs.btcClient.GetBlockByHeight(i)
 		if err != nil {
 			return fmt.Errorf("failed to get block at height %d: %w", i, err)
 		}
@@ -191,12 +190,12 @@ func (bs *BtcPoller) pollConfirmedBlocks(tipHeight uint64) error {
 	return nil
 }
 
-func (bs *BtcPoller) sendConfirmedBlockToChan(block *vtypes.IndexedBlock) {
+func (bs *BtcPoller) sendConfirmedBlockToChan(block *types.IndexedBlock) {
 	bs.confirmedBlocksChan <- block
 	bs.lastConfirmedHeight = uint64(block.Height)
 }
 
-func (bs *BtcPoller) ConfirmedBlocksChan() chan *vtypes.IndexedBlock {
+func (bs *BtcPoller) ConfirmedBlocksChan() chan *types.IndexedBlock {
 	return bs.confirmedBlocksChan
 }
 
