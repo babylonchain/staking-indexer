@@ -53,7 +53,7 @@ var (
 	regtestParams         = &chaincfg.RegressionNetParams
 	eventuallyWaitTimeOut = 1 * time.Minute
 	eventuallyPollTime    = 500 * time.Millisecond
-	testParamsPath        = "test_params.json"
+	testParamsPath        = "test-params.json"
 	passphrase            = "pass"
 	walletName            = "test-wallet"
 )

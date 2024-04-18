@@ -439,7 +439,7 @@ func buildWithdrawTx(
 }
 
 func getCovenantPrivKeys(t *testing.T) []*btcec.PrivateKey {
-	// private keys of the covenant committee which correspond to the public keys in test_params.json
+	// private keys of the covenant committee which correspond to the public keys in test-params.json
 	covenantPrivKeysHex := []string{
 		"6a2369c2c9f5cd3c4242834228acdc38b73e5b8930f5f4a9b69e6eaf557e60ed",
 	}
