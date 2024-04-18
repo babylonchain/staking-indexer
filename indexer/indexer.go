@@ -466,6 +466,7 @@ func (si *StakingIndexer) processWithdrawTx(tx *wire.MsgTx, stakingTxHash *chain
 			strconv.Itoa(int(height)),
 			txHashHex,
 			unbondingTxHash.String(),
+			stakingTxHash.String(),
 		).SetToCurrentTime()
 	}
 

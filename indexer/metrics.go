@@ -79,8 +79,6 @@ var (
 			"height",
 			// the tx id of the withdrawal tx
 			"txid",
-			// the public key of the staker
-			"staker_pk",
 			// the tx id of the relevant unbonding tx
 			"unbonding_txid",
 			// the tx id of the relevant staking tx
