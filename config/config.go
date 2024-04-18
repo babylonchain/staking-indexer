@@ -37,6 +37,7 @@ type Config struct {
 	BTCConfig        *BTCConfig        `group:"btcconfig" namespace:"btcconfig"`
 	DatabaseConfig   *DBConfig         `group:"dbconfig" namespace:"dbconfig"`
 	QueueConfig      *QueueConfig      `group:"queueconfig" namespace:"queueconfig"`
+	MetricsConfig    *MetricsConfig    `group:"metricsconfig" namespace:"metricsconfig"`
 
 	BTCNetParams chaincfg.Params
 }
@@ -49,6 +50,7 @@ func DefaultConfigWithHome(homePath string) *Config {
 		BTCConfig:        DefaultBTCConfig(),
 		DatabaseConfig:   DefaultDBConfigWithHomePath(homePath),
 		QueueConfig:      DefaultQueueConfig(),
+		MetricsConfig:    DefaultMetricsConfig(),
 	}
 
 	if err := cfg.Validate(); err != nil {
