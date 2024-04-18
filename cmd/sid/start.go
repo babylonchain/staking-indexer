@@ -8,6 +8,7 @@ import (
 	"github.com/lightningnetwork/lnd/signal"
 	"github.com/urfave/cli"
 
+	"github.com/babylonchain/staking-indexer/btcclient"
 	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/indexer"
@@ -64,7 +65,7 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create BTC client and connect to BTC server
-	btcClient, err := btcscanner.NewBTCClient(
+	btcClient, err := btcclient.NewBTCClient(
 		cfg.BTCConfig,
 	)
 	if err != nil {

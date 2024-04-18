@@ -1,4 +1,4 @@
-package btcscanner
+package btcclient
 
 import (
 	"fmt"
@@ -10,11 +10,6 @@ import (
 	"github.com/babylonchain/staking-indexer/types"
 	"github.com/babylonchain/staking-indexer/utils"
 )
-
-type Client interface {
-	GetTipHeight() (uint64, error)
-	GetBlockByHeight(height uint64) (*types.IndexedBlock, error)
-}
 
 type BTCClient struct {
 	client *rpcclient.Client

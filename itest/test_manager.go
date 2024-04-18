@@ -20,6 +20,7 @@ import (
 	"github.com/lightningnetwork/lnd/signal"
 	"github.com/stretchr/testify/require"
 
+	"github.com/babylonchain/staking-indexer/btcclient"
 	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/indexer"
@@ -85,8 +86,7 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 	walletPrivKey, err := rpcclient.DumpPrivKey(minerAddress)
 	require.NoError(t, err)
 
-	// TODO this is not needed after we remove dependency on vigilante
-	btcClient, err := btcscanner.NewBTCClient(
+	btcClient, err := btcclient.NewBTCClient(
 		cfg.BTCConfig,
 	)
 	require.NoError(t, err)
