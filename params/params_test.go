@@ -42,7 +42,7 @@ func FuzzParamsRetriever(f *testing.F) {
 		require.NoError(t, err)
 
 		// write params to file
-		path := filepath.Join(t.TempDir(), "test_params.json")
+		path := filepath.Join(t.TempDir(), "test-params.json")
 		err = os.WriteFile(path, jsonBytes, os.ModePerm)
 		defer os.Remove(path)
 		require.NoError(t, err)
