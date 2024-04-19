@@ -56,6 +56,14 @@ test-e2e:
 	./itest/scripts/start_rabbitmq.sh;
 	go test -mod=readonly -timeout=25m -v $(PACKAGES_E2E) -count=1 --tags=e2e
 
+test-integration:
+	rm -rf ./.testnets
+	mkdir -p ./.testnets/rabbitmq_data
+	mkdir -p ./.testnets/bitcoin
+	mkdir -p ./.testnets/staking-indexer/data ./.testnets/staking-indexer/logs
+	docker compose -f integration/docker-compose.yml down
+	docker compose -f integration/docker-compose.yml up -d
+
 mock-gen:
 	mkdir -p $(MOCKS_DIR)
 	$(MOCKGEN_CMD) -source=consumer/event_consumer.go -package mocks -destination $(MOCKS_DIR)/event_consumer.go
