@@ -29,3 +29,6 @@ build/
 rabbitmq_data/
 
 *.swp
+
+# integration test
+.testnets

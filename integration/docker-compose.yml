@@ -1,0 +1,52 @@
+version: "3.9"
+services:
+  staking-indexer:
+    image: babylonchain/staking-indexer:latest
+    container_name: staking-indexer
+    environment:
+      - CONFIG=/home/staking-indexer/.sid/sid.conf
+    volumes:
+      - ../.testnets/staking-indexer/data:/home/staking-indexer/.sid/data:Z
+      - ../.testnets/staking-indexer/logs:/home/staking-indexer/.sid/logs:Z
+      - ./sid.conf:/home/staking-indexer/.sid/sid.conf:Z
+      - ./global-params.json:/home/staking-indexer/.sid/global-params.json:Z
+    depends_on:
+      - bitcoindsim
+      - rabbitmq
+    entrypoint: ["/bin/sh", "-c", "sleep 5 && /bin/sid start --start-height 1"]
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672" # AMQP protocol port
+      - "15672:15672" # Management UI port
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+    volumes:
+      - "../rabbitmq_data:/var/lib/rabbitmq"
+  bitcoindsim:
+    image: babylonchain/bitcoindsim:latest
+    platform: linux/amd64
+    container_name: bitcoindsim
+    # networks:
+    #   localnet:
+    #     ipv4_address: 192.168.10.30
+    environment:
+      - ZMQ_SEQUENCE_PORT=29000
+      - ZMQ_RAWBLOCK_PORT=29001
+      - ZMQ_RAWTR_PORT=29002
+      - RPC_PORT=18443
+      - RPC_USER=rpcuser
+      - RPC_PASS=rpcpass
+      - WALLET_PASS=walletpass
+      - WALLET_NAME=default
+      - BTCSTAKER_WALLET_NAME=btcstaker
+      - BTCSTAKER_WALLET_ADDR_COUNT=3
+      - GENERATE_INTERVAL_SECS=10
+    ports:
+      - "18443:18443"
+      - "29000-29002:29000-29002"
+    volumes:
+      - ../.testnets/bitcoin:/bitcoindsim/.bitcoin:Z
+  # btc-staker:
