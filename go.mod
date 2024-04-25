@@ -6,7 +6,7 @@ toolchain go1.22.0
 
 require (
 	github.com/babylonchain/babylon v0.8.6-0.20240319122043-bc4943f41c79
-	github.com/babylonchain/staking-queue-client v0.0.0-20240405021545-21bf91bfa8af
+	github.com/babylonchain/staking-queue-client v0.0.0-20240424061128-3ac950ef5f27
 	github.com/btcsuite/btcd v0.24.0
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/btcutil v1.1.5
@@ -19,6 +19,7 @@ require (
 	github.com/lightningnetwork/lnd v0.16.4-beta.rc1
 	github.com/lightningnetwork/lnd/kvdb v1.4.1
 	github.com/ory/dockertest/v3 v3.9.1
+	github.com/prometheus/client_golang v1.17.0
 	github.com/rabbitmq/amqp091-go v1.9.0
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli v1.22.14
@@ -237,7 +238,6 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.15 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus/client_golang v1.17.0 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common v0.45.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
