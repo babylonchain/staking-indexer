@@ -542,15 +542,3 @@ func getTxHex(tx *wire.MsgTx) (string, error) {
 
 	return txHex, nil
 }
-
-func outputsAreEqual(a *wire.TxOut, b *wire.TxOut) bool {
-	if a.Value != b.Value {
-		return false
-	}
-
-	if !bytes.Equal(a.PkScript, b.PkScript) {
-		return false
-	}
-
-	return true
-}
