@@ -69,10 +69,13 @@ To start the staking indexer from a specific height, run:
 sid start --start-height <start-height>
 ```
 
-The `--start-height` needs to be specified at the first run as the database 
-does not have the last processed height. If `--start-height` is not 
-specified, it will start from the last processed height retrieved from the 
-database.
+If the `--start-height` is not specified, the indexer will retrieve the 
+start height first from the database which saves the last processed height. 
+If the database is empty, the start height will be retrieved from the 
+`base-height` defined in the config file.
+Note that `--start-height` should not be specified either lower than the last 
+processed height from the database nor the `base-height` in config because 
+this will be at risk of missing data.
 
 To run the staking indexer, we need to prepare a `global-params.json` file 
 which defines all the global params that are used across the BTC staking 
