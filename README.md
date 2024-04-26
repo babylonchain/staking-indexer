@@ -15,8 +15,10 @@ the ground truth for the BTC staking system.
   [here](./doc/extract_tx_data.md). 
 * Storing the extracted transaction data in a database. The database schema 
   can be found [here](./doc/db_schema.md).
-* Pushing staking, unbonding, and withdrawal events to the consumers. We 
-  have a consumer implementation of [rabbitmq](https://www.rabbitmq.com/).
+* Pushing staking, unbonding, and withdrawal events to the consumers.
+  A reference implementation based on [rabbitmq](https://www.rabbitmq.com/) is 
+  provided.
+  The definition of each type of events can be found [here](./doc/events.md).
 * Monitoring the status by Prometheus [metrics](./doc/metrics.md).
 
 ## Usage
@@ -73,6 +75,27 @@ specified, it will start from the last processed height retrieved from the
 database.
 
 To run the staking indexer, we need to prepare a `global-params.json` file 
-which is needed to parse staking transaction data. The program will read the 
-file from the home directory by default. The user can specify the file path 
-using the `--params-path` flag.
+which defines all the global params that are used across the BTC staking 
+system. The indexer needs it to parse staking 
+transaction data. An example of the global params can be found in
+[test-params.json](./itest/test-params.json).
+
+The program reads the file from the home directory by default. The user can 
+specify the file path using the `--params-path` flag.
+
+### Tests
+
+Run unit tests:
+
+```bash
+make test
+```
+
+Run e2e tests:
+
+```bash
+make test-e2e
+```
+
+This will initiate docker containers for both a `bitcoind` node running in the 
+signet mode and a `rabbitmq` instance.
