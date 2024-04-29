@@ -5,53 +5,55 @@ metrics:
 
 ## Stats
 
-* `startBtcHeight`: The BTC height at which the indexer starts scanning
+* `startBtcHeight`: The BTC height from which the indexer starts scanning
 
 * `lastProcessedBtcHeight`: Last processed BTC height
 
 * `lastFoundStakingTx`: The info of the last found staking transaction 
-including block height, transaction id, staker public key, staking value, 
-  staking time, and finality provider public key
 
 * `lastFoundUnbondingTx`: The info of the last found unbonding transaction 
-including block height, transaction id, and staking transaction id
 
-* `lastFoundWithdrawTxFromStaking`: The info of the last found withdraw 
-transaction from staking including block height, transaction id, and staking transaction id
+* `lastFoundWithdrawTxFromStaking`: The info of the last found withdrawal
+  transaction spending a previous staking transaction 
 
-* `lastFoundWithdrawTxFromUnbonding`: The info of the last found withdraw 
-transaction from unbonding including block height, transaction id, unbonding transaction id, and staking transaction id
+* `lastFoundWithdrawTxFromUnbonding`: The info of the last found withdrawal 
+  transaction spending a previous unbonding transaction
 
 * `totalStakingTxs`: Total number of staking transactions
 
 * `totalUnbondingTxs`: Total number of unbonding transactions
 
-* `totalWithdrawTxsFromStaking`: Total number of withdraw transactions from 
-staking path
+* `totalWithdrawTxsFromStaking`: Total number of withdrawal transactions from 
+  the staking path
 
-* `totalWithdrawTxsFromUnbonding`: Total number of withdraw transactions from 
-unbonding path
+* `totalWithdrawTxsFromUnbonding`: Total number of withdrawal transactions 
+  from the unbonding path
 
 ## Alerts
-* `failedProcessingStakingTxsCounter`: Total number of failed staking txs 
-during processing
 
-* `failedCheckingUnbondingTxsCounter`: Total number of failed unbonding txs 
-during checking
+The following alerts indicate systematic errors are happening and the
+service operator should take actions of checking other components or the 
+global parameters.
 
-* `failedProcessingUnbondingTxsCounter`: Total number of failed unbonding txs 
-during processing
+* `failedProcessingStakingTxsCounter`: Total number of failures when 
+  processing valid staking transactions
 
-* `failedProcessingWithdrawTxsFromStakingCounter`: Total number of failed 
-withdraw txs from staking during processing
+* `failedVerifyingUnbondingTxsCounter`: Total number of failures when 
+  verifying unbonding txs 
 
-* `failedProcessingWithdrawTxsFromUnbondingCounter`: Total number of failed 
-withdraw txs from unbonding during processing
+* `failedProcessingUnbondingTxsCounter`: Total number of failures when 
+  processing valid unbonding transactions
 
-* `irregularTxsFromStakingCounter`: Total number of irregular transactions that 
-spend a staking tx
+* `failedProcessingWithdrawTxsFromStakingCounter`: Total number of failures 
+  when processing valid withdrawal transactions from staking 
+
+* `failedProcessingWithdrawTxsFromUnbondingCounter`: Total number of 
+  failures when processing valid withdrawal transactions from unbonding
+
+* `irregularTxsFromStakingCounter`: Total number of irregular transactions 
+  that spend a staking tx
 
 * `irregularTxsFromUnbondingCounter`: Total number of irregular transactions 
-that spend a unbonding tx
+  that spend an unbonding tx
 
 * `invalidUnbondingTxsCounter`: Total number of invalid unbonding transactions

@@ -167,7 +167,7 @@ func (si *StakingIndexer) handleConfirmedBlock(b *types.IndexedBlock) error {
 			isUnbonding, err := si.IsUnbondingTx(msgTx, stakingTx)
 			if err != nil {
 				// record metrics
-				failedCheckingUnbondingTxsCounter.Inc()
+				failedVerifyingUnbondingTxsCounter.Inc()
 
 				return err
 			}

@@ -1,7 +1,7 @@
 # Staking Indexer
 
 The staking indexer is a tool that extracts BTC staking relevant data from 
-Bitcoin blockchain, transforms it into a structured form, loads it into a 
+the Bitcoin blockchain, transforms it into a structured form, stores it in a 
 database, and pushes events to consumers. Data from the staking indexer is 
 the ground truth for the BTC staking system.
 
@@ -9,23 +9,25 @@ the ground truth for the BTC staking system.
 
 * Polling BTC blocks data from a specified height in an ongoing manner. The 
   poller ensures that all the output blocks have at least `N` confirmations 
-  where `N` is a configurable value.
+  where `N` is a configurable value, which should be large enough so that 
+  the chance of the output blocks being forked is enormously low, e.g., 
+  greater than or equal to `6` in Bitcoin mainnet.
 * Extracting transaction data for staking, unbonding, and withdrawal.
   Specifications of identifying and parsing these transactions can be found 
   [here](./doc/extract_tx_data.md). 
 * Storing the extracted transaction data in a database. The database schema 
   can be found [here](./doc/db_schema.md).
-* Pushing staking, unbonding, and withdrawal events to the consumers.
+* Pushing staking, unbonding, and withdrawal events to the message queues.
   A reference implementation based on [rabbitmq](https://www.rabbitmq.com/) is 
   provided.
   The definition of each type of events can be found [here](./doc/events.md).
-* Monitoring the status by Prometheus [metrics](./doc/metrics.md).
+* Monitoring the status of the service through [Prometheus metrics](./doc/metrics.md).
 
 ## Usage
 
 ### Setup bitcoind node
 
-The staking indexer relies on `bitcoind` as backend. Follow this [guide](https://bitcoin.org/en/full-node#what-is-a-full-node)
+The staking indexer relies on `bitcoind` as backend. Follow this [guide](./doc/bitcoind_setup.md)
 to set up a `bitcoind` node.
 
 ### Install
