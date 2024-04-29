@@ -10,7 +10,7 @@ var (
 
 	startBtcHeight = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "si_start_btc_height",
-		Help: "The BTC height at which the indexer starts scanning",
+		Help: "The BTC height from which the indexer starts scanning",
 	})
 
 	lastProcessedBtcHeight = promauto.NewGauge(prometheus.GaugeOpts{
@@ -57,7 +57,7 @@ var (
 	lastFoundWithdrawTxFromStaking = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "si_last_found_withdraw_tx_from_staking",
-			Help: "The info of the last found withdraw transaction from staking",
+			Help: "The info of the last found withdrawal transaction spending a previous staking transaction ",
 		},
 		[]string{
 			// the height of the block containing the withdrawal tx
@@ -72,7 +72,7 @@ var (
 	lastFoundWithdrawTxFromUnbonding = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "si_last_found_withdraw_tx_from_unbonding",
-			Help: "The info of the last found withdraw transaction from unbonding",
+			Help: "The info of the last found withdrawal transaction spending a previous unbonding transaction",
 		},
 		[]string{
 			// the height of the block containing the withdrawal tx
@@ -103,14 +103,14 @@ var (
 	totalWithdrawTxsFromStaking = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "si_total_withdraw_txs_from_staking",
-			Help: "Total number of withdraw transactions from staking path",
+			Help: "Total number of withdrawal transactions from the staking path",
 		},
 	)
 
 	totalWithdrawTxsFromUnbonding = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "si_total_withdraw_txs_from_unbonding",
-			Help: "Total number of withdraw transactions from unbonding path",
+			Help: "Total number of withdrawal transactions from the unbonding path",
 		},
 	)
 
@@ -119,35 +119,35 @@ var (
 	failedProcessingStakingTxsCounter = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "si_failed_processing_staking_txs_counter",
-			Help: "Total number of failed staking txs during processing",
+			Help: "Total number of failures when processing valid staking transactions",
 		},
 	)
 
-	failedCheckingUnbondingTxsCounter = promauto.NewCounter(
+	failedVerifyingUnbondingTxsCounter = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "si_failed_checking_unbonding_txs_counter",
-			Help: "Total number of failed unbonding txs during checking",
+			Help: "Total number of failures when verifying unbonding txs ",
 		},
 	)
 
 	failedProcessingUnbondingTxsCounter = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "si_failed_processing_unbonding_txs_counter",
-			Help: "Total number of failed unbonding txs during processing",
+			Help: "Total number of failures when processing valid unbonding transactions",
 		},
 	)
 
 	failedProcessingWithdrawTxsFromStakingCounter = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "si_failed_processing_withdraw_txs_from_staking_counter",
-			Help: "Total number of failed withdraw txs from staking during processing",
+			Help: "Total number of failures when processing valid withdrawal transactions from staking ",
 		},
 	)
 
 	failedProcessingWithdrawTxsFromUnbondingCounter = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "si_failed_processing_withdraw_txs_from_unbonding_counter",
-			Help: "Total number of failed withdraw txs from unbonding during processing",
+			Help: "Total number of failures when processing valid withdrawal transactions from unbonding",
 		},
 	)
 

@@ -179,7 +179,7 @@ func (si *StakingIndexer) handleConfirmedBlock(b *types.IndexedBlock) error {
 				}
 
 				// record metrics
-				failedCheckingUnbondingTxsCounter.Inc()
+				failedVerifyingUnbondingTxsCounter.Inc()
 
 				return err
 			}
