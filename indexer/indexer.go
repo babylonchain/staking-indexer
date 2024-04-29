@@ -167,6 +167,17 @@ func (si *StakingIndexer) handleConfirmedBlock(b *types.IndexedBlock) error {
 			// 3. is a spending tx, check whether it is a valid unbonding tx
 			isUnbonding, err := si.IsValidUnbondingTx(msgTx, stakingTx)
 			if err != nil {
+				if errors.Is(err, ErrInvalidUnbondingTx) {
+					invalidUnbondingTxsCounter.Inc()
+
+					si.logger.Error("found an invalid unbonding tx",
+						zap.String("tx_hash", msgTx.TxHash().String()),
+						zap.Error(err),
+					)
+
+					continue
+				}
+
 				// record metrics
 				failedCheckingUnbondingTxsCounter.Inc()
 

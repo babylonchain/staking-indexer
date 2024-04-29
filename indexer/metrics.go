@@ -150,4 +150,11 @@ var (
 			Help: "Total number of failed withdraw txs from unbonding during processing",
 		},
 	)
+
+	invalidUnbondingTxsCounter = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "si_invalid_unbonding_txs_counter",
+			Help: "Total number of invalid transactions",
+		},
+	)
 )
