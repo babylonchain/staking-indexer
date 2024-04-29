@@ -28,6 +28,8 @@ func GenerateGlobalParams(r *rand.Rand, t *testing.T) *types.Params {
 
 	unbondingTime := uint16(r.Intn(1000) + 100)
 
+	unbondingFee := btcutil.Amount(r.Int63n(10000) + 1)
+
 	minStakingAmount := btcutil.Amount(r.Int63n(10000) + 1)
 
 	maxStakingAmount := btcutil.Amount(r.Int63n(1000000)) + minStakingAmount
@@ -41,6 +43,7 @@ func GenerateGlobalParams(r *rand.Rand, t *testing.T) *types.Params {
 		CovenantPks:      covPks,
 		CovenantQuorum:   covQuorum,
 		UnbondingTime:    unbondingTime,
+		UnbondingFee:     unbondingFee,
 		MaxStakingAmount: maxStakingAmount,
 		MinStakingAmount: minStakingAmount,
 		MaxStakingTime:   maxStakingTime,

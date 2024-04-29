@@ -141,7 +141,7 @@ func (si *StakingIndexer) handleConfirmedBlock(b *types.IndexedBlock) error {
 		// 1. try to parse staking tx
 		stakingData, err := si.tryParseStakingTx(msgTx)
 		if err == nil {
-			if err := si.processStakingTx(msgTx, stakingData, uint64(b.Height), b.Header.Timestamp); err != nil {
+			if err := si.ProcessStakingTx(msgTx, stakingData, uint64(b.Height), b.Header.Timestamp); err != nil {
 				if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
 					// record metrics
 					failedProcessingStakingTxsCounter.Inc()
@@ -330,7 +330,7 @@ func (si *StakingIndexer) IsValidUnbondingTx(tx *wire.MsgTx, stakingTx *indexers
 	return true, nil
 }
 
-func (si *StakingIndexer) processStakingTx(
+func (si *StakingIndexer) ProcessStakingTx(
 	tx *wire.MsgTx,
 	stakingData *btcstaking.ParsedV0StakingTx,
 	height uint64, timestamp time.Time,
