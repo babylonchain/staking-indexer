@@ -97,6 +97,9 @@ func (si *StakingIndexer) Start(startHeight uint64) error {
 // ValidateStartHeight validates the given startHeight and returns an error
 // if the given startHeight is not in the range of
 // [base height, last processed height + 1]
+// The point of this validation is to ensure the indexer
+// (1) does not handle irrelevant blocks (impossible to have staking tx)
+// (2) does not miss relevant blocks (possible to have staking tx)
 func (si *StakingIndexer) ValidateStartHeight(startHeight uint64) error {
 	baseHeight := si.cfg.BTCScannerConfig.BaseHeight
 	if startHeight < baseHeight {
