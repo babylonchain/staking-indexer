@@ -75,19 +75,18 @@ func (si *StakingIndexer) Start(startHeight uint64) error {
 		si.wg.Add(1)
 		go si.confirmedBlocksLoop()
 
-		validatedStartHeight, err := si.validateStartHeight(startHeight)
-		if err != nil {
-			startErr = err
+		if err := si.ValidateStartHeight(startHeight); err != nil {
+			startErr = fmt.Errorf("invalid start height %d: %w", startHeight, err)
 			return
 		}
 
-		if err := si.btcScanner.Start(validatedStartHeight); err != nil {
+		if err := si.btcScanner.Start(startHeight); err != nil {
 			startErr = err
 			return
 		}
 
 		// record metrics
-		startBtcHeight.Set(float64(validatedStartHeight))
+		startBtcHeight.Set(float64(startHeight))
 
 		si.logger.Info("Staking Indexer App is successfully started!")
 	})
@@ -95,20 +94,38 @@ func (si *StakingIndexer) Start(startHeight uint64) error {
 	return startErr
 }
 
-// validateStartHeight ensures that the returned start height is positive
-// if the given startHeight is not positive, it returns the lastProcessHeight + 1
-// from the local store
-func (si *StakingIndexer) validateStartHeight(startHeight uint64) (uint64, error) {
+// ValidateStartHeight validates the given startHeight and returns an error
+// if the given startHeight is not in the range of
+// [base height, last processed height + 1]
+func (si *StakingIndexer) ValidateStartHeight(startHeight uint64) error {
+	baseHeight := si.cfg.BTCScannerConfig.BaseHeight
+	if startHeight < baseHeight {
+		return fmt.Errorf("the start height should not be lower than the base height %d", baseHeight)
+	}
+
 	lastProcessedHeight, err := si.is.GetLastProcessedHeight()
-	if err != nil && startHeight == 0 {
-		return 0, fmt.Errorf("the last processed height not set, the specified start height must be positive")
+	if err != nil && startHeight > baseHeight {
+		return fmt.Errorf("the database is empty, the start height should be equal to the base height %d", baseHeight)
 	}
 
-	if startHeight == 0 {
-		startHeight = lastProcessedHeight + 1
+	if startHeight > lastProcessedHeight+1 {
+		return fmt.Errorf("the start height should not be higher than %d (the last processed height + 1)", lastProcessedHeight+1)
 	}
 
-	return startHeight, nil
+	return nil
+}
+
+// GetStartHeight returns a start height that can pass ValidateStartHeight()
+// if the database is empty, then the base height in the config will be returned
+// otherwise, it will return the last processed height + 1
+func (si *StakingIndexer) GetStartHeight() uint64 {
+
+	lastProcessedHeight, err := si.is.GetLastProcessedHeight()
+	if err != nil {
+		return si.cfg.BTCScannerConfig.BaseHeight
+	}
+
+	return lastProcessedHeight + 1
 }
 
 func (si *StakingIndexer) confirmedBlocksLoop() {
