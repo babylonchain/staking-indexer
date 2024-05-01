@@ -240,11 +240,10 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	k := tm.Config.BTCScannerConfig.ConfirmationDepth
 
 	// generate valid staking tx data
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	testStakingData := datagen.GenerateTestStakingData(t, r)
 	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
 	sysParams := paramsRetriever.GetParams()
+	testStakingData := getTestStakingData(t, sysParams)
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
 		sysParams.Tag,
 		tm.WalletPrivKey.PubKey(),
@@ -350,13 +349,14 @@ func buildUnbondingTx(
 	stakingTx *wire.MsgTx,
 	covPrivKeys []*btcec.PrivateKey,
 ) *wire.MsgTx {
+	expectedOutputValue := stakingAmount - params.UnbondingFee
 	unbondingInfo, err := btcstaking.BuildUnbondingInfo(
 		stakerPrivKey.PubKey(),
 		[]*btcec.PublicKey{fpKey},
 		params.CovenantPks,
 		params.CovenantQuorum,
 		params.UnbondingTime,
-		stakingAmount.MulF64(0.9),
+		expectedOutputValue,
 		regtestParams,
 	)
 	require.NoError(t, err)
@@ -453,4 +453,22 @@ func getCovenantPrivKeys(t *testing.T) []*btcec.PrivateKey {
 	}
 
 	return privKeys
+}
+
+func getTestStakingData(
+	t *testing.T,
+	p *types.Params,
+) *datagen.TestStakingData {
+	stakerPrivKey, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+
+	stakingAmount := btcutil.Amount(100000)
+	stakingTime := uint16(10000)
+
+	return &datagen.TestStakingData{
+		StakerKey:           stakerPrivKey.PubKey(),
+		FinalityProviderKey: p.FinalityProviderPks[0],
+		StakingAmount:       stakingAmount,
+		StakingTime:         stakingTime,
+	}
 }

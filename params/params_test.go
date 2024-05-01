@@ -23,6 +23,7 @@ type internalParams struct {
 	CovenantPks      []string       `json:"covenant_pks"`
 	CovenantQuorum   uint32         `json:"covenant_quorum"`
 	UnbondingTime    uint16         `json:"unbonding_time"`
+	UnbondingFee     btcutil.Amount `json:"unbonding_fee"`
 	MaxStakingAmount btcutil.Amount `json:"max_staking_amount"`
 	MinStakingAmount btcutil.Amount `json:"min_staking_amount"`
 	MaxStakingTime   uint16         `json:"max_staking_time"`

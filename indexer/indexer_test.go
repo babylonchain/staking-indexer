@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/babylonchain/babylon/btcstaking"
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
@@ -122,6 +123,82 @@ func FuzzIndexer(f *testing.F) {
 			require.True(t, testutils.PubKeysEqual(expectedStakingData.FinalityProviderKey, storedStakingTx.FinalityProviderPk))
 		}
 	})
+}
+
+// FuzzVerifyUnbondingTx tests IsValidUnbondingTx in three scenarios:
+// 1. it returns (true, nil) if the given tx is valid unbonding tx
+// 2. it returns (false, nil) if the given tx is not unbonding tx
+// 3. it returns (false, ErrInvalidUnbondingTx) if the given tx is not
+// a valid unbonding tx
+func FuzzVerifyUnbondingTx(f *testing.F) {
+	bbndatagen.AddRandomSeedsToFuzzer(f, 10)
+
+	f.Fuzz(func(t *testing.T, seed int64) {
+		r := rand.New(rand.NewSource(seed))
+
+		homePath := filepath.Join(t.TempDir(), "indexer")
+		cfg := config.DefaultConfigWithHome(homePath)
+
+		confirmedBlockChan := make(chan *types.IndexedBlock)
+		sysParams := datagen.GenerateGlobalParams(r, t)
+
+		db, err := cfg.DatabaseConfig.GetDbBackend()
+		require.NoError(t, err)
+		mockBtcScanner := NewMockedBtcScanner(t, confirmedBlockChan)
+		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParams, mockBtcScanner)
+		require.NoError(t, err)
+		defer func() {
+			err = db.Close()
+			require.NoError(t, err)
+		}()
+
+		// 1. generate and add a valid staking tx to the indexer
+		stakingData := datagen.GenerateTestStakingData(t, r)
+		_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, sysParams, stakingData)
+		err = stakingIndexer.ProcessStakingTx(
+			stakingTx.MsgTx(),
+			getParsedStakingData(stakingData, stakingTx.MsgTx(), sysParams),
+			100, time.Now())
+		require.NoError(t, err)
+		storedStakingTx, err := stakingIndexer.GetStakingTxByHash(stakingTx.Hash())
+		require.NoError(t, err)
+
+		// 2. test IsValidUnbondingTx with valid unbonding tx, expect (true, nil)
+		unbondingTx := datagen.GenerateUnbondingTxFromStaking(t, sysParams, stakingData, stakingTx.Hash(), 0)
+		isValid, err := stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx)
+		require.NoError(t, err)
+		require.True(t, isValid)
+
+		// 3. test IsValidUnbondingTx with no unbonding tx (different staking output index), expect (false, nil)
+		unbondingTx = datagen.GenerateUnbondingTxFromStaking(t, sysParams, stakingData, stakingTx.Hash(), 1)
+		isValid, err = stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx)
+		require.NoError(t, err)
+		require.False(t, isValid)
+
+		// 4. test IsValidUnbondingTx with invaid unbonding tx (random unbonding fee in params), expect (false, ErrInvalidUnbondingTx)
+		newParams := *sysParams
+		newParams.UnbondingFee = btcutil.Amount(bbndatagen.RandomIntOtherThan(r, int(sysParams.UnbondingFee), 10000000))
+		unbondingTx = datagen.GenerateUnbondingTxFromStaking(t, &newParams, stakingData, stakingTx.Hash(), 0)
+		isValid, err = stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx)
+		require.ErrorIs(t, err, indexer.ErrInvalidUnbondingTx)
+		require.False(t, isValid)
+	})
+}
+
+func getParsedStakingData(data *datagen.TestStakingData, tx *wire.MsgTx, params *types.Params) *btcstaking.ParsedV0StakingTx {
+	return &btcstaking.ParsedV0StakingTx{
+		StakingOutput:     tx.TxOut[0],
+		StakingOutputIdx:  0,
+		OpReturnOutput:    tx.TxOut[1],
+		OpReturnOutputIdx: 1,
+		OpReturnData: &btcstaking.V0OpReturnData{
+			MagicBytes:                params.Tag,
+			Version:                   0,
+			StakerPublicKey:           &btcstaking.XonlyPubKey{PubKey: data.StakerKey},
+			FinalityProviderPublicKey: &btcstaking.XonlyPubKey{PubKey: data.FinalityProviderKey},
+			StakingTime:               data.StakingTime,
+		},
+	}
 }
 
 func NewMockedConsumer(t *testing.T) *mocks.MockEventConsumer {

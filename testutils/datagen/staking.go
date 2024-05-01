@@ -80,7 +80,7 @@ func GenerateUnbondingTxFromStaking(t *testing.T, params *types.Params, stakingD
 		params.CovenantPks,
 		params.CovenantQuorum,
 		params.UnbondingTime,
-		stakingData.StakingAmount.MulF64(0.9),
+		stakingData.StakingAmount-params.UnbondingFee,
 		&chaincfg.SigNetParams,
 	)
 	require.NoError(t, err)
