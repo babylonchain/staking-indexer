@@ -1,6 +1,7 @@
 package params_test
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"math/rand"
 	"os"
@@ -8,7 +9,6 @@ import (
 	"testing"
 
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
-	bbntypes "github.com/babylonchain/babylon/types"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/stretchr/testify/require"
 
@@ -68,7 +68,7 @@ func FuzzParamsRetriever(f *testing.F) {
 func paramsToInternalParams(p *types.Params) *internalParams {
 	covPksHex := make([]string, len(p.CovenantPks))
 	for i, pk := range p.CovenantPks {
-		covPksHex[i] = bbntypes.NewBIP340PubKeyFromBTCPK(pk).MarshalHex()
+		covPksHex[i] = hex.EncodeToString(pk.SerializeCompressed())
 	}
 
 	return &internalParams{

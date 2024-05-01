@@ -11,6 +11,7 @@ import (
 	"github.com/btcsuite/btcd/btcutil"
 
 	"github.com/babylonchain/staking-indexer/types"
+	"github.com/babylonchain/staking-indexer/utils"
 )
 
 type ParamsRetriever interface {
@@ -61,11 +62,11 @@ func NewLocalParamsRetriever(filePath string) (*LocalParamsRetriever, error) {
 
 	covPks := make([]*btcec.PublicKey, len(p.CovenantPks))
 	for i, covPk := range p.CovenantPks {
-		pk, err := bbntypes.NewBIP340PubKeyFromHex(covPk)
+		pk, err := utils.ParseCovenantPubKeyFromHex(covPk)
 		if err != nil {
 			return nil, fmt.Errorf("invalid covenant public key %s: %w", covPk, err)
 		}
-		covPks[i] = pk.MustToBTCPK()
+		covPks[i] = pk
 	}
 
 	fpPks := make([]*btcec.PublicKey, len(p.FinalityProviders))
