@@ -143,6 +143,22 @@ func (cfg *Config) Validate() error {
 		return err
 	}
 
+	if err := cfg.DatabaseConfig.Validate(); err != nil {
+		return err
+	}
+
+	if err := cfg.MetricsConfig.Validate(); err != nil {
+		return err
+	}
+
+	if err := cfg.QueueConfig.Validate(); err != nil {
+		return err
+	}
+
+	if err := cfg.BTCConfig.Validate(); err != nil {
+		return err
+	}
+
 	// All good, return the sanitized result.
 	return nil
 }
