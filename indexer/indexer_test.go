@@ -1,6 +1,8 @@
 package indexer_test
 
 import (
+	"bytes"
+	"encoding/hex"
 	"math/rand"
 	"path/filepath"
 	"sync"
@@ -10,6 +12,7 @@ import (
 	"github.com/babylonchain/babylon/btcstaking"
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -17,6 +20,7 @@ import (
 
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/indexer"
+	"github.com/babylonchain/staking-indexer/params"
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
 	"github.com/babylonchain/staking-indexer/testutils/mocks"
@@ -183,6 +187,30 @@ func FuzzVerifyUnbondingTx(f *testing.F) {
 		require.ErrorIs(t, err, indexer.ErrInvalidUnbondingTx)
 		require.False(t, isValid)
 	})
+}
+
+func getParams(t *testing.T, homepath string) *types.Params {
+	paramsRetriever, err := params.NewLocalParamsRetriever(homepath)
+	require.NoError(t, err)
+	return paramsRetriever.GetParams()
+}
+
+func TestStakingParser(t *testing.T) {
+	p := getParams(t, "./test-params.json")
+	txHex := "02000000000101d03336ef85b06ed63b76428bc9cec35815f9d2c285e43d8b9647bfde80d113450200000000ffffffff03d859000000000000225120bae0367641d550f699ded65b22f2fa03946513827611b7a9a396274623afc3990000000000000000496a4762627434009a5af9e33e297521300896fc0271eb7070b59a6b061fa647903bdcc8e737567d0d2f9728abc45c0cdeefdd73f52a0e0102470e35fb689fc5bc681959a61b021f00f3a08106000000000022512006c47bb4bf349191ca90dec71fa80a662fcb3666c0ed13a07d318bb16aef45530140133a237997524853e5d36bd11a4a4353ddb034ee2721af3f2eccf1f40bd6833e400ffa3867b6fc8aab5cceafbcc03eb10f8803f154e236739919c1cfbf1a1b5900000000"
+	txBytes, err := hex.DecodeString(txHex)
+	require.NoError(t, err)
+	var stakingTx wire.MsgTx
+	err = stakingTx.Deserialize(bytes.NewReader(txBytes))
+	require.NoError(t, err)
+	parsedData, err := btcstaking.ParseV0StakingTx(
+		&stakingTx,
+		p.Tag,
+		p.CovenantPks,
+		p.CovenantQuorum,
+		&chaincfg.SigNetParams)
+	require.NoError(t, err)
+	t.Logf("parsed data: %d", parsedData.OpReturnData.StakingTime)
 }
 
 func getParsedStakingData(data *datagen.TestStakingData, tx *wire.MsgTx, params *types.Params) *btcstaking.ParsedV0StakingTx {
