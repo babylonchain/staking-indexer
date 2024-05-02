@@ -6,12 +6,11 @@ package e2etest
 import (
 	"encoding/hex"
 	"encoding/json"
-	"math/rand"
-	"testing"
-	"time"
-
 	"github.com/babylonchain/babylon/btcstaking"
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
+	"github.com/babylonchain/staking-indexer/config"
+	"github.com/babylonchain/staking-indexer/params"
+	"github.com/babylonchain/staking-indexer/testutils"
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -20,10 +19,10 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/stretchr/testify/require"
+	"math/rand"
+	"testing"
+	"time"
 
-	"github.com/babylonchain/staking-indexer/config"
-	"github.com/babylonchain/staking-indexer/params"
-	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
 	"github.com/babylonchain/staking-indexer/types"
 )
@@ -94,11 +93,13 @@ func TestStakingLifeCycle(t *testing.T) {
 
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	testStakingData := datagen.GenerateTestStakingData(t, r)
-	testStakingData.StakingTime = 120
 	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	sysParams := paramsRetriever.GetParams()
+	sysParamsVersions := paramsRetriever.GetParamsVersions()
+	// TODO: test with multiple system parameters
+	sysParams := sysParamsVersions.ParamsVersions[0]
+	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
+	testStakingData.StakingTime = 120
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
 		sysParams.Tag,
 		tm.WalletPrivKey.PubKey(),
@@ -170,11 +171,13 @@ func TestIndexerRestart(t *testing.T) {
 
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	testStakingData := datagen.GenerateTestStakingData(t, r)
-	testStakingData.StakingTime = 120
 	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	sysParams := paramsRetriever.GetParams()
+	sysParamsVersions := paramsRetriever.GetParamsVersions()
+	// TODO: test with multiple system parameters
+	sysParams := sysParamsVersions.ParamsVersions[0]
+	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
+	testStakingData.StakingTime = 120
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
 		sysParams.Tag,
 		tm.WalletPrivKey.PubKey(),
@@ -242,8 +245,10 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	// generate valid staking tx data
 	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	sysParams := paramsRetriever.GetParams()
-	testStakingData := getTestStakingData(t, sysParams)
+	sysParamsVersions := paramsRetriever.GetParamsVersions()
+	// TODO: test with multiple system parameters
+	sysParams := sysParamsVersions.ParamsVersions[0]
+	testStakingData := getTestStakingData(t)
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
 		sysParams.Tag,
 		tm.WalletPrivKey.PubKey(),
@@ -457,9 +462,11 @@ func getCovenantPrivKeys(t *testing.T) []*btcec.PrivateKey {
 
 func getTestStakingData(
 	t *testing.T,
-	p *types.Params,
 ) *datagen.TestStakingData {
 	stakerPrivKey, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+
+	fpPrivKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
 
 	stakingAmount := btcutil.Amount(100000)
@@ -467,7 +474,7 @@ func getTestStakingData(
 
 	return &datagen.TestStakingData{
 		StakerKey:           stakerPrivKey.PubKey(),
-		FinalityProviderKey: p.FinalityProviderPks[0],
+		FinalityProviderKey: fpPrivKey.PubKey(),
 		StakingAmount:       stakingAmount,
 		StakingTime:         stakingTime,
 	}
