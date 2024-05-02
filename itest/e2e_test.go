@@ -1,11 +1,10 @@
-//go:build e2e
-// +build e2e
-
 package e2etest
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -291,6 +290,12 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 		stakingTx,
 		getCovenantPrivKeys(t),
 	)
+	unbondingTxHash := unbondingTx.TxHash().String()
+	unbondingTxHex, err := getTxHex(unbondingTx)
+	require.NoError(t, err)
+	t.Logf("unbonding tx hash: %s", unbondingTxHash)
+	t.Logf("unbonding tx hex: %s", unbondingTxHex)
+
 	tm.SendTxWithNConfirmations(t, unbondingTx, int(k+1))
 
 	// check the unbonding tx is already stored
@@ -387,6 +392,8 @@ func buildUnbondingTx(
 		unbondingSpendInfo.RevealedLeaf.Script,
 	)
 	require.NoError(t, err)
+	sigHex := hex.EncodeToString(stakerUnbondingSig.Serialize())
+	t.Logf("unbonding sig hex: %s", sigHex)
 
 	witness, err := unbondingSpendInfo.CreateUnbondingPathWitness(unbondingCovSigs, stakerUnbondingSig)
 	require.NoError(t, err)
@@ -471,4 +478,14 @@ func getTestStakingData(
 		StakingAmount:       stakingAmount,
 		StakingTime:         stakingTime,
 	}
+}
+
+func getTxHex(tx *wire.MsgTx) (string, error) {
+	var buf bytes.Buffer
+	if err := tx.Serialize(&buf); err != nil {
+		return "", fmt.Errorf("failed to serialize the tx: %w", err)
+	}
+	txHex := hex.EncodeToString(buf.Bytes())
+
+	return txHex, nil
 }
