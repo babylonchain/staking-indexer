@@ -229,7 +229,7 @@ func FuzzCalculateStakingEligibilityStatusBasedOnStakingCap(f *testing.F) {
 		// Select the first params versions to play with
 		params := sysParamsVersions.ParamsVersions[0]
 
-		remainingStakingCap := params.StakingCap
+		tvl := btcutil.Amount(0)
 
 		// Accumulate the test data
 		var stakingTxData []StakingTxData
@@ -251,10 +251,11 @@ func FuzzCalculateStakingEligibilityStatusBasedOnStakingCap(f *testing.F) {
 				StakingTx:   stakingTx,
 				StakingData: stakingData,
 			})
-			remainingStakingCap -= btcutil.Amount(storedStakingTx.StakingValue)
-			if remainingStakingCap < 0 {
+
+			if tvl+btcutil.Amount(storedStakingTx.StakingValue) > params.StakingCap {
 				break
 			}
+			tvl += btcutil.Amount(storedStakingTx.StakingValue)
 		}
 
 		// Check the eligibility status of each staking tx
@@ -276,7 +277,7 @@ func FuzzCalculateStakingEligibilityStatusBasedOnStakingCap(f *testing.F) {
 			require.NoError(t, err)
 			// unbond the staking tx
 			unbondingTx := datagen.GenerateUnbondingTxFromStaking(t, params, data.StakingData, data.StakingTx.Hash(), 0)
-			mockedHeight := uint64(params.ActivationHeight) + 2
+			mockedHeight := uint64(params.ActivationHeight) + 1
 			err = stakingIndexer.ProcessUnbondingTx(
 				unbondingTx.MsgTx(),
 				data.StakingTx.Hash(),
@@ -286,10 +287,10 @@ func FuzzCalculateStakingEligibilityStatusBasedOnStakingCap(f *testing.F) {
 			require.NoError(t, err)
 
 			// We revert the calculation
-			remainingStakingCap += btcutil.Amount(storedStakingTx.StakingValue)
+			tvl -= btcutil.Amount(storedStakingTx.StakingValue)
 
-			// Let's break if current tvl is already below the staking cap (i.e remainingStakingCap > 0)
-			if remainingStakingCap > 0 {
+			// Let's break if current tvl is has enough room for the next staking tx
+			if params.StakingCap-tvl > params.MaxStakingAmount {
 				break
 			}
 		}
@@ -300,7 +301,7 @@ func FuzzCalculateStakingEligibilityStatusBasedOnStakingCap(f *testing.F) {
 			stakingData := datagen.GenerateTestStakingData(t, r, params)
 			_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, params, stakingData)
 			// For a valid tx, its btc height is always larger than the activation height
-			mockedHeight := uint64(params.ActivationHeight) + 3
+			mockedHeight := uint64(params.ActivationHeight) + 1
 			err = stakingIndexer.ProcessStakingTx(
 				stakingTx.MsgTx(),
 				getParsedStakingData(stakingData, stakingTx.MsgTx(), params),
@@ -309,21 +310,22 @@ func FuzzCalculateStakingEligibilityStatusBasedOnStakingCap(f *testing.F) {
 			storedStakingTx, err := stakingIndexer.GetStakingTxByHash(stakingTx.Hash())
 			require.NoError(t, err)
 
-			stakingTxData2 = append(stakingTxData, StakingTxData{
+			stakingTxData2 = append(stakingTxData2, StakingTxData{
 				StakingTx:   stakingTx,
 				StakingData: stakingData,
 			})
-			remainingStakingCap -= btcutil.Amount(storedStakingTx.StakingValue)
-			if remainingStakingCap < 0 {
+
+			if tvl+btcutil.Amount(storedStakingTx.StakingValue) > params.StakingCap {
 				break
 			}
+			tvl += btcutil.Amount(storedStakingTx.StakingValue)
 		}
 
 		// Check the eligibility status of each staking tx from the second batch
 		for index, data := range stakingTxData2 {
 			storedStakingTx, err := stakingIndexer.GetStakingTxByHash(data.StakingTx.Hash())
 			require.NoError(t, err)
-			// check all staking txs are eligible
+			// check all staking txs are eligible, except the last one
 			if index < len(stakingTxData2)-1 {
 				require.Equal(t, types.EligibilityStatusActive, storedStakingTx.EligibilityStatus)
 			} else {
@@ -332,14 +334,45 @@ func FuzzCalculateStakingEligibilityStatusBasedOnStakingCap(f *testing.F) {
 		}
 
 		// Now let's use the second params
-		paramsSecond := sysParamsVersions.ParamsVersions[1]
+		secondParam := sysParamsVersions.ParamsVersions[1]
 
-		// find the staking cap gap
-		stakingCapGap := paramsSecond.StakingCap - params.StakingCap
+		// Let's send more staking txs until the staking cap is exceeded again
+		var stakingTxData3 []StakingTxData
+		for {
+			stakingData := datagen.GenerateTestStakingData(t, r, secondParam)
+			_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, secondParam, stakingData)
+			// For a valid tx, its btc height is always larger than the activation height
+			mockedHeight := uint64(secondParam.ActivationHeight) + 1
+			err = stakingIndexer.ProcessStakingTx(
+				stakingTx.MsgTx(),
+				getParsedStakingData(stakingData, stakingTx.MsgTx(), secondParam),
+				mockedHeight, time.Now())
+			require.NoError(t, err)
+			storedStakingTx, err := stakingIndexer.GetStakingTxByHash(stakingTx.Hash())
+			require.NoError(t, err)
 
-		remainingStakingCap = stakingCapGap + remainingStakingCap
-		// TODO: Continue the calculation based on the second params
+			stakingTxData3 = append(stakingTxData3, StakingTxData{
+				StakingTx:   stakingTx,
+				StakingData: stakingData,
+			})
 
+			if tvl+btcutil.Amount(storedStakingTx.StakingValue) > secondParam.StakingCap {
+				break
+			}
+			tvl += btcutil.Amount(storedStakingTx.StakingValue)
+		}
+
+		// Check the eligibility status of each staking tx from the third batch
+		for index, data := range stakingTxData3 {
+			storedStakingTx, err := stakingIndexer.GetStakingTxByHash(data.StakingTx.Hash())
+			require.NoError(t, err)
+			// check all staking txs are eligible
+			if index < len(stakingTxData3)-1 {
+				require.Equal(t, types.EligibilityStatusActive, storedStakingTx.EligibilityStatus)
+			} else {
+				require.Equal(t, types.EligibilityStatusInactive, storedStakingTx.EligibilityStatus)
+			}
+		}
 	})
 }
 

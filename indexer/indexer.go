@@ -353,7 +353,6 @@ func (si *StakingIndexer) ProcessStakingTx(
 	stakerPkHex := hex.EncodeToString(stakingData.OpReturnData.StakerPublicKey.Marshall())
 	fpPkHex := hex.EncodeToString(stakingData.OpReturnData.FinalityProviderPublicKey.Marshall())
 
-	// TODO: Get the current TVL to calculate if has reached staking cap.
 	status, err := si.performEligibilityStatusCheck(height, stakingData)
 	if err != nil {
 		return fmt.Errorf("failed to check the eligibility status: %w", err)
@@ -605,5 +604,7 @@ func (si *StakingIndexer) performEligibilityStatusCheck(height uint64, stakingDa
 	if uint64(stakingData.OpReturnData.StakingTime) < uint64(paramas.MinStakingTime) {
 		return types.EligibilityStatusInactive, nil
 	}
+
+	// TODO: Add more checks here https://github.com/babylonchain/staking-indexer/issues/47
 	return types.EligibilityStatusActive, nil
 }
