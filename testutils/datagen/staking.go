@@ -36,7 +36,7 @@ func GenerateTestStakingData(
 	require.NoError(t, err)
 
 	stakingAmount := btcutil.Amount(r.Int63n(int64(params.MaxStakingAmount-params.MinStakingAmount)) + int64(params.MinStakingAmount) + 1)
-	stakingTime := uint16(r.Int31n(65535) + 1)
+	stakingTime := uint16(r.Int31n(int32(params.MaxStakingTime-params.MinStakingTime)) + int32(params.MinStakingTime) + 1)
 
 	return &TestStakingData{
 		StakerKey:           stakerPrivKey.PubKey(),
@@ -153,6 +153,8 @@ func genStoredStakingTx(t *testing.T, r *rand.Rand, maxStakingTime uint16, inclu
 	fpPirvKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
 
+	stakingValue := r.Uint64()
+
 	return &indexerstore.StoredStakingTransaction{
 		Tx:                 btcTx,
 		StakingOutputIdx:   outputIdx,
@@ -160,7 +162,16 @@ func genStoredStakingTx(t *testing.T, r *rand.Rand, maxStakingTime uint16, inclu
 		FinalityProviderPk: fpPirvKey.PubKey(),
 		StakerPk:           stakerPrivKey.PubKey(),
 		InclusionHeight:    inclusionHeight,
+		StakingValue:       stakingValue,
+		EligibilityStatus:  getRandomEligibilityStatus(r),
 	}
+}
+
+func getRandomEligibilityStatus(r *rand.Rand) types.EligibilityStatus {
+	if r.Intn(2) == 0 { // Generates either 0 or 1
+		return types.EligibilityStatusInactive
+	}
+	return types.EligibilityStatusActive
 }
 
 func genStoredUnbondingTx(r *rand.Rand, stakingTxHash *chainhash.Hash) *indexerstore.StoredUnbondingTransaction {

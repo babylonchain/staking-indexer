@@ -52,6 +52,8 @@ func FuzzStoringTxs(f *testing.F) {
 				storedTx.StakerPk,
 				storedTx.StakingTime,
 				storedTx.FinalityProviderPk,
+				storedTx.StakingValue,
+				storedTx.EligibilityStatus,
 			)
 			require.NoError(t, err)
 		}

@@ -18,6 +18,11 @@ message StakingTransaction {
     bytes staker_pk = 6;
     bytes finality_provider_pk = 8;
     uint32 staking_time = 7;
+
+    // Status of the transaction eligibility ('active' or 'inactive').
+    string eligibility_status = 9;
+    // The staking amount
+    uint64 staking_value = 10;
 }
 
 message UnbondingTransaction {

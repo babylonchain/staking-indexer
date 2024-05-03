@@ -200,7 +200,7 @@ func (si *StakingIndexer) handleConfirmedBlock(b *types.IndexedBlock) error {
 			}
 
 			// 5. this is an unbonding tx
-			if err := si.processUnbondingTx(msgTx, &stakingTxHash, uint64(b.Height), b.Header.Timestamp, params); err != nil {
+			if err := si.ProcessUnbondingTx(msgTx, &stakingTxHash, uint64(b.Height), b.Header.Timestamp, params); err != nil {
 				if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
 					// record metrics
 					failedProcessingUnbondingTxsCounter.Inc()
@@ -352,6 +352,13 @@ func (si *StakingIndexer) ProcessStakingTx(
 
 	stakerPkHex := hex.EncodeToString(stakingData.OpReturnData.StakerPublicKey.Marshall())
 	fpPkHex := hex.EncodeToString(stakingData.OpReturnData.FinalityProviderPublicKey.Marshall())
+
+	// TODO: Get the current TVL to calculate if has reached staking cap.
+	status, err := si.performEligibilityStatusCheck(height, stakingData)
+	if err != nil {
+		return fmt.Errorf("failed to check the eligibility status: %w", err)
+	}
+
 	stakingEvent := queuecli.NewActiveStakingEvent(
 		tx.TxHash().String(),
 		stakerPkHex,
@@ -362,6 +369,7 @@ func (si *StakingIndexer) ProcessStakingTx(
 		uint64(stakingData.OpReturnData.StakingTime),
 		uint64(stakingData.StakingOutputIdx),
 		txHex,
+		status.ToString(),
 	)
 
 	// push the events first with the assumption that the consumer can handle duplicate events
@@ -380,6 +388,8 @@ func (si *StakingIndexer) ProcessStakingTx(
 		stakingData.OpReturnData.StakerPublicKey.PubKey,
 		uint32(stakingData.OpReturnData.StakingTime),
 		stakingData.OpReturnData.FinalityProviderPublicKey.PubKey,
+		uint64(stakingData.StakingOutput.Value),
+		status,
 	); err != nil {
 		return fmt.Errorf("failed to add the staking tx to store: %w", err)
 	}
@@ -401,7 +411,7 @@ func (si *StakingIndexer) ProcessStakingTx(
 	return nil
 }
 
-func (si *StakingIndexer) processUnbondingTx(
+func (si *StakingIndexer) ProcessUnbondingTx(
 	tx *wire.MsgTx,
 	stakingTxHash *chainhash.Hash,
 	height uint64, timestamp time.Time,
@@ -557,4 +567,43 @@ func getTxHex(tx *wire.MsgTx) (string, error) {
 	txHex := hex.EncodeToString(buf.Bytes())
 
 	return txHex, nil
+}
+
+func (si *StakingIndexer) performEligibilityStatusCheck(height uint64, stakingData *btcstaking.ParsedV0StakingTx) (types.EligibilityStatus, error) {
+	// Staking cap calculation
+	value := stakingData.StakingOutput.Value
+	paramas, err := si.paramsVersions.GetParamsForBTCHeight(int32(height))
+	if err != nil {
+		return "", fmt.Errorf("failed to get the params for the height: %w", err)
+	}
+
+	confirmedTvl, err := si.is.GetConfirmedTvl()
+	if err != nil {
+		return "", fmt.Errorf("failed to get the confirmed TVL: %w", err)
+	}
+
+	if confirmedTvl+uint64(value) > uint64(paramas.StakingCap) {
+		return types.EligibilityStatusInactive, nil
+	}
+
+	// Minimum staking amount check
+	if uint64(value) < uint64(paramas.MinStakingAmount) {
+		return types.EligibilityStatusInactive, nil
+	}
+
+	// Maximum staking amount check
+	if uint64(value) > uint64(paramas.MaxStakingAmount) {
+		return types.EligibilityStatusInactive, nil
+	}
+
+	// Maximum staking time check
+	if uint64(stakingData.OpReturnData.StakingTime) > uint64(paramas.MaxStakingTime) {
+		return types.EligibilityStatusInactive, nil
+	}
+
+	// Minimum staking time check
+	if uint64(stakingData.OpReturnData.StakingTime) < uint64(paramas.MinStakingTime) {
+		return types.EligibilityStatusInactive, nil
+	}
+	return types.EligibilityStatusActive, nil
 }
