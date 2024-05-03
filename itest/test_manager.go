@@ -116,7 +116,7 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 	require.NoError(t, err)
 	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, db, paramsRetriever.GetParams(), scanner)
+	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, db, paramsRetriever.GetParamsVersions(), scanner)
 	require.NoError(t, err)
 
 	interceptor, err := signal.Intercept()
