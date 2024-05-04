@@ -6,11 +6,11 @@ import (
 	"os"
 
 	"github.com/babylonchain/babylon/btcstaking"
-	bbntypes "github.com/babylonchain/babylon/types"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 
 	"github.com/babylonchain/staking-indexer/types"
+	"github.com/babylonchain/staking-indexer/utils"
 )
 
 type ParamsRetriever interface {
@@ -65,17 +65,14 @@ func NewLocalParamsRetriever(filePath string) (*LocalParamsRetriever, error) {
 		if len(p.CovenantPks) == 0 {
 			return nil, fmt.Errorf("empty covenant public keys")
 		}
-		if p.CovenantQuorum > uint32(len(p.CovenantPks)) {
-			return nil, fmt.Errorf("covenant quorum cannot be more than the amount of covenants")
-		}
 
 		covPks := make([]*btcec.PublicKey, len(p.CovenantPks))
 		for i, covPk := range p.CovenantPks {
-			pk, err := bbntypes.NewBIP340PubKeyFromHex(covPk)
+			pk, err := utils.ParseCovenantPubKeyFromHex(covPk)
 			if err != nil {
 				return nil, fmt.Errorf("invalid covenant public key %s: %w", covPk, err)
 			}
-			covPks[i] = pk.MustToBTCPK()
+			covPks[i] = pk
 		}
 
 		if p.MaxStakingAmount <= p.MinStakingAmount {
