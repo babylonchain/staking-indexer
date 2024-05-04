@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/btcsuite/btcd/rpcclient"
@@ -68,4 +69,46 @@ func (cfg *BTCConfig) ToConnConfig() *rpcclient.ConnConfig {
 		// we may need to re-consider it later if we need any notifications
 		HTTPPostMode: true,
 	}
+}
+
+func (cfg *BTCConfig) Validate() error {
+	if cfg.RPCHost == "" {
+		return fmt.Errorf("RPC host cannot be empty")
+	}
+	if cfg.RPCUser == "" {
+		return fmt.Errorf("RPC user cannot be empty")
+	}
+	if cfg.RPCPass == "" {
+		return fmt.Errorf("RPC password cannot be empty")
+	}
+
+	if cfg.BlockPollingInterval <= 0 {
+		return fmt.Errorf("block polling interval should be positive")
+	}
+	if cfg.TxPollingInterval <= 0 {
+		return fmt.Errorf("tx polling interval should be positive")
+	}
+
+	if cfg.BlockCacheSize <= 0 {
+		return fmt.Errorf("block cache size should be positive")
+	}
+
+	if cfg.ZMQPubRawBlock == "" {
+		return fmt.Errorf("ZMQ publish raw block endpoint cannot not be empty")
+	}
+	if cfg.ZMQPubRawTx == "" {
+		return fmt.Errorf("ZMQ publish raw block endpoint cannot not be empty")
+	}
+	if cfg.ZMQReadDeadline <= 0 {
+		return fmt.Errorf("ZMQ read deadline should be positive")
+	}
+
+	if cfg.RetrySleepTime <= 0 {
+		return fmt.Errorf("retry sleep time should be positive")
+	}
+	if cfg.MaxRetrySleepTime <= 0 {
+		return fmt.Errorf("max retry sleep time should be positive")
+	}
+
+	return nil
 }

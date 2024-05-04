@@ -18,7 +18,14 @@ import (
 	"github.com/babylonchain/staking-indexer/types"
 )
 
+type internalParamsVersions struct {
+	ParamsVersions []*internalParams `json:"versions"`
+}
+
 type internalParams struct {
+	Version          uint16         `json:"version"`
+	ActivationHeight int32          `json:"activation_height"`
+	StakingCap       btcutil.Amount `json:"staking_cap"`
 	Tag              string         `json:"tag"`
 	CovenantPks      []string       `json:"covenant_pks"`
 	CovenantQuorum   uint32         `json:"covenant_quorum"`
@@ -37,9 +44,9 @@ func FuzzParamsRetriever(f *testing.F) {
 		r := rand.New(rand.NewSource(seed))
 
 		// generate global params
-		globalParams := datagen.GenerateGlobalParams(r, t)
+		globalParamsVersions := datagen.GenerateGlobalParamsVersions(r, t)
 
-		jsonBytes, err := json.MarshalIndent(paramsToInternalParams(globalParams), "", "    ")
+		jsonBytes, err := json.MarshalIndent(paramsToInternalParams(globalParamsVersions), "", "    ")
 		require.NoError(t, err)
 
 		// write params to file
@@ -51,34 +58,50 @@ func FuzzParamsRetriever(f *testing.F) {
 		// the params retriever read the file
 		paramsRetriever, err := params.NewLocalParamsRetriever(path)
 		require.NoError(t, err)
-		p := paramsRetriever.GetParams()
+		pv := paramsRetriever.GetParamsVersions()
 
 		// check the values are expected
-		require.Equal(t, globalParams.Tag, p.Tag)
-		require.Equal(t, globalParams.MinStakingTime, p.MinStakingTime)
-		require.Equal(t, globalParams.MaxStakingTime, p.MaxStakingTime)
-		require.Equal(t, globalParams.MinStakingAmount, p.MinStakingAmount)
-		require.Equal(t, globalParams.MaxStakingAmount, p.MaxStakingAmount)
-		require.Equal(t, globalParams.CovenantQuorum, p.CovenantQuorum)
-		require.Equal(t, globalParams.UnbondingTime, p.UnbondingTime)
-		require.True(t, testutils.PubKeysSliceEqual(globalParams.CovenantPks, p.CovenantPks))
+		require.Equal(t, len(globalParamsVersions.ParamsVersions), len(pv.ParamsVersions))
+		for idx, globalParams := range globalParamsVersions.ParamsVersions {
+			p := pv.ParamsVersions[idx]
+			require.Equal(t, globalParams.Version, p.Version)
+			require.Equal(t, globalParams.ActivationHeight, p.ActivationHeight)
+			require.Equal(t, globalParams.StakingCap, p.StakingCap)
+			require.Equal(t, globalParams.Tag, p.Tag)
+			require.Equal(t, globalParams.MinStakingTime, p.MinStakingTime)
+			require.Equal(t, globalParams.MaxStakingTime, p.MaxStakingTime)
+			require.Equal(t, globalParams.MinStakingAmount, p.MinStakingAmount)
+			require.Equal(t, globalParams.MaxStakingAmount, p.MaxStakingAmount)
+			require.Equal(t, globalParams.CovenantQuorum, p.CovenantQuorum)
+			require.Equal(t, globalParams.UnbondingTime, p.UnbondingTime)
+			require.True(t, testutils.PubKeysSliceEqual(globalParams.CovenantPks, p.CovenantPks))
+		}
 	})
 }
 
-func paramsToInternalParams(p *types.Params) *internalParams {
-	covPksHex := make([]string, len(p.CovenantPks))
-	for i, pk := range p.CovenantPks {
-		covPksHex[i] = bbntypes.NewBIP340PubKeyFromBTCPK(pk).MarshalHex()
+func paramsToInternalParams(pv *types.ParamsVersions) *internalParamsVersions {
+	paramsVersions := &internalParamsVersions{
+		ParamsVersions: make([]*internalParams, 0),
 	}
+	for _, p := range pv.ParamsVersions {
+		covPksHex := make([]string, len(p.CovenantPks))
+		for i, pk := range p.CovenantPks {
+			covPksHex[i] = bbntypes.NewBIP340PubKeyFromBTCPK(pk).MarshalHex()
+		}
 
-	return &internalParams{
-		Tag:              string(p.Tag),
-		CovenantPks:      covPksHex,
-		CovenantQuorum:   p.CovenantQuorum,
-		UnbondingTime:    p.UnbondingTime,
-		MaxStakingAmount: p.MaxStakingAmount,
-		MinStakingAmount: p.MinStakingAmount,
-		MaxStakingTime:   p.MaxStakingTime,
-		MinStakingTime:   p.MinStakingTime,
+		paramsVersions.ParamsVersions = append(paramsVersions.ParamsVersions, &internalParams{
+			Version:          p.Version,
+			ActivationHeight: p.ActivationHeight,
+			StakingCap:       p.StakingCap,
+			Tag:              string(p.Tag),
+			CovenantPks:      covPksHex,
+			CovenantQuorum:   p.CovenantQuorum,
+			UnbondingTime:    p.UnbondingTime,
+			MaxStakingAmount: p.MaxStakingAmount,
+			MinStakingAmount: p.MinStakingAmount,
+			MaxStakingTime:   p.MaxStakingTime,
+			MinStakingTime:   p.MinStakingTime,
+		})
 	}
+	return paramsVersions
 }

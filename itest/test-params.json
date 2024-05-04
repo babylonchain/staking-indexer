@@ -1,26 +1,20 @@
 {
-  "tag": "bbt4",
-  "covenant_pks": [
-    "cecdb3f9b99e0d67e806a9d1abd9d8c7811602dc7653bcb657a3faff29b76047"
-  ],
-  "finality_providers": [
-    {
-      "description": {
-        "moniker": "Babylon Foundation 0",
-        "identity": "",
-        "website": "",
-        "security_contact": "",
-        "details": ""
-      },
-      "commission": "0.050000000000000000",
-      "btc_pk": "03d5a0bb72d71993e435d6c5a70e2aa4db500a62cfaae33c56050deefee64ec0"
-    }
-  ],
-  "covenant_quorum": 1,
-  "unbonding_time": 1000,
-  "unbonding_fee": 10000,
-  "max_staking_amount": 300000,
-  "min_staking_amount": 3000,
-  "max_staking_time": 10000,
-  "min_staking_time": 100
+    "versions": [
+        {
+            "version": 0,
+            "activation_height": 1,
+            "staking_cap": 5000000000,
+            "tag": "bbt4",
+            "covenant_pks": [
+                "cecdb3f9b99e0d67e806a9d1abd9d8c7811602dc7653bcb657a3faff29b76047"
+            ],
+            "covenant_quorum": 1,
+            "unbonding_time": 1000,
+            "unbonding_fee": 1000,
+            "max_staking_amount": 300000,
+            "min_staking_amount": 3000,
+            "max_staking_time": 10000,
+            "min_staking_time": 100
+        }
+    ]
 }

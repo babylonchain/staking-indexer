@@ -104,7 +104,7 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create the staking indexer app
-	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, dbBackend, paramsRetriever.GetParams(), scanner)
+	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, dbBackend, paramsRetriever.GetParamsVersions(), scanner)
 	if err != nil {
 		return fmt.Errorf("failed to initialize the staking indexer app: %w", err)
 	}

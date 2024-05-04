@@ -29,8 +29,8 @@ type StakingIndexer struct {
 	startOnce sync.Once
 	stopOnce  sync.Once
 
-	consumer consumer.EventConsumer
-	params   *types.Params
+	consumer       consumer.EventConsumer
+	paramsVersions *types.ParamsVersions
 
 	cfg    *config.Config
 	logger *zap.Logger
@@ -48,7 +48,7 @@ func NewStakingIndexer(
 	logger *zap.Logger,
 	consumer consumer.EventConsumer,
 	db kvdb.Backend,
-	params *types.Params,
+	paramsVersions *types.ParamsVersions,
 	btcScanner btcscanner.BtcScanner,
 ) (*StakingIndexer, error) {
 	is, err := indexerstore.NewIndexerStore(db)
@@ -57,13 +57,13 @@ func NewStakingIndexer(
 	}
 
 	return &StakingIndexer{
-		cfg:        cfg,
-		logger:     logger.With(zap.String("module", "staking indexer")),
-		consumer:   consumer,
-		is:         is,
-		params:     params,
-		btcScanner: btcScanner,
-		quit:       make(chan struct{}),
+		cfg:            cfg,
+		logger:         logger.With(zap.String("module", "staking indexer")),
+		consumer:       consumer,
+		is:             is,
+		paramsVersions: paramsVersions,
+		btcScanner:     btcScanner,
+		quit:           make(chan struct{}),
 	}, nil
 }
 
@@ -135,11 +135,15 @@ func (si *StakingIndexer) confirmedBlocksLoop() {
 // handleConfirmedBlock iterates all the tx set in the block and
 // parse staking tx, unbonding tx, and withdrawal tx if there are any
 func (si *StakingIndexer) handleConfirmedBlock(b *types.IndexedBlock) error {
+	params, err := si.paramsVersions.GetParamsForBTCHeight(b.Height)
+	if err != nil {
+		return err
+	}
 	for _, tx := range b.Txs {
 		msgTx := tx.MsgTx()
 
 		// 1. try to parse staking tx
-		stakingData, err := si.tryParseStakingTx(msgTx)
+		stakingData, err := si.tryParseStakingTx(msgTx, params)
 		if err == nil {
 			if err := si.ProcessStakingTx(msgTx, stakingData, uint64(b.Height), b.Header.Timestamp); err != nil {
 				if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
@@ -165,7 +169,7 @@ func (si *StakingIndexer) handleConfirmedBlock(b *types.IndexedBlock) error {
 		if spentInputIdx >= 0 {
 			stakingTxHash := stakingTx.Tx.TxHash()
 			// 3. is a spending tx, check whether it is a valid unbonding tx
-			isUnbonding, err := si.IsValidUnbondingTx(msgTx, stakingTx)
+			isUnbonding, err := si.IsValidUnbondingTx(msgTx, stakingTx, params)
 			if err != nil {
 				if errors.Is(err, ErrInvalidUnbondingTx) {
 					invalidUnbondingTxsCounter.Inc()
@@ -196,7 +200,7 @@ func (si *StakingIndexer) handleConfirmedBlock(b *types.IndexedBlock) error {
 			}
 
 			// 5. this is an unbonding tx
-			if err := si.processUnbondingTx(msgTx, &stakingTxHash, uint64(b.Height), b.Header.Timestamp); err != nil {
+			if err := si.processUnbondingTx(msgTx, &stakingTxHash, uint64(b.Height), b.Header.Timestamp, params); err != nil {
 				if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
 					// record metrics
 					failedProcessingUnbondingTxsCounter.Inc()
@@ -280,7 +284,7 @@ func (si *StakingIndexer) getSpentUnbondingTx(tx *wire.MsgTx) (*indexerstore.Sto
 // It returns error when (1) it fails to verify the unbonding tx due
 // to invalid parameters, and (2) the tx spends the unbonding path
 // but is invalid
-func (si *StakingIndexer) IsValidUnbondingTx(tx *wire.MsgTx, stakingTx *indexerstore.StoredStakingTransaction) (bool, error) {
+func (si *StakingIndexer) IsValidUnbondingTx(tx *wire.MsgTx, stakingTx *indexerstore.StoredStakingTransaction, params *types.Params) (bool, error) {
 	// 1. an unbonding tx must have exactly one input and output
 	if len(tx.TxIn) != 1 {
 		return false, nil
@@ -301,17 +305,17 @@ func (si *StakingIndexer) IsValidUnbondingTx(tx *wire.MsgTx, stakingTx *indexers
 	// 3. the script of an unbonding tx output must be expected
 	// as re-built unbonding output from params
 	stakingValue := btcutil.Amount(stakingTx.Tx.TxOut[stakingTx.StakingOutputIdx].Value)
-	expectedUnbondingOutputValue := stakingValue - si.params.UnbondingFee
+	expectedUnbondingOutputValue := stakingValue - params.UnbondingFee
 	if expectedUnbondingOutputValue <= 0 {
 		return false, fmt.Errorf("%w: staking output value is too low, got %v, unbonding fee: %v",
-			ErrInvalidUnbondingTx, stakingValue, si.params.UnbondingFee)
+			ErrInvalidUnbondingTx, stakingValue, params.UnbondingFee)
 	}
 	unbondingInfo, err := btcstaking.BuildUnbondingInfo(
 		stakingTx.StakerPk,
 		[]*btcec.PublicKey{stakingTx.FinalityProviderPk},
-		si.params.CovenantPks,
-		si.params.CovenantQuorum,
-		si.params.UnbondingTime,
+		params.CovenantPks,
+		params.CovenantQuorum,
+		params.UnbondingTime,
 		expectedUnbondingOutputValue,
 		&si.cfg.BTCNetParams,
 	)
@@ -401,6 +405,7 @@ func (si *StakingIndexer) processUnbondingTx(
 	tx *wire.MsgTx,
 	stakingTxHash *chainhash.Hash,
 	height uint64, timestamp time.Time,
+	params *types.Params,
 ) error {
 
 	si.logger.Info("found an unbonding tx",
@@ -418,7 +423,7 @@ func (si *StakingIndexer) processUnbondingTx(
 		stakingTxHash.String(),
 		height,
 		timestamp.Unix(),
-		uint64(si.params.UnbondingTime),
+		uint64(params.UnbondingTime),
 		// valid unbonding tx always has one output
 		0,
 		txHex,
@@ -498,17 +503,17 @@ func (si *StakingIndexer) processWithdrawTx(tx *wire.MsgTx, stakingTxHash *chain
 	return nil
 }
 
-func (si *StakingIndexer) tryParseStakingTx(tx *wire.MsgTx) (*btcstaking.ParsedV0StakingTx, error) {
-	possible := btcstaking.IsPossibleV0StakingTx(tx, si.params.Tag)
+func (si *StakingIndexer) tryParseStakingTx(tx *wire.MsgTx, params *types.Params) (*btcstaking.ParsedV0StakingTx, error) {
+	possible := btcstaking.IsPossibleV0StakingTx(tx, params.Tag)
 	if !possible {
 		return nil, fmt.Errorf("not staking tx")
 	}
 
 	parsedData, err := btcstaking.ParseV0StakingTx(
 		tx,
-		si.params.Tag,
-		si.params.CovenantPks,
-		si.params.CovenantQuorum,
+		params.Tag,
+		params.CovenantPks,
+		params.CovenantQuorum,
 		&si.cfg.BTCNetParams)
 	if err != nil {
 		return nil, fmt.Errorf("not staking tx")

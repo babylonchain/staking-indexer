@@ -27,7 +27,7 @@ import (
 // parse staking tx from confirmed blocks
 func FuzzIndexer(f *testing.F) {
 	// use small seed because db open/close is slow
-	bbndatagen.AddRandomSeedsToFuzzer(f, 3)
+	bbndatagen.AddRandomSeedsToFuzzer(f, 5)
 
 	f.Fuzz(func(t *testing.T, seed int64) {
 		r := rand.New(rand.NewSource(seed))
@@ -36,12 +36,12 @@ func FuzzIndexer(f *testing.F) {
 		cfg := config.DefaultConfigWithHome(homePath)
 
 		confirmedBlockChan := make(chan *types.IndexedBlock)
-		sysParams := datagen.GenerateGlobalParams(r, t)
+		sysParamsVersions := datagen.GenerateGlobalParamsVersions(r, t)
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
 		mockBtcScanner := NewMockedBtcScanner(t, confirmedBlockChan)
-		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParams, mockBtcScanner)
+		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParamsVersions, mockBtcScanner)
 		require.NoError(t, err)
 
 		err = stakingIndexer.Start(1)
@@ -56,7 +56,8 @@ func FuzzIndexer(f *testing.F) {
 		// 1. build staking tx and insert them into blocks
 		// and send block to the confirmed block channel
 		numBlocks := r.Intn(10) + 1
-		startingHeight := r.Int31n(1000) + 1
+		// Starting height should be at least later than the activation height of the first parameters
+		startingHeight := r.Int31n(1000) + 1 + sysParamsVersions.ParamsVersions[0].ActivationHeight
 
 		stakingDataList := make([]*datagen.TestStakingData, 0)
 		stakingTxList := make([]*btcutil.Tx, 0)
@@ -66,20 +67,23 @@ func FuzzIndexer(f *testing.F) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < numBlocks; i++ {
+				blockHeight := startingHeight + int32(i)
+				params, err := sysParamsVersions.GetParamsForBTCHeight(blockHeight)
+				require.NoError(t, err)
 				numTxs := r.Intn(10) + 1
 				blockTxs := make([]*btcutil.Tx, 0)
 				for j := 0; j < numTxs; j++ {
-					stakingData := datagen.GenerateTestStakingData(t, r)
+					stakingData := datagen.GenerateTestStakingData(t, r, params)
 					stakingDataList = append(stakingDataList, stakingData)
-					_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, sysParams, stakingData)
-					unbondingTx := datagen.GenerateUnbondingTxFromStaking(t, sysParams, stakingData, stakingTx.Hash(), 0)
+					_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, params, stakingData)
+					unbondingTx := datagen.GenerateUnbondingTxFromStaking(t, params, stakingData, stakingTx.Hash(), 0)
 					blockTxs = append(blockTxs, stakingTx)
 					blockTxs = append(blockTxs, unbondingTx)
 					stakingTxList = append(stakingTxList, stakingTx)
 					unbondingTxList = append(unbondingTxList, unbondingTx)
 				}
 				b := &types.IndexedBlock{
-					Height: startingHeight + int32(i),
+					Height: blockHeight,
 					Txs:    blockTxs,
 					Header: &wire.BlockHeader{Timestamp: time.Now()},
 				}
@@ -131,7 +135,7 @@ func FuzzIndexer(f *testing.F) {
 // 3. it returns (false, ErrInvalidUnbondingTx) if the given tx is not
 // a valid unbonding tx
 func FuzzVerifyUnbondingTx(f *testing.F) {
-	bbndatagen.AddRandomSeedsToFuzzer(f, 10)
+	bbndatagen.AddRandomSeedsToFuzzer(f, 50)
 
 	f.Fuzz(func(t *testing.T, seed int64) {
 		r := rand.New(rand.NewSource(seed))
@@ -140,46 +144,49 @@ func FuzzVerifyUnbondingTx(f *testing.F) {
 		cfg := config.DefaultConfigWithHome(homePath)
 
 		confirmedBlockChan := make(chan *types.IndexedBlock)
-		sysParams := datagen.GenerateGlobalParams(r, t)
+		sysParamsVersions := datagen.GenerateGlobalParamsVersions(r, t)
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
 		mockBtcScanner := NewMockedBtcScanner(t, confirmedBlockChan)
-		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParams, mockBtcScanner)
+		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParamsVersions, mockBtcScanner)
 		require.NoError(t, err)
 		defer func() {
 			err = db.Close()
 			require.NoError(t, err)
 		}()
 
+		// Select the first params versions to play with
+		params := sysParamsVersions.ParamsVersions[0]
 		// 1. generate and add a valid staking tx to the indexer
-		stakingData := datagen.GenerateTestStakingData(t, r)
-		_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, sysParams, stakingData)
+		stakingData := datagen.GenerateTestStakingData(t, r, params)
+		_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, params, stakingData)
 		err = stakingIndexer.ProcessStakingTx(
 			stakingTx.MsgTx(),
-			getParsedStakingData(stakingData, stakingTx.MsgTx(), sysParams),
+			getParsedStakingData(stakingData, stakingTx.MsgTx(), params),
 			100, time.Now())
 		require.NoError(t, err)
 		storedStakingTx, err := stakingIndexer.GetStakingTxByHash(stakingTx.Hash())
 		require.NoError(t, err)
 
 		// 2. test IsValidUnbondingTx with valid unbonding tx, expect (true, nil)
-		unbondingTx := datagen.GenerateUnbondingTxFromStaking(t, sysParams, stakingData, stakingTx.Hash(), 0)
-		isValid, err := stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx)
+		unbondingTx := datagen.GenerateUnbondingTxFromStaking(t, params, stakingData, stakingTx.Hash(), 0)
+		isValid, err := stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx, params)
 		require.NoError(t, err)
 		require.True(t, isValid)
 
 		// 3. test IsValidUnbondingTx with no unbonding tx (different staking output index), expect (false, nil)
-		unbondingTx = datagen.GenerateUnbondingTxFromStaking(t, sysParams, stakingData, stakingTx.Hash(), 1)
-		isValid, err = stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx)
+		unbondingTx = datagen.GenerateUnbondingTxFromStaking(t, params, stakingData, stakingTx.Hash(), 1)
+		isValid, err = stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx, params)
 		require.NoError(t, err)
 		require.False(t, isValid)
 
-		// 4. test IsValidUnbondingTx with invaid unbonding tx (random unbonding fee in params), expect (false, ErrInvalidUnbondingTx)
-		newParams := *sysParams
-		newParams.UnbondingFee = btcutil.Amount(bbndatagen.RandomIntOtherThan(r, int(sysParams.UnbondingFee), 10000000))
+		// 4. test IsValidUnbondingTx with invalid unbonding tx (random unbonding fee in params), expect (false, ErrInvalidUnbondingTx)
+		newParams := *params
+		newParams.UnbondingFee = btcutil.Amount(bbndatagen.RandomIntOtherThan(r, int(params.UnbondingFee), 10000000))
 		unbondingTx = datagen.GenerateUnbondingTxFromStaking(t, &newParams, stakingData, stakingTx.Hash(), 0)
-		isValid, err = stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx)
+		// pass the old params
+		isValid, err = stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx, params)
 		require.ErrorIs(t, err, indexer.ErrInvalidUnbondingTx)
 		require.False(t, isValid)
 	})
