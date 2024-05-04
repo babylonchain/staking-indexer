@@ -42,7 +42,7 @@ type StoredStakingTransaction struct {
 	StakingTime        uint32
 	FinalityProviderPk *btcec.PublicKey
 	IsOverflow         bool
-	StakingValue       uint64
+	StakingValue       int64
 }
 
 type StoredUnbondingTransaction struct {
@@ -95,7 +95,7 @@ func (is *IndexerStore) AddStakingTransaction(
 	stakerPk *btcec.PublicKey,
 	stakingTime uint32,
 	fpPk *btcec.PublicKey,
-	stakingValue uint64,
+	stakingValue int64,
 	isOverflow bool,
 ) error {
 	txHash := tx.TxHash()
@@ -148,7 +148,7 @@ func (is *IndexerStore) addStakingTransaction(
 		if st.IsOverflow {
 			return nil
 		}
-		return is.incrementConfirmedTvl(tx, uint64(st.StakingValue))
+		return is.incrementConfirmedTvl(tx, st.StakingValue)
 	})
 }
 
@@ -352,7 +352,7 @@ func getConfirmedTvlKey() []byte {
 
 // incrementConfirmedTvl increments the confirmed tvl
 func (is *IndexerStore) incrementConfirmedTvl(
-	tx kvdb.RwTx, tvlIncrement uint64,
+	tx kvdb.RwTx, tvlIncrement int64,
 ) error {
 	tvlBucket := tx.ReadWriteBucket(confirmedTvlBucketName)
 	key := getConfirmedTvlKey()
@@ -361,24 +361,24 @@ func (is *IndexerStore) incrementConfirmedTvl(
 	}
 
 	currentTvl := tvlBucket.Get(key)
-	var confirmedTvl uint64
+	var confirmedTvl int64
 	if currentTvl != nil {
 		var err error
-		confirmedTvl, err = uint64FromBytes(currentTvl)
+		confirmedTvl, err = int64FromBytes(currentTvl)
 		if err != nil {
 			return err
 		}
 	}
 
 	newTvl := confirmedTvl + tvlIncrement
-	newTvlBytes := uint64ToBytes(newTvl)
+	newTvlBytes := int64ToBytes(newTvl)
 
 	return tvlBucket.Put(key, newTvlBytes)
 }
 
 // SubtractConfirmedTvl subtracts the confirmed tvl
 func (is *IndexerStore) subtractConfirmedTvl(
-	tx kvdb.RwTx, tvlSubtract uint64,
+	tx kvdb.RwTx, tvlSubtract int64,
 ) error {
 	key := getConfirmedTvlKey()
 	tvlBucket := tx.ReadWriteBucket(confirmedTvlBucketName)
@@ -391,7 +391,7 @@ func (is *IndexerStore) subtractConfirmedTvl(
 		// This should never happen, return an error
 		return ErrCorruptedStateDb
 	}
-	confirmedTvl, err := uint64FromBytes(currentTvl)
+	confirmedTvl, err := int64FromBytes(currentTvl)
 	if err != nil {
 		return err
 	}
@@ -400,17 +400,16 @@ func (is *IndexerStore) subtractConfirmedTvl(
 		return ErrNegativeTvl
 	}
 
-	newTvlBytes := uint64ToBytes(confirmedTvl - tvlSubtract)
+	newTvlBytes := int64ToBytes(confirmedTvl - tvlSubtract)
 
 	return tvlBucket.Put(key, newTvlBytes)
 }
 
 // GetConfirmedTvl returns the confirmed tvl
-func (is *IndexerStore) GetConfirmedTvl() (uint64, error) {
+func (is *IndexerStore) GetConfirmedTvl() (int64, error) {
 	key := getConfirmedTvlKey()
 
-	var confirmedTvl uint64
-
+	var confirmedTvl int64
 	err := is.db.View(func(tx kvdb.RTx) error {
 		tvlBucket := tx.ReadBucket(confirmedTvlBucketName)
 		if tvlBucket == nil {
@@ -424,7 +423,7 @@ func (is *IndexerStore) GetConfirmedTvl() (uint64, error) {
 			return nil
 		}
 
-		tvl, err := uint64FromBytes(v)
+		tvl, err := int64FromBytes(v)
 		if err != nil {
 			return err
 		}
@@ -504,4 +503,25 @@ func uint64FromBytes(b []byte) (uint64, error) {
 	}
 
 	return binary.BigEndian.Uint64(b), nil
+}
+
+func int64ToBytes(v int64) []byte {
+	buf := make([]byte, 8)
+	for i := 7; i >= 0; i-- {
+		buf[i] = byte(v)
+		v >>= 8
+	}
+	return buf
+}
+
+func int64FromBytes(buf []byte) (int64, error) {
+	if len(buf) != 8 {
+		return 0, fmt.Errorf("invalid int64 bytes length: %d", len(buf))
+	}
+	var result int64
+	for _, b := range buf {
+		result <<= 8
+		result |= int64(b)
+	}
+	return result, nil
 }

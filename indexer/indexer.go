@@ -372,13 +372,13 @@ func (si *StakingIndexer) ProcessStakingTx(
 	fpPkHex := hex.EncodeToString(stakingData.OpReturnData.FinalityProviderPublicKey.Marshall())
 
 	// Step 1: Check against global parameters such as min/max staking amount and staking time
-	validationErr := si.performStakingTxValidationCheck(params, stakingData)
+	validationErr := si.validateStakingTx(params, stakingData)
 	if validationErr != nil {
 		si.logger.Warn("failed to validate the staking tx", zap.String("message", validationErr.Message))
 		return validationErr.Err
 	}
 	// Step 2: Overflow check (staking cap)
-	isOverflow, err := si.isOverflow(uint64(params.StakingCap), uint64(stakingData.StakingOutput.Value))
+	isOverflow, err := si.isOverflow(int64(params.StakingCap), stakingData.StakingOutput.Value)
 	if err != nil {
 		return fmt.Errorf("failed to check the overflow of staking tx: %w", err)
 	}
@@ -412,7 +412,7 @@ func (si *StakingIndexer) ProcessStakingTx(
 		stakingData.OpReturnData.StakerPublicKey.PubKey,
 		uint32(stakingData.OpReturnData.StakingTime),
 		stakingData.OpReturnData.FinalityProviderPublicKey.PubKey,
-		uint64(stakingData.StakingOutput.Value),
+		stakingData.StakingOutput.Value,
 		isOverflow,
 	); err != nil {
 		return fmt.Errorf("failed to add the staking tx to store: %w", err)
@@ -593,17 +593,17 @@ func getTxHex(tx *wire.MsgTx) (string, error) {
 	return txHex, nil
 }
 
-// performStakingTxValidationCheck performs the validation checks for the staking tx
+// validateStakingTx performs the validation checks for the staking tx
 // such as min and max staking amount and staking time
-func (si *StakingIndexer) performStakingTxValidationCheck(params *types.Params, stakingData *btcstaking.ParsedV0StakingTx) *IndexerError {
+func (si *StakingIndexer) validateStakingTx(params *types.Params, stakingData *btcstaking.ParsedV0StakingTx) *IndexerError {
 	value := stakingData.StakingOutput.Value
 	// Minimum staking amount check
-	if uint64(value) < uint64(params.MinStakingAmount) {
+	if value < int64(params.MinStakingAmount) {
 		return NewIndexerError(ErrInvalidStakingTx, fmt.Sprintf("staking amount is too low: %d", value))
 	}
 
 	// Maximum staking amount check
-	if uint64(value) > uint64(params.MaxStakingAmount) {
+	if value > int64(params.MaxStakingAmount) {
 		return NewIndexerError(ErrInvalidStakingTx, fmt.Sprintf("staking amount is too high: %d", value))
 	}
 
@@ -625,7 +625,7 @@ func (si *StakingIndexer) performStakingTxValidationCheck(params *types.Params, 
 	return nil
 }
 
-func (si *StakingIndexer) isOverflow(cap uint64, stakingValue uint64) (bool, error) {
+func (si *StakingIndexer) isOverflow(cap int64, stakingValue int64) (bool, error) {
 	confirmedTvl, err := si.is.GetConfirmedTvl()
 	if err != nil {
 		return false, fmt.Errorf("failed to get the confirmed TVL: %w", err)

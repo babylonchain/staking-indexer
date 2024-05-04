@@ -281,7 +281,6 @@ func FuzzTestOverflow(f *testing.F) {
 		}
 
 		// let's send more staking txs until the staking cap is exceeded again
-		var stakingTxData2 []StakingTxData
 		for {
 			stakingData := datagen.GenerateTestStakingData(t, r, params)
 			_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, params, stakingData)
@@ -294,11 +293,6 @@ func FuzzTestOverflow(f *testing.F) {
 			require.NoError(t, err)
 			storedStakingTx, err := stakingIndexer.GetStakingTxByHash(stakingTx.Hash())
 			require.NoError(t, err)
-
-			stakingTxData2 = append(stakingTxData2, StakingTxData{
-				StakingTx:   stakingTx,
-				StakingData: stakingData,
-			})
 
 			if tvl+btcutil.Amount(storedStakingTx.StakingValue) > params.StakingCap {
 				require.Equal(t, true, storedStakingTx.IsOverflow)
