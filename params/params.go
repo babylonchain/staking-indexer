@@ -1,12 +1,12 @@
 package params
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/babylonchain/babylon/btcstaking"
-	bbntypes "github.com/babylonchain/babylon/types"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 
@@ -69,13 +69,9 @@ func NewLocalParamsRetriever(filePath string) (*LocalParamsRetriever, error) {
 			return nil, fmt.Errorf("covenant quorum cannot be more than the amount of covenants")
 		}
 
-		covPks := make([]*btcec.PublicKey, len(p.CovenantPks))
-		for i, covPk := range p.CovenantPks {
-			pk, err := bbntypes.NewBIP340PubKeyFromHex(covPk)
-			if err != nil {
-				return nil, fmt.Errorf("invalid covenant public key %s: %w", covPk, err)
-			}
-			covPks[i] = pk.MustToBTCPK()
+		covPks, err := GetCovenantPksFromStrings(p.CovenantPks)
+		if err != nil {
+			return nil, err
 		}
 
 		if p.MaxStakingAmount <= p.MinStakingAmount {
@@ -128,4 +124,23 @@ func NewLocalParamsRetriever(filePath string) (*LocalParamsRetriever, error) {
 
 func (lp *LocalParamsRetriever) GetParamsVersions() *types.ParamsVersions {
 	return lp.paramsVersions
+}
+
+// GetCovenantPksFromStrings parses BTC public keys in 33 bytes
+func GetCovenantPksFromStrings(covPks []string) ([]*btcec.PublicKey, error) {
+	pks := make([]*btcec.PublicKey, len(covPks))
+	for i, pkStr := range covPks {
+		pkBytes, err := hex.DecodeString(pkStr)
+		if err != nil {
+			return nil, err
+		}
+
+		pk, err := btcec.ParsePubKey(pkBytes)
+		if err != nil {
+			return nil, err
+		}
+
+		pks[i] = pk
+	}
+	return pks, nil
 }
