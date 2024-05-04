@@ -1,6 +1,7 @@
 package params_test
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"math/rand"
 	"os"
@@ -8,7 +9,6 @@ import (
 	"testing"
 
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
-	bbntypes "github.com/babylonchain/babylon/types"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/stretchr/testify/require"
 
@@ -86,7 +86,7 @@ func paramsToInternalParams(pv *types.ParamsVersions) *internalParamsVersions {
 	for _, p := range pv.ParamsVersions {
 		covPksHex := make([]string, len(p.CovenantPks))
 		for i, pk := range p.CovenantPks {
-			covPksHex[i] = bbntypes.NewBIP340PubKeyFromBTCPK(pk).MarshalHex()
+			covPksHex[i] = hex.EncodeToString(pk.SerializeCompressed())
 		}
 
 		paramsVersions.ParamsVersions = append(paramsVersions.ParamsVersions, &internalParams{
