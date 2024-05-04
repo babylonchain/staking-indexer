@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/lightningnetwork/lnd/kvdb"
@@ -65,6 +66,17 @@ func (cfg *DBConfig) DBConfigToBoltBackenCondfig() *kvdb.BoltBackendConfig {
 		AutoCompactMinAge: cfg.AutoCompactMinAge,
 		DBTimeout:         cfg.DBTimeout,
 	}
+}
+
+func (cfg *DBConfig) Validate() error {
+	if cfg.DBPath == "" {
+		return fmt.Errorf("DB path cannot be empty")
+	}
+
+	if cfg.DBFileName == "" {
+		return fmt.Errorf("DB file name cannot be empty")
+	}
+	return nil
 }
 
 func (cfg *DBConfig) GetDbBackend() (kvdb.Backend, error) {
