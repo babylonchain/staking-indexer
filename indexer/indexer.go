@@ -374,7 +374,6 @@ func (si *StakingIndexer) ProcessStakingTx(
 	// Step 1: Check against global parameters such as min/max staking amount and staking time
 	validationErr := si.validateStakingTx(params, stakingData)
 	if validationErr != nil {
-		si.logger.Warn("failed to validate the staking tx", zap.Error(validationErr))
 		return validationErr
 	}
 	// Step 2: Overflow check (staking cap)
