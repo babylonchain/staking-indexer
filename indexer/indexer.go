@@ -374,8 +374,8 @@ func (si *StakingIndexer) ProcessStakingTx(
 	// Step 1: Check against global parameters such as min/max staking amount and staking time
 	validationErr := si.validateStakingTx(params, stakingData)
 	if validationErr != nil {
-		si.logger.Warn("failed to validate the staking tx", zap.String("message", validationErr.Message))
-		return validationErr.Err
+		si.logger.Warn("failed to validate the staking tx", zap.Error(validationErr))
+		return validationErr
 	}
 	// Step 2: Overflow check (staking cap)
 	isOverflow, err := si.isOverflow(int64(params.StakingCap), stakingData.StakingOutput.Value)
@@ -595,32 +595,30 @@ func getTxHex(tx *wire.MsgTx) (string, error) {
 
 // validateStakingTx performs the validation checks for the staking tx
 // such as min and max staking amount and staking time
-func (si *StakingIndexer) validateStakingTx(params *types.Params, stakingData *btcstaking.ParsedV0StakingTx) *IndexerError {
+func (si *StakingIndexer) validateStakingTx(params *types.Params, stakingData *btcstaking.ParsedV0StakingTx) error {
 	value := stakingData.StakingOutput.Value
 	// Minimum staking amount check
 	if value < int64(params.MinStakingAmount) {
-		return NewIndexerError(ErrInvalidStakingTx, fmt.Sprintf("staking amount is too low: %d", value))
+		return fmt.Errorf("%w: staking amount is too low, expected: %v, got: %v",
+			ErrInvalidStakingTx, params.MinStakingAmount, value)
 	}
 
 	// Maximum staking amount check
 	if value > int64(params.MaxStakingAmount) {
-		return NewIndexerError(ErrInvalidStakingTx, fmt.Sprintf("staking amount is too high: %d", value))
+		return fmt.Errorf("%w: staking amount is too high, expected: %v, got: %v",
+			ErrInvalidStakingTx, params.MaxStakingAmount, value)
 	}
 
 	// Maximum staking time check
 	if uint64(stakingData.OpReturnData.StakingTime) > uint64(params.MaxStakingTime) {
-		return NewIndexerError(
-			ErrInvalidStakingTx,
-			fmt.Sprintf("staking time is too high: %d", stakingData.OpReturnData.StakingTime),
-		)
+		return fmt.Errorf("%w: staking time is too high, expected: %v, got: %v",
+			ErrInvalidStakingTx, params.MaxStakingTime, stakingData.OpReturnData.StakingTime)
 	}
 
 	// Minimum staking time check
 	if uint64(stakingData.OpReturnData.StakingTime) < uint64(params.MinStakingTime) {
-		return NewIndexerError(
-			ErrInvalidStakingTx,
-			fmt.Sprintf("staking time is too low: %d", stakingData.OpReturnData.StakingTime),
-		)
+		return fmt.Errorf("%w: staking time is too low, expected: %v, got: %v",
+			ErrInvalidStakingTx, params.MinStakingTime, stakingData.OpReturnData.StakingTime)
 	}
 	return nil
 }

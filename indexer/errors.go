@@ -12,16 +12,3 @@ var (
 	// ErrInvalidStakingTx the stake transaction is invalid as it does not follow the global parameters
 	ErrInvalidStakingTx = errors.New("invalid staking tx")
 )
-
-type IndexerError struct {
-	Err     error
-	Message string
-}
-
-// NewIndexerError creates a new IndexerError
-func NewIndexerError(err error, message string) *IndexerError {
-	return &IndexerError{
-		Err:     err,
-		Message: message,
-	}
-}
