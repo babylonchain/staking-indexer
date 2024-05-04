@@ -50,7 +50,8 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 
 		// These parameters should be monotonically increasing
 		// The staking cap should be more than the maximum staking amount
-		stakingCap := btcutil.Amount(r.Int63n(1000000)) + maxStakingAmount + lastStakingCap
+		stakingCap := btcutil.Amount(r.Int63n(1000000)) +
+			btcutil.Amount(r.Int63n(100000)) + maxStakingAmount + lastStakingCap
 		lastStakingCap = stakingCap
 		activationHeight := int32(r.Intn(1000)) + lastActivationHeight + 1
 		lastActivationHeight = activationHeight

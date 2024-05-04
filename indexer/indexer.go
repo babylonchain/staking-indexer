@@ -637,3 +637,7 @@ func (si *StakingIndexer) isOverflow(cap int64, stakingValue int64) (bool, error
 
 	return false, nil
 }
+
+func (si *StakingIndexer) GetConfirmedTvl() (int64, error) {
+	return si.is.GetConfirmedTvl()
+}
