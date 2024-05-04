@@ -53,7 +53,7 @@ func FuzzStoringTxs(f *testing.F) {
 				storedTx.StakingTime,
 				storedTx.FinalityProviderPk,
 				storedTx.StakingValue,
-				storedTx.EligibilityStatus,
+				storedTx.IsOverflow,
 			)
 			require.NoError(t, err)
 		}

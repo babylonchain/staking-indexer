@@ -13,7 +13,6 @@ import (
 	pm "google.golang.org/protobuf/proto"
 
 	"github.com/babylonchain/staking-indexer/proto"
-	"github.com/babylonchain/staking-indexer/types"
 	"github.com/babylonchain/staking-indexer/utils"
 )
 
@@ -42,7 +41,7 @@ type StoredStakingTransaction struct {
 	StakerPk           *btcec.PublicKey
 	StakingTime        uint32
 	FinalityProviderPk *btcec.PublicKey
-	EligibilityStatus  types.EligibilityStatus
+	IsOverflow         bool
 	StakingValue       uint64
 }
 
@@ -97,7 +96,7 @@ func (is *IndexerStore) AddStakingTransaction(
 	stakingTime uint32,
 	fpPk *btcec.PublicKey,
 	stakingValue uint64,
-	status types.EligibilityStatus,
+	isOverflow bool,
 ) error {
 	txHash := tx.TxHash()
 	serializedTx, err := utils.SerializeBtcTransaction(tx)
@@ -113,7 +112,7 @@ func (is *IndexerStore) AddStakingTransaction(
 		StakingTime:        stakingTime,
 		StakerPk:           schnorr.SerializePubKey(stakerPk),
 		FinalityProviderPk: schnorr.SerializePubKey(fpPk),
-		EligibilityStatus:  status.ToString(),
+		IsOverflow:         isOverflow,
 		StakingValue:       stakingValue,
 	}
 
@@ -145,8 +144,11 @@ func (is *IndexerStore) addStakingTransaction(
 			return err
 		}
 
-		return is.incrementConfirmedTvl(tx, st.EligibilityStatus, uint64(st.StakingValue))
-
+		// if the staking tx is an overflow, we don't increment the confirmed tvl
+		if st.IsOverflow {
+			return nil
+		}
+		return is.incrementConfirmedTvl(tx, uint64(st.StakingValue))
 	})
 }
 
@@ -203,11 +205,6 @@ func protoStakingTxToStoredStakingTx(protoTx *proto.StakingTransaction) (*Stored
 		return nil, fmt.Errorf("invalid finality provider pk: %w", err)
 	}
 
-	status, err := types.EligibilityStatusFromString(protoTx.EligibilityStatus)
-	if err != nil {
-		return nil, fmt.Errorf("invalid eligibility status: %w", err)
-	}
-
 	return &StoredStakingTransaction{
 		Tx:                 &stakingTx,
 		StakingOutputIdx:   protoTx.StakingOutputIdx,
@@ -215,7 +212,7 @@ func protoStakingTxToStoredStakingTx(protoTx *proto.StakingTransaction) (*Stored
 		StakerPk:           stakerPk,
 		StakingTime:        protoTx.StakingTime,
 		FinalityProviderPk: fpPk,
-		EligibilityStatus:  status,
+		IsOverflow:         protoTx.IsOverflow,
 		StakingValue:       protoTx.StakingValue,
 	}, nil
 }
@@ -283,8 +280,14 @@ func (is *IndexerStore) addUnbondingTransaction(
 			return err
 		}
 
+		// if the staking tx is an overflow, we don't decrement the confirmed tvl
+		// as it was never added
+		if storedTxProto.IsOverflow {
+			return nil
+		}
+
 		return is.subtractConfirmedTvl(
-			tx, storedTxProto.EligibilityStatus, storedTxProto.StakingValue,
+			tx, storedTxProto.StakingValue,
 		)
 	})
 }
@@ -349,12 +352,8 @@ func getConfirmedTvlKey() []byte {
 
 // incrementConfirmedTvl increments the confirmed tvl
 func (is *IndexerStore) incrementConfirmedTvl(
-	tx kvdb.RwTx, status string, tvlIncrement uint64,
+	tx kvdb.RwTx, tvlIncrement uint64,
 ) error {
-	// we only increment the confirmed tvl if the status is active
-	if status != types.EligibilityStatusActive.ToString() {
-		return nil
-	}
 	tvlBucket := tx.ReadWriteBucket(confirmedTvlBucketName)
 	key := getConfirmedTvlKey()
 	if tvlBucket == nil {
@@ -379,12 +378,8 @@ func (is *IndexerStore) incrementConfirmedTvl(
 
 // SubtractConfirmedTvl subtracts the confirmed tvl
 func (is *IndexerStore) subtractConfirmedTvl(
-	tx kvdb.RwTx, status string, tvlSubtract uint64,
+	tx kvdb.RwTx, tvlSubtract uint64,
 ) error {
-	// we only substract the confirmed tvl if the staking tx status is active
-	if status != types.EligibilityStatusActive.ToString() {
-		return nil
-	}
 	key := getConfirmedTvlKey()
 	tvlBucket := tx.ReadWriteBucket(confirmedTvlBucketName)
 	if tvlBucket == nil {
@@ -399,6 +394,10 @@ func (is *IndexerStore) subtractConfirmedTvl(
 	confirmedTvl, err := uint64FromBytes(currentTvl)
 	if err != nil {
 		return err
+	}
+
+	if tvlSubtract > confirmedTvl {
+		return ErrNegativeTvl
 	}
 
 	newTvlBytes := uint64ToBytes(confirmedTvl - tvlSubtract)

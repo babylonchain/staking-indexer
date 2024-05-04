@@ -163,15 +163,8 @@ func genStoredStakingTx(t *testing.T, r *rand.Rand, maxStakingTime uint16, inclu
 		StakerPk:           stakerPrivKey.PubKey(),
 		InclusionHeight:    inclusionHeight,
 		StakingValue:       stakingValue,
-		EligibilityStatus:  getRandomEligibilityStatus(r),
+		IsOverflow:         r.Intn(2) == 0,
 	}
-}
-
-func getRandomEligibilityStatus(r *rand.Rand) types.EligibilityStatus {
-	if r.Intn(2) == 0 { // Generates either 0 or 1
-		return types.EligibilityStatusInactive
-	}
-	return types.EligibilityStatusActive
 }
 
 func genStoredUnbondingTx(r *rand.Rand, stakingTxHash *chainhash.Hash) *indexerstore.StoredUnbondingTransaction {

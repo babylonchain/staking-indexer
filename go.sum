@@ -279,10 +279,17 @@ github.com/aws/aws-sdk-go v1.44.122/go.mod h1:y4AeaBuwd2Lk+GepC1E9v0qOiTws0MIWAX
 github.com/aws/aws-sdk-go v1.44.312 h1:llrElfzeqG/YOLFFKjg1xNpZCFJ2xraIi3PqSuP+95k=
 github.com/aws/aws-sdk-go v1.44.312/go.mod h1:aVsgQcEevwlmQ7qHE9I3h+dtQgpqhFB+i8Phjh7fkwI=
 github.com/aws/aws-sdk-go-v2 v0.18.0/go.mod h1:JWVYvqSMppoMJC0x5wdwiImzgXTI9FuZwxzkQq9wy+g=
+<<<<<<< HEAD
 github.com/babylonchain/babylon v0.8.6-0.20240426101001-7778c798e236 h1:Ydna4VcP56xu1+zdgygqHdSCeMduZjuznVhr4exO5do=
 github.com/babylonchain/babylon v0.8.6-0.20240426101001-7778c798e236/go.mod h1:lfeASLNJgcUsX7LEns3HRUv0k+MjzcB2q2AMasfz38M=
 github.com/babylonchain/staking-queue-client v0.0.0-20240504141431-2907206a6a67 h1:u1cF2CfZvdaNztpuFxelNSMQri3QJ2WT36WBEobPVQE=
 github.com/babylonchain/staking-queue-client v0.0.0-20240504141431-2907206a6a67/go.mod h1:mEgA6N3SnwFwGEOsUYr/HdjpKa13Wck08MS7VY/Icvo=
+=======
+github.com/babylonchain/babylon v0.8.6-0.20240319122043-bc4943f41c79 h1:YKSkDbW4xULKxO+ukea8nxk2/EyZWeAhugcRnk9uwT4=
+github.com/babylonchain/babylon v0.8.6-0.20240319122043-bc4943f41c79/go.mod h1:jR1b+5mA7BkRrXfd/PMHwk7W/RpoeQtunvjal+tKeHY=
+github.com/babylonchain/staking-queue-client v0.0.0-20240504041303-e2834e89547e h1:6R01BHAsZzVxhLGKtQy///utliVnUB2bgzp6GkpRCks=
+github.com/babylonchain/staking-queue-client v0.0.0-20240504041303-e2834e89547e/go.mod h1:mEgA6N3SnwFwGEOsUYr/HdjpKa13Wck08MS7VY/Icvo=
+>>>>>>> 7d04c6c (rename the staking cap calculation field to isOverflow and other review comments update)
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+CedLV8=

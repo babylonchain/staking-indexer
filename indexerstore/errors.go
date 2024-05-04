@@ -18,9 +18,6 @@ var (
 	// ErrLastProcessedHeightNotFound the last processed height is not found in db
 	ErrLastProcessedHeightNotFound = errors.New("last processed height not found")
 
-	// ErrConfirmedTvlNotFound the confirmed tvl is not found in db
-	ErrConfirmedTvlNotFound = errors.New("confirmed tvl not found")
-
 	// ErrNegativeTvl the tvl is negative
 	ErrNegativeTvl = errors.New("negative tvl")
 )
