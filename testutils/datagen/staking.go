@@ -1,7 +1,6 @@
 package datagen
 
 import (
-	"math"
 	"math/rand"
 	"testing"
 
@@ -28,6 +27,7 @@ type TestStakingData struct {
 func GenerateTestStakingData(
 	t *testing.T,
 	r *rand.Rand,
+	params *types.Params,
 ) *TestStakingData {
 	stakerPrivKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
@@ -35,8 +35,8 @@ func GenerateTestStakingData(
 	fpPrivKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
 
-	stakingAmount := btcutil.Amount(r.Int63n(1000000000) + 10000)
-	stakingTime := uint16(r.Int31n(math.MaxUint16-1) + 1)
+	stakingAmount := btcutil.Amount(r.Int63n(int64(params.MaxStakingAmount-params.MinStakingAmount)) + int64(params.MinStakingAmount) + 1)
+	stakingTime := uint16(r.Int31n(65535) + 1)
 
 	return &TestStakingData{
 		StakerKey:           stakerPrivKey.PubKey(),
