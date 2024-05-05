@@ -197,20 +197,30 @@ func getParams(t *testing.T, homepath string) *types.Params {
 
 func TestStakingParser(t *testing.T) {
 	p := getParams(t, "./test-params.json")
-	txHex := "02000000000101d9994153032fee252fe4f50f3954ec7131c74582aa4d5bdf072a0db26cdbc8280000000000ffffffff0330750000000000002251206407e8e16d9310c049a12da7db9563c704e0e3e780862e79ef6948733452a0ca0000000000000000496a4762627434004a897d051130f15eacab4bfcc681032246c77cd56a263538ee35b4d9173b2a9603d5a0bb72d71993e435d6c5a70e2aa4db500a62cfaae33c56050deefee64ec000fae0160400000000002251208b41b0129693efa21c9389a04373d2dc2d522aa641600a66c98e7ac4f65b04e00140abc2ed8240b02d78275a879a92e55642ce214e25dacede4b07b904f78da25fe91bfe3c6f50b0f4ad93579ac52109fcae1520841a21e557c1230e272bd46ab5b100000000"
+	txHex := "02000000000101c1d6c571ead8f0fc93e9f50204dedd69ac17279c4c73a7ea442a59f81258f9c40200000000ffffffff033075000000000000225120ac69613ce0601f45636d10a7cc6210ad2cf49eda657c95e88b217d002e21b6940000000000000000496a4762627434004a897d051130f15eacab4bfcc681032246c77cd56a263538ee35b4d9173b2a9603d5a0bb72d71993e435d6c5a70e2aa4db500a62cfaae33c56050deefee64ec000c886e69b16000000002251208b41b0129693efa21c9389a04373d2dc2d522aa641600a66c98e7ac4f65b04e001403369401ad6174bd867536f1681e936617495a390d4dba94e1a37556e3a3aee65c1421b8e7da44085399a89e8ae898e894fc8f2cedec1d857249bc146c470d64100000000"
 	txBytes, err := hex.DecodeString(txHex)
 	require.NoError(t, err)
 	var stakingTx wire.MsgTx
 	err = stakingTx.Deserialize(bytes.NewReader(txBytes))
 	require.NoError(t, err)
-	parsedData, err := btcstaking.ParseV0StakingTx(
+	parsedData, err := btcstaking.NewV0OpReturnDataFromTxOutput(stakingTx.TxOut[1])
+	_, err = btcstaking.ParseV0StakingTx(
 		&stakingTx,
 		p.Tag,
 		p.CovenantPks,
 		p.CovenantQuorum,
 		&chaincfg.SigNetParams)
 	require.NoError(t, err)
-	t.Logf("parsed data: %d", parsedData.OpReturnData.StakingTime)
+	t.Logf("staker public key: %s", hex.EncodeToString(parsedData.StakerPublicKey.Marshall()))
+	t.Logf("finality provider public key: %s", hex.EncodeToString(parsedData.FinalityProviderPublicKey.Marshall()))
+	t.Logf("staking time: %v", parsedData.StakingTime)
+	t.Logf("staking value: %v", stakingTx.TxOut[0].Value)
+	var covenantPks []string
+	for _, pk := range p.CovenantPks {
+		covenantPks = append(covenantPks, hex.EncodeToString(pk.SerializeCompressed()))
+	}
+	t.Logf("covenant pks: %v", covenantPks)
+	t.Logf("covenant quorum: %v", p.CovenantQuorum)
 }
 
 func getParsedStakingData(data *datagen.TestStakingData, tx *wire.MsgTx, params *types.Params) *btcstaking.ParsedV0StakingTx {
