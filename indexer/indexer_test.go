@@ -140,7 +140,7 @@ func FuzzGetStartHeight(f *testing.F) {
 		cfg := config.DefaultConfigWithHome(homePath)
 
 		confirmedBlockChan := make(chan *types.IndexedBlock)
-		sysParams := datagen.GenerateGlobalParams(r, t)
+		sysParams := datagen.GenerateGlobalParamsVersions(r, t)
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
@@ -154,7 +154,7 @@ func FuzzGetStartHeight(f *testing.F) {
 		err = stakingIndexer.ValidateStartHeight(initialHeight)
 		require.NoError(t, err)
 
-		err = stakingIndexer.Start(1)
+		err = stakingIndexer.Start(initialHeight)
 		require.NoError(t, err)
 		defer func() {
 			err := stakingIndexer.Stop()

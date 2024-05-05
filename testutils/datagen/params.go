@@ -52,7 +52,12 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 		// The staking cap should be more than the maximum staking amount
 		stakingCap := btcutil.Amount(r.Int63n(1000000)) + maxStakingAmount + lastStakingCap
 		lastStakingCap = stakingCap
-		activationHeight := int32(r.Intn(1000)) + lastActivationHeight + 1
+		var activationHeight int32
+		if version == 0 {
+			activationHeight = 1
+		} else {
+			activationHeight = int32(r.Intn(1000)) + lastActivationHeight + 1
+		}
 		lastActivationHeight = activationHeight
 		paramsVersions.ParamsVersions = append(paramsVersions.ParamsVersions, &types.Params{
 			Version:          version,
