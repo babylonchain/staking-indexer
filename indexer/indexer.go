@@ -151,8 +151,8 @@ func (si *StakingIndexer) confirmedBlocksLoop() {
 	}
 }
 
-// HandleConfirmedBlock iterates all the tx set in the block and
-// parse staking tx, unbonding tx, and withdrawal tx if there are any
+// HandleConfirmedBlock iterates through the tx set of a confirmed block and
+// parse the staking, unbonding, and withdrawal txs if there are any.
 func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 	params, err := si.paramsVersions.GetParamsForBTCHeight(b.Height)
 	if err != nil {

@@ -50,23 +50,25 @@ type TestScenario struct {
 	StakingEvents   []*StakingEvent
 	UnbondingEvents []*UnbondingEvent
 	Blocks          []*types.IndexedBlock
-	Tvl             btcutil.Amount
+	TvlToHeight     map[int32]btcutil.Amount
 }
 
 // NewTestScenario creates a scenario where staking txs and unbonding txs are
-// randomly distributed across blocks a tx has 80% chance to be a staking tx
-// while the rest to be an unbonding tx, n is the number of staking txs and
-// unbonding txs
-func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *types.ParamsVersions, n int) *TestScenario {
+// randomly distributed across blocks. A tx has a given chance (stakingChance/100)
+// to be a staking tx while the rest to be an unbonding tx, n is the number of
+// staking txs and unbonding txs
+func NewTestScenario(r *rand.Rand, t *testing.T, stakingChance int, numEvents int) *TestScenario {
+	versionedParams := datagen.GenerateGlobalParamsVersions(r, t)
 	startHeight := r.Int31n(1000) + 1 + versionedParams.ParamsVersions[0].ActivationHeight
 	lastEventHeight := startHeight
 	stakingEvents := make([]*StakingEvent, 0)
 	unbondingEvents := make([]*UnbondingEvent, 0)
 	tvl := btcutil.Amount(0)
 	txsPerHeight := make(map[int32][]*btcutil.Tx)
+	tvlToHeight := make(map[int32]btcutil.Amount)
 
-	// create n events
-	for i := 0; i < n; i++ {
+	// create numEvents events
+	for i := 0; i < numEvents; i++ {
 		// randomly select a height at which the event should be happening
 		height := lastEventHeight + r.Int31n(3)
 		p, err := versionedParams.GetParamsForBTCHeight(height)
@@ -77,9 +79,9 @@ func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *types.ParamsVe
 			txs = make([]*btcutil.Tx, 0)
 		}
 
-		// 80% chance to be a staking event, or there are no active staking events created
-		// else to be an unbonding event
-		if r.Intn(10) >= 2 || !hasActiveStakingEvent(stakingEvents) {
+		// stakingChance/100 chance to be a staking event, or there are
+		// no active staking events created, otherwise, to be an unbonding event
+		if r.Intn(100) < stakingChance || !hasActiveStakingEvent(stakingEvents) {
 			stakingEvent := buildStakingEvent(r, t, height, p)
 			if stakingEvent.StakingTxData.StakingAmount+tvl > p.StakingCap {
 				stakingEvent.IsOverflow = true
@@ -105,6 +107,7 @@ func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *types.ParamsVe
 		}
 
 		txsPerHeight[height] = txs
+		tvlToHeight[height] = tvl
 		lastEventHeight = height
 	}
 
@@ -116,6 +119,9 @@ func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *types.ParamsVe
 			Txs:    txsPerHeight[h],
 		}
 		blocks = append(blocks, block)
+		if h != startHeight && tvlToHeight[h] == 0 {
+			tvlToHeight[h] = tvlToHeight[h-1]
+		}
 	}
 
 	return &TestScenario{
@@ -123,7 +129,7 @@ func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *types.ParamsVe
 		StakingEvents:   stakingEvents,
 		UnbondingEvents: unbondingEvents,
 		Blocks:          blocks,
-		Tvl:             tvl,
+		TvlToHeight:     tvlToHeight,
 	}
 }
 
@@ -187,7 +193,9 @@ func FuzzBlockHandler(f *testing.F) {
 		cfg := config.DefaultConfigWithHome(homePath)
 
 		confirmedBlockChan := make(chan *types.IndexedBlock)
-		sysParamsVersions := datagen.GenerateGlobalParamsVersions(r, t)
+		n := r.Intn(1000) + 1
+		testScenario := NewTestScenario(r, t, 80, n)
+		sysParamsVersions := testScenario.VersionedParams
 		cfg.BTCScannerConfig.BaseHeight = uint64(sysParamsVersions.ParamsVersions[0].ActivationHeight)
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
@@ -201,16 +209,13 @@ func FuzzBlockHandler(f *testing.F) {
 			require.NoError(t, err)
 		}()
 
-		n := r.Intn(1000) + 1
-		testScenario := NewTestScenario(r, t, sysParamsVersions, n)
 		for _, b := range testScenario.Blocks {
 			err := stakingIndexer.HandleConfirmedBlock(b)
 			require.NoError(t, err)
+			tvl, err := stakingIndexer.GetConfirmedTvl()
+			require.NoError(t, err)
+			require.Equal(t, uint64(testScenario.TvlToHeight[b.Height]), tvl)
 		}
-
-		tvl, err := stakingIndexer.GetConfirmedTvl()
-		require.NoError(t, err)
-		require.Equal(t, uint64(testScenario.Tvl), tvl)
 
 		for _, stakingEv := range testScenario.StakingEvents {
 			storedTx, err := stakingIndexer.GetStakingTxByHash(stakingEv.StakingTx.Hash())
