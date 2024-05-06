@@ -112,7 +112,7 @@ func (si *StakingIndexer) ValidateStartHeight(startHeight uint64) error {
 		return fmt.Errorf("the database is empty, the start height should be equal to the base height %d", baseHeight)
 	}
 
-	if startHeight > lastProcessedHeight+1 {
+	if lastProcessedHeight != 0 && startHeight > lastProcessedHeight+1 {
 		return fmt.Errorf("the start height should not be higher than %d (the last processed height + 1)", lastProcessedHeight+1)
 	}
 

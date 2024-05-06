@@ -148,6 +148,7 @@ func FuzzGetStartHeight(f *testing.F) {
 
 		confirmedBlockChan := make(chan *types.IndexedBlock)
 		sysParams := datagen.GenerateGlobalParamsVersions(r, t)
+		cfg.BTCScannerConfig.BaseHeight = uint64(sysParams.ParamsVersions[0].ActivationHeight)
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
