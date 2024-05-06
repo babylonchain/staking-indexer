@@ -15,9 +15,9 @@ The indexer performs the following steps to process transactions:
    stored in the database. 
    1. If a spending transaction is found, check whether it is a valid unbonding 
       transaction. The definition of an unbonding transaction and validation 
-      details can be found in [the unbonding tx spec](./doc/unbonding_tx.md).
+      details can be found in [the unbonding tx spec](/doc/unbonding_tx.md).
       1. If a valid unbonding transaction is found, emit `UnbondingEvent` and 
-         persist the unbonding transaction data in the database.  This happens
+         persist the unbonding transaction data in the database. This happens
          for both active and overflow staking transactions.
       2. If the transaction is found to unlock the unbonding path but does 
          not pass the validation, an alarm will be raised as this indicates 

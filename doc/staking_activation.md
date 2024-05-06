@@ -79,7 +79,7 @@ verifications:
 If all the conditions are valid, the staking transaction is removed from the
 active staking transactions set. This effectivelly means, that if the staking cap
 had previously been filled, now there is space for new staking transactions.
-These staking transactions, need to come later than the unbonding transaction.
+These staking transactions need to come later than the unbonding transaction.
 
 ### Naturally Expiring Transactions
 
