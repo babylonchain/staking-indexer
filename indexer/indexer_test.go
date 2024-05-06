@@ -129,6 +129,86 @@ func FuzzIndexer(f *testing.F) {
 	})
 }
 
+func FuzzGetStartHeight(f *testing.F) {
+	// use small seed because db open/close is slow
+	bbndatagen.AddRandomSeedsToFuzzer(f, 6)
+
+	f.Fuzz(func(t *testing.T, seed int64) {
+		r := rand.New(rand.NewSource(seed))
+
+		homePath := filepath.Join(t.TempDir(), "indexer")
+		cfg := config.DefaultConfigWithHome(homePath)
+
+		confirmedBlockChan := make(chan *types.IndexedBlock)
+		sysParams := datagen.GenerateGlobalParamsVersions(r, t)
+
+		db, err := cfg.DatabaseConfig.GetDbBackend()
+		require.NoError(t, err)
+		mockBtcScanner := NewMockedBtcScanner(t, confirmedBlockChan)
+		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParams, mockBtcScanner)
+		require.NoError(t, err)
+
+		// 1. no blocks have been processed, the start height should be equal to the base height
+		initialHeight := stakingIndexer.GetStartHeight()
+		require.Equal(t, cfg.BTCScannerConfig.BaseHeight, initialHeight)
+		err = stakingIndexer.ValidateStartHeight(initialHeight)
+		require.NoError(t, err)
+
+		err = stakingIndexer.ValidateStartHeight(bbndatagen.RandomIntOtherThan(r, int(initialHeight), 100))
+		require.Error(t, err)
+
+		err = stakingIndexer.Start(initialHeight)
+		require.NoError(t, err)
+		defer func() {
+			err := stakingIndexer.Stop()
+			require.NoError(t, err)
+			err = db.Close()
+			require.NoError(t, err)
+		}()
+
+		// 2. generate some blocks and let the last processed height grow
+		numBlocks := r.Intn(10) + 1
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < numBlocks; i++ {
+				b := &types.IndexedBlock{
+					Height: int32(initialHeight) + int32(i),
+				}
+				confirmedBlockChan <- b
+			}
+		}()
+		wg.Wait()
+
+		// wait for db writes finished
+		time.Sleep(2 * time.Second)
+
+		// get start height from the indexer again, it should be equal to
+		// the last processed height (initialHeight + numBlocks - 1) + 1
+		startHeight := stakingIndexer.GetStartHeight()
+		require.Equal(t, initialHeight+uint64(numBlocks), startHeight)
+		err = stakingIndexer.ValidateStartHeight(startHeight)
+		require.NoError(t, err)
+
+		// 3. test the case where the start height is between [base height, last processed height + 1]
+		gap := int(startHeight - initialHeight)
+		validStartHeight := initialHeight + uint64(r.Intn(gap)) + 1
+		err = stakingIndexer.ValidateStartHeight(validStartHeight)
+		require.NoError(t, err)
+
+		// 4. test the case where the start height is less than the base height
+		smallHeight := uint64(r.Intn(int(initialHeight)))
+		err = stakingIndexer.ValidateStartHeight(smallHeight)
+		require.Error(t, err)
+
+		// 5. test the case where the start height is more than the last processed height + 1
+		bigHeight := uint64(r.Intn(1000)) + 1 + startHeight
+		err = stakingIndexer.ValidateStartHeight(bigHeight)
+		require.Error(t, err)
+	})
+}
+
 // FuzzVerifyUnbondingTx tests IsValidUnbondingTx in three scenarios:
 // 1. it returns (true, nil) if the given tx is valid unbonding tx
 // 2. it returns (false, nil) if the given tx is not unbonding tx

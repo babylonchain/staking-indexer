@@ -34,7 +34,7 @@ var startCommand = cli.Command{
 			Usage: "The path to the staking indexer home directory",
 			Value: config.DefaultHomeDir,
 		},
-		cli.StringFlag{
+		cli.Uint64Flag{
 			Name:  startHeightFlag,
 			Usage: "The BTC height that the staking indexer starts from",
 		},
@@ -109,6 +109,14 @@ func start(ctx *cli.Context) error {
 		return fmt.Errorf("failed to initialize the staking indexer app: %w", err)
 	}
 
+	// get start height
+	var startHeight uint64
+	if ctx.IsSet(startHeightFlag) {
+		startHeight = ctx.Uint64(startHeightFlag)
+	} else {
+		startHeight = si.GetStartHeight()
+	}
+
 	// hook interceptor for os signals
 	shutdownInterceptor, err := signal.Intercept()
 	if err != nil {
@@ -116,7 +124,6 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create the server
-	startHeight := ctx.Uint64(startHeightFlag)
 	indexerServer := service.NewStakingIndexerServer(cfg, queueConsumer, dbBackend, btcNotifier, si, logger, shutdownInterceptor)
 
 	// run all the services until shutdown
