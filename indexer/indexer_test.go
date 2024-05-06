@@ -131,7 +131,7 @@ func FuzzIndexer(f *testing.F) {
 
 func FuzzGetStartHeight(f *testing.F) {
 	// use small seed because db open/close is slow
-	bbndatagen.AddRandomSeedsToFuzzer(f, 3)
+	bbndatagen.AddRandomSeedsToFuzzer(f, 6)
 
 	f.Fuzz(func(t *testing.T, seed int64) {
 		r := rand.New(rand.NewSource(seed))
@@ -153,6 +153,9 @@ func FuzzGetStartHeight(f *testing.F) {
 		require.Equal(t, cfg.BTCScannerConfig.BaseHeight, initialHeight)
 		err = stakingIndexer.ValidateStartHeight(initialHeight)
 		require.NoError(t, err)
+
+		err = stakingIndexer.ValidateStartHeight(bbndatagen.RandomIntOtherThan(r, int(initialHeight), 100))
+		require.Error(t, err)
 
 		err = stakingIndexer.Start(initialHeight)
 		require.NoError(t, err)

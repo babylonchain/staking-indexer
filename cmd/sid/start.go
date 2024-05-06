@@ -111,8 +111,7 @@ func start(ctx *cli.Context) error {
 
 	// get start height
 	var startHeight uint64
-	isSet := ctx.IsSet(startHeightFlag)
-	if isSet {
+	if ctx.IsSet(startHeightFlag) {
 		startHeight = ctx.Uint64(startHeightFlag)
 	} else {
 		startHeight = si.GetStartHeight()

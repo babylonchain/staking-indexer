@@ -108,7 +108,7 @@ func (si *StakingIndexer) ValidateStartHeight(startHeight uint64) error {
 	}
 
 	lastProcessedHeight, err := si.is.GetLastProcessedHeight()
-	if err != nil && startHeight > baseHeight {
+	if err != nil && startHeight != baseHeight {
 		return fmt.Errorf("the database is empty, the start height should be equal to the base height %d", baseHeight)
 	}
 
@@ -123,7 +123,6 @@ func (si *StakingIndexer) ValidateStartHeight(startHeight uint64) error {
 // if the database is empty, then the base height in the config will be returned
 // otherwise, it will return the last processed height + 1
 func (si *StakingIndexer) GetStartHeight() uint64 {
-
 	lastProcessedHeight, err := si.is.GetLastProcessedHeight()
 	if err != nil {
 		return si.cfg.BTCScannerConfig.BaseHeight

@@ -12,7 +12,7 @@ const (
 )
 
 type BTCScannerConfig struct {
-	BaseHeight        uint64        `long:"baseheight" description:"the base height from which the polling starts to avoid unnecessary polling"`
+	BaseHeight        uint64        `long:"baseheight" description:"the base height before which no staking transactions exist"`
 	PollingInterval   time.Duration `long:"pollinginterval" description:"the time interval between each polling of new confirmed blocks"`
 	ConfirmationDepth uint64        `long:"confirmationdepth" description:"the confirmation depth to consider a BTC block as confirmed"`
 }
