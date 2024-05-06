@@ -37,6 +37,8 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 	}
 	lastStakingCap := btcutil.Amount(0)
 	lastActivationHeight := int32(0)
+	lastCovKeys := make([]*btcec.PublicKey, numCovenants)
+	copy(lastCovKeys, covPks)
 	for version := uint16(0); version <= numVersions; version++ {
 		// These parameters can freely change between versions
 		unbondingTime := uint16(r.Intn(1000) + 100)
@@ -53,14 +55,16 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 		stakingCap := btcutil.Amount(r.Int63n(1000000)) +
 			btcutil.Amount(r.Int63n(100000)) + maxStakingAmount + lastStakingCap
 		lastStakingCap = stakingCap
-		activationHeight := int32(r.Intn(500)) + lastActivationHeight + 1
+		activationHeight := int32(r.Intn(100)) + lastActivationHeight + 1
 		lastActivationHeight = activationHeight
+		rotatedKeys := rotateCovenantPks(lastCovKeys, r, t)
+		copy(lastCovKeys, rotatedKeys)
 		paramsVersions.ParamsVersions = append(paramsVersions.ParamsVersions, &types.Params{
 			Version:          version,
 			StakingCap:       stakingCap,
 			ActivationHeight: activationHeight,
 			Tag:              []byte(tag),
-			CovenantPks:      covPks,
+			CovenantPks:      rotatedKeys,
 			CovenantQuorum:   covQuorum,
 			UnbondingTime:    unbondingTime,
 			UnbondingFee:     unbondingFee,
@@ -72,4 +76,26 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 	}
 
 	return paramsVersions
+}
+
+// rotateCovenantPks randomly rotates max 2 public keys and returns a new list of keys
+func rotateCovenantPks(oldKeys []*btcec.PublicKey, r *rand.Rand, t *testing.T) []*btcec.PublicKey {
+	newKeys := make([]*btcec.PublicKey, len(oldKeys))
+	copy(newKeys, oldKeys)
+	randIndex := r.Intn(len(oldKeys))
+	privKey, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+	newKeys[randIndex] = privKey.PubKey()
+
+	if len(newKeys) == 1 {
+		return newKeys
+	}
+
+	// if the covenant key number > 1, do one more round
+	randIndex = r.Intn(len(newKeys))
+	privKey, err = btcec.NewPrivateKey()
+	require.NoError(t, err)
+	newKeys[randIndex] = privKey.PubKey()
+
+	return newKeys
 }

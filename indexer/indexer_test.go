@@ -51,6 +51,7 @@ type TestScenario struct {
 	UnbondingEvents []*UnbondingEvent
 	Blocks          []*types.IndexedBlock
 	TvlToHeight     map[int32]btcutil.Amount
+	Tvl             btcutil.Amount
 }
 
 // NewTestScenario creates a scenario where staking txs and unbonding txs are
@@ -119,7 +120,8 @@ func NewTestScenario(r *rand.Rand, t *testing.T, stakingChance int, numEvents in
 			Txs:    txsPerHeight[h],
 		}
 		blocks = append(blocks, block)
-		if h != startHeight && tvlToHeight[h] == 0 {
+		_, ok := tvlToHeight[h]
+		if !ok {
 			tvlToHeight[h] = tvlToHeight[h-1]
 		}
 	}
@@ -130,6 +132,7 @@ func NewTestScenario(r *rand.Rand, t *testing.T, stakingChance int, numEvents in
 		UnbondingEvents: unbondingEvents,
 		Blocks:          blocks,
 		TvlToHeight:     tvlToHeight,
+		Tvl:             tvl,
 	}
 }
 
@@ -216,6 +219,9 @@ func FuzzBlockHandler(f *testing.F) {
 			require.NoError(t, err)
 			require.Equal(t, uint64(testScenario.TvlToHeight[b.Height]), tvl)
 		}
+		tvl, err := stakingIndexer.GetConfirmedTvl()
+		require.NoError(t, err)
+		require.Equal(t, uint64(testScenario.Tvl), tvl)
 
 		for _, stakingEv := range testScenario.StakingEvents {
 			storedTx, err := stakingIndexer.GetStakingTxByHash(stakingEv.StakingTx.Hash())
