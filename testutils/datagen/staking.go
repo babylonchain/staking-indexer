@@ -164,7 +164,7 @@ func genStoredStakingTx(t *testing.T, r *rand.Rand, maxStakingTime uint16, inclu
 		FinalityProviderPk: fpPirvKey.PubKey(),
 		StakerPk:           stakerPrivKey.PubKey(),
 		InclusionHeight:    inclusionHeight,
-		StakingValue:       int64(stakingValue),
+		StakingValue:       uint64(stakingValue),
 		IsOverflow:         false,
 	}
 }

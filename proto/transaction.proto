@@ -22,7 +22,7 @@ message StakingTransaction {
     // Indicate if the staking tx would exceed the staking cap.
     bool is_overflow = 9;
     // The staking amount
-    int64 staking_value = 10;
+    uint64 staking_value = 10;
 }
 
 message UnbondingTransaction {

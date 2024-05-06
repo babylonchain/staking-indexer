@@ -17,6 +17,7 @@ import (
 
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/indexer"
+	"github.com/babylonchain/staking-indexer/indexerstore"
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
 	"github.com/babylonchain/staking-indexer/testutils/mocks"
@@ -168,6 +169,8 @@ func FuzzVerifyUnbondingTx(f *testing.F) {
 		stakingData := datagen.GenerateTestStakingData(t, r, params)
 		_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, params, stakingData)
 		// For a valid tx, its btc height is always larger than the activation height
+		// TODO: Test with different heights across different versions of params
+		// https://github.com/babylonchain/staking-indexer/issues/52
 		mockedHeight := uint64(params.ActivationHeight) + 1
 		err = stakingIndexer.ProcessStakingTx(
 			stakingTx.MsgTx(),
@@ -228,26 +231,13 @@ func FuzzTestOverflow(f *testing.F) {
 		var stakingTxData []*StakingTxData
 		// Keep sending staking tx until the staking cap is reached for the very last tx
 		for {
-			stakingData := datagen.GenerateTestStakingData(t, r, params)
-			_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, params, stakingData)
-			// For a valid tx, its btc height is always larger than the activation height
-			mockedHeight := uint64(params.ActivationHeight) + 1
-
-			tvl, err := stakingIndexer.GetConfirmedTvl()
-			require.NoError(t, err)
-
-			err = stakingIndexer.ProcessStakingTx(
-				stakingTx.MsgTx(),
-				getParsedStakingData(stakingData, stakingTx.MsgTx(), params),
-				mockedHeight, time.Now(), params)
-			require.NoError(t, err)
-			storedStakingTx, err := stakingIndexer.GetStakingTxByHash(stakingTx.Hash())
-			require.NoError(t, err)
-
+			stakingData, tvl, storedStakingTx, stakingTx := sendStakingTx(
+				t, r, stakingIndexer, params, stakingTxData,
+				uint64(params.ActivationHeight)+1,
+			)
 			stakingTxData = append(stakingTxData, &StakingTxData{
 				StakingTx:   stakingTx,
 				StakingData: stakingData,
-				Unbonded:    false,
 			})
 			// ~10% chance to trigger unbonding tx on existing staking tx to reduce the tvl
 			if r.Intn(10) == 0 {
@@ -256,10 +246,38 @@ func FuzzTestOverflow(f *testing.F) {
 
 			// Let's break if the staking tx is overflow
 			if storedStakingTx.IsOverflow {
-				require.True(t, tvl+int64(stakingData.StakingAmount) > int64(params.StakingCap))
+				require.True(t, tvl+uint64(stakingData.StakingAmount) > uint64(params.StakingCap))
 				break
 			}
-			require.True(t, tvl+int64(stakingData.StakingAmount) <= int64(params.StakingCap))
+			require.True(t, tvl+uint64(stakingData.StakingAmount) <= uint64(params.StakingCap))
+		}
+
+		// Unbond some of the tx so that new staking tx can be processed
+		for {
+			sendUnbondingTx(t, stakingIndexer, params, stakingTxData, r)
+			// Let's break if the tvl is below max staking value
+			tvl, err := stakingIndexer.GetConfirmedTvl()
+			require.NoError(t, err)
+			if tvl < uint64(params.StakingCap)-uint64(params.MaxStakingAmount) {
+				break
+			}
+		}
+
+		// Send staking tx again so that it will be accepted until overflow again
+		for {
+			stakingData, tvl, storedStakingTx, stakingTx := sendStakingTx(
+				t, r, stakingIndexer, params, stakingTxData,
+				uint64(params.ActivationHeight)+1,
+			)
+			stakingTxData = append(stakingTxData, &StakingTxData{
+				StakingTx:   stakingTx,
+				StakingData: stakingData,
+			})
+			if storedStakingTx.IsOverflow {
+				require.True(t, tvl+uint64(stakingData.StakingAmount) > uint64(params.StakingCap))
+				break
+			}
+			require.True(t, tvl+uint64(stakingData.StakingAmount) <= uint64(params.StakingCap))
 		}
 
 		// Now, let's test the overflow with the second params
@@ -292,10 +310,10 @@ func FuzzTestOverflow(f *testing.F) {
 
 			// Let's break if the staking tx is overflow
 			if storedStakingTx.IsOverflow {
-				require.True(t, tvl+int64(stakingData.StakingAmount) > int64(secondParam.StakingCap))
+				require.True(t, tvl+uint64(stakingData.StakingAmount) > uint64(secondParam.StakingCap))
 				break
 			}
-			require.True(t, tvl+int64(stakingData.StakingAmount) <= int64(secondParam.StakingCap))
+			require.True(t, tvl+uint64(stakingData.StakingAmount) <= uint64(secondParam.StakingCap))
 		}
 	})
 }
@@ -357,4 +375,23 @@ func sendUnbondingTx(
 		mockedHeight, time.Now(), params)
 	require.NoError(t, err)
 	data.Unbonded = true
+}
+
+func sendStakingTx(
+	t *testing.T, r *rand.Rand, stakingIndexer *indexer.StakingIndexer,
+	params *types.Params, stakingTxData []*StakingTxData, height uint64,
+) (*datagen.TestStakingData, uint64, *indexerstore.StoredStakingTransaction, *btcutil.Tx) {
+	stakingData := datagen.GenerateTestStakingData(t, r, params)
+	_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, params, stakingData)
+	tvl, err := stakingIndexer.GetConfirmedTvl()
+	require.NoError(t, err)
+	err = stakingIndexer.ProcessStakingTx(
+		stakingTx.MsgTx(),
+		getParsedStakingData(stakingData, stakingTx.MsgTx(), params),
+		height, time.Now(), params)
+	require.NoError(t, err)
+	storedStakingTx, err := stakingIndexer.GetStakingTxByHash(stakingTx.Hash())
+	require.NoError(t, err)
+
+	return stakingData, tvl, storedStakingTx, stakingTx
 }

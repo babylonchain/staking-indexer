@@ -377,7 +377,7 @@ func (si *StakingIndexer) ProcessStakingTx(
 		return validationErr
 	}
 	// Step 2: Overflow check (staking cap)
-	isOverflow, err := si.isOverflow(int64(params.StakingCap), stakingData.StakingOutput.Value)
+	isOverflow, err := si.isOverflow(uint64(params.StakingCap), uint64(stakingData.StakingOutput.Value))
 	if err != nil {
 		return fmt.Errorf("failed to check the overflow of staking tx: %w", err)
 	}
@@ -411,7 +411,7 @@ func (si *StakingIndexer) ProcessStakingTx(
 		stakingData.OpReturnData.StakerPublicKey.PubKey,
 		uint32(stakingData.OpReturnData.StakingTime),
 		stakingData.OpReturnData.FinalityProviderPublicKey.PubKey,
-		stakingData.StakingOutput.Value,
+		uint64(stakingData.StakingOutput.Value),
 		isOverflow,
 	); err != nil {
 		return fmt.Errorf("failed to add the staking tx to store: %w", err)
@@ -622,19 +622,15 @@ func (si *StakingIndexer) validateStakingTx(params *types.Params, stakingData *b
 	return nil
 }
 
-func (si *StakingIndexer) isOverflow(cap int64, stakingValue int64) (bool, error) {
+func (si *StakingIndexer) isOverflow(cap uint64, stakingValue uint64) (bool, error) {
 	confirmedTvl, err := si.is.GetConfirmedTvl()
 	if err != nil {
 		return false, fmt.Errorf("failed to get the confirmed TVL: %w", err)
 	}
 
-	if confirmedTvl+stakingValue > cap {
-		return true, nil
-	}
-
-	return false, nil
+	return confirmedTvl+stakingValue > cap, nil
 }
 
-func (si *StakingIndexer) GetConfirmedTvl() (int64, error) {
+func (si *StakingIndexer) GetConfirmedTvl() (uint64, error) {
 	return si.is.GetConfirmedTvl()
 }
