@@ -10,6 +10,7 @@ import (
 	"github.com/babylonchain/babylon/btcstaking"
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -30,11 +31,154 @@ type StakingTxData struct {
 	Unbonded    bool
 }
 
-// FuzzIndexer tests the property that the indexer can correctly
+type StakingEvent struct {
+	StakingTx     *btcutil.Tx
+	StakingTxData *datagen.TestStakingData
+	Height        int32
+	Unbonded      bool
+	IsOverflow    bool
+}
+
+type UnbondingEvent struct {
+	StakingTxHash *chainhash.Hash
+	UnbondingTx   *btcutil.Tx
+	Height        int32
+}
+
+type TestScenario struct {
+	VersionedParams *types.ParamsVersions
+	StakingEvents   []*StakingEvent
+	UnbondingEvents []*UnbondingEvent
+	Blocks          []*types.IndexedBlock
+	Tvl             btcutil.Amount
+}
+
+// NewTestScenario creates a scenario where staking txs and unbonding txs are
+// randomly distributed across blocks a tx has 80% chance to be a staking tx
+// while the rest to be an unbonding tx, n is the number of staking txs and
+// unbonding txs
+func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *types.ParamsVersions, n int) *TestScenario {
+	startHeight := r.Int31n(1000) + 1 + versionedParams.ParamsVersions[0].ActivationHeight
+	lastEventHeight := startHeight
+	stakingEvents := make([]*StakingEvent, 0)
+	unbondingEvents := make([]*UnbondingEvent, 0)
+	tvl := btcutil.Amount(0)
+	txsPerHeight := make(map[int32][]*btcutil.Tx)
+
+	// create n events
+	for i := 0; i < n; i++ {
+		// randomly select a height at which the event should be happening
+		height := lastEventHeight + r.Int31n(3)
+		p, err := versionedParams.GetParamsForBTCHeight(height)
+		require.NoError(t, err)
+		txs, ok := txsPerHeight[height]
+		if !ok {
+			// new height
+			txs = make([]*btcutil.Tx, 0)
+		}
+
+		// 80% chance to be a staking event, or there are no active staking events created
+		// else to be an unbonding event
+		if r.Intn(10) >= 2 || !hasActiveStakingEvent(stakingEvents) {
+			stakingEvent := buildStakingEvent(r, t, height, p)
+			if stakingEvent.StakingTxData.StakingAmount+tvl > p.StakingCap {
+				stakingEvent.IsOverflow = true
+			} else {
+				tvl += stakingEvent.StakingTxData.StakingAmount
+			}
+			stakingEvents = append(stakingEvents, stakingEvent)
+			txs = append(txs, stakingEvent.StakingTx)
+		} else {
+			prevStakingEvent := findActiveStakingEvent(stakingEvents, r)
+			require.NotNil(t, prevStakingEvent)
+			require.False(t, prevStakingEvent.Unbonded)
+			stakingParams, err := versionedParams.GetParamsForBTCHeight(prevStakingEvent.Height)
+			require.NoError(t, err)
+			unbondingEvent := buildUnbondingEvent(prevStakingEvent, height, stakingParams, t)
+			unbondingEvents = append(unbondingEvents, unbondingEvent)
+			prevStakingEvent.Unbonded = true
+			if !prevStakingEvent.IsOverflow {
+				tvl -= prevStakingEvent.StakingTxData.StakingAmount
+			}
+			require.True(t, tvl >= 0)
+			txs = append(txs, unbondingEvent.UnbondingTx)
+		}
+
+		txsPerHeight[height] = txs
+		lastEventHeight = height
+	}
+
+	blocks := make([]*types.IndexedBlock, 0)
+	for h := startHeight; h <= lastEventHeight; h++ {
+		block := &types.IndexedBlock{
+			Height: h,
+			Header: &wire.BlockHeader{Timestamp: time.Now()},
+			Txs:    txsPerHeight[h],
+		}
+		blocks = append(blocks, block)
+	}
+
+	return &TestScenario{
+		VersionedParams: versionedParams,
+		StakingEvents:   stakingEvents,
+		UnbondingEvents: unbondingEvents,
+		Blocks:          blocks,
+		Tvl:             tvl,
+	}
+}
+
+func buildUnbondingEvent(stakingEvent *StakingEvent, height int32, p *types.Params, t *testing.T) *UnbondingEvent {
+	stakingTxHash := stakingEvent.StakingTx.Hash()
+	unbondingTx := datagen.GenerateUnbondingTxFromStaking(t, p, stakingEvent.StakingTxData, stakingTxHash, 0)
+
+	return &UnbondingEvent{
+		StakingTxHash: stakingTxHash,
+		UnbondingTx:   unbondingTx,
+		Height:        height,
+	}
+}
+
+func findActiveStakingEvent(stakingEvents []*StakingEvent, r *rand.Rand) *StakingEvent {
+	var activeStakingEvents []*StakingEvent
+	for _, se := range stakingEvents {
+		if !se.Unbonded {
+			activeStakingEvents = append(activeStakingEvents, se)
+		}
+	}
+	if len(activeStakingEvents) == 0 {
+		return nil
+	}
+	return activeStakingEvents[r.Intn(len(activeStakingEvents))]
+}
+
+func hasActiveStakingEvent(stakingEvents []*StakingEvent) bool {
+	for _, se := range stakingEvents {
+		if !se.Unbonded {
+			return true
+		}
+	}
+
+	return false
+}
+
+func buildStakingEvent(r *rand.Rand, t *testing.T, height int32, p *types.Params) *StakingEvent {
+	stakingData := datagen.GenerateTestStakingData(t, r, p)
+	_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, p, stakingData)
+
+	return &StakingEvent{
+		StakingTx:     stakingTx,
+		StakingTxData: stakingData,
+		Height:        height,
+	}
+}
+
+// FuzzBlockHandler tests the property that the indexer can correctly
 // parse staking tx from confirmed blocks
-func FuzzIndexer(f *testing.F) {
-	// use small seed because db open/close is slow
-	bbndatagen.AddRandomSeedsToFuzzer(f, 5)
+func FuzzBlockHandler(f *testing.F) {
+	// Note: before committing, it should be tested with large seed
+	// to avoid flaky
+	// small seed for ci because db open/close is slow
+	bbndatagen.AddRandomSeedsToFuzzer(f, 10)
 
 	f.Fuzz(func(t *testing.T, seed int64) {
 		r := rand.New(rand.NewSource(seed))
@@ -44,6 +188,7 @@ func FuzzIndexer(f *testing.F) {
 
 		confirmedBlockChan := make(chan *types.IndexedBlock)
 		sysParamsVersions := datagen.GenerateGlobalParamsVersions(r, t)
+		cfg.BTCScannerConfig.BaseHeight = uint64(sysParamsVersions.ParamsVersions[0].ActivationHeight)
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
@@ -51,87 +196,37 @@ func FuzzIndexer(f *testing.F) {
 		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParamsVersions, mockBtcScanner)
 		require.NoError(t, err)
 
-		err = stakingIndexer.Start(1)
-		require.NoError(t, err)
 		defer func() {
-			err := stakingIndexer.Stop()
-			require.NoError(t, err)
 			err = db.Close()
 			require.NoError(t, err)
 		}()
 
-		// 1. build staking tx and insert them into blocks
-		// and send block to the confirmed block channel
-		numBlocks := r.Intn(10) + 1
-		// Starting height should be at least later than the activation height of the first parameters
-		startingHeight := r.Int31n(1000) + 1 + sysParamsVersions.ParamsVersions[0].ActivationHeight
-
-		stakingDataList := make([]*datagen.TestStakingData, 0)
-		stakingTxList := make([]*btcutil.Tx, 0)
-		unbondingTxList := make([]*btcutil.Tx, 0)
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < numBlocks; i++ {
-				blockHeight := startingHeight + int32(i)
-				params, err := sysParamsVersions.GetParamsForBTCHeight(blockHeight)
-				require.NoError(t, err)
-				numTxs := r.Intn(10) + 1
-				blockTxs := make([]*btcutil.Tx, 0)
-				for j := 0; j < numTxs; j++ {
-					stakingData := datagen.GenerateTestStakingData(t, r, params)
-					stakingDataList = append(stakingDataList, stakingData)
-					_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, params, stakingData)
-					unbondingTx := datagen.GenerateUnbondingTxFromStaking(t, params, stakingData, stakingTx.Hash(), 0)
-					blockTxs = append(blockTxs, stakingTx)
-					blockTxs = append(blockTxs, unbondingTx)
-					stakingTxList = append(stakingTxList, stakingTx)
-					unbondingTxList = append(unbondingTxList, unbondingTx)
-				}
-				b := &types.IndexedBlock{
-					Height: blockHeight,
-					Txs:    blockTxs,
-					Header: &wire.BlockHeader{Timestamp: time.Now()},
-				}
-				confirmedBlockChan <- b
-			}
-		}()
-		wg.Wait()
-
-		// wait for db writes finished
-		time.Sleep(2 * time.Second)
-
-		// 2. read local store and expect them to be the
-		// same as the data before being stored
-		for i := 0; i < len(stakingTxList); i++ {
-			tx := stakingTxList[i].MsgTx()
-			txHash := tx.TxHash()
-			data := stakingDataList[i]
-			storedTx, err := stakingIndexer.GetStakingTxByHash(&txHash)
+		n := r.Intn(1000) + 1
+		testScenario := NewTestScenario(r, t, sysParamsVersions, n)
+		for _, b := range testScenario.Blocks {
+			err := stakingIndexer.HandleConfirmedBlock(b)
 			require.NoError(t, err)
-			require.Equal(t, tx.TxHash(), storedTx.Tx.TxHash())
-			require.True(t, testutils.PubKeysEqual(data.StakerKey, storedTx.StakerPk))
-			require.Equal(t, uint32(data.StakingTime), storedTx.StakingTime)
-			require.True(t, testutils.PubKeysEqual(data.FinalityProviderKey, storedTx.FinalityProviderPk))
 		}
 
-		for i := 0; i < len(unbondingTxList); i++ {
-			tx := unbondingTxList[i].MsgTx()
-			txHash := tx.TxHash()
-			expectedStakingTx := stakingTxList[i].MsgTx()
-			storedUnbondingTx, err := stakingIndexer.GetUnbondingTxByHash(&txHash)
-			require.NoError(t, err)
-			require.Equal(t, tx.TxHash(), storedUnbondingTx.Tx.TxHash())
-			require.Equal(t, expectedStakingTx.TxHash().String(), storedUnbondingTx.StakingTxHash.String())
+		tvl, err := stakingIndexer.GetConfirmedTvl()
+		require.NoError(t, err)
+		require.Equal(t, uint64(testScenario.Tvl), tvl)
 
-			expectedStakingData := stakingDataList[i]
-			storedStakingTx, err := stakingIndexer.GetStakingTxByHash(storedUnbondingTx.StakingTxHash)
+		for _, stakingEv := range testScenario.StakingEvents {
+			storedTx, err := stakingIndexer.GetStakingTxByHash(stakingEv.StakingTx.Hash())
 			require.NoError(t, err)
-			require.Equal(t, expectedStakingTx.TxHash(), storedStakingTx.Tx.TxHash())
-			require.True(t, testutils.PubKeysEqual(expectedStakingData.StakerKey, storedStakingTx.StakerPk))
-			require.Equal(t, uint32(expectedStakingData.StakingTime), storedStakingTx.StakingTime)
-			require.True(t, testutils.PubKeysEqual(expectedStakingData.FinalityProviderKey, storedStakingTx.FinalityProviderPk))
+			require.Equal(t, stakingEv.StakingTx.Hash().String(), storedTx.Tx.TxHash().String())
+			require.True(t, testutils.PubKeysEqual(stakingEv.StakingTxData.StakerKey, storedTx.StakerPk))
+			require.Equal(t, uint32(stakingEv.StakingTxData.StakingTime), storedTx.StakingTime)
+			require.True(t, testutils.PubKeysEqual(stakingEv.StakingTxData.FinalityProviderKey, storedTx.FinalityProviderPk))
+			require.Equal(t, stakingEv.IsOverflow, storedTx.IsOverflow)
+		}
+
+		for _, unbondingEv := range testScenario.UnbondingEvents {
+			storedTx, err := stakingIndexer.GetUnbondingTxByHash(unbondingEv.UnbondingTx.Hash())
+			require.NoError(t, err)
+			require.Equal(t, unbondingEv.StakingTxHash, storedTx.StakingTxHash)
+			require.Equal(t, unbondingEv.UnbondingTx.Hash().String(), storedTx.Tx.TxHash().String())
 		}
 	})
 }
