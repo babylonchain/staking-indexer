@@ -15,13 +15,11 @@ Staking protocol and serves as the ground truth for the Bitcoin Staking system.
   where `N` is a configurable value, which should be large enough so that 
   the chance of the output blocks being forked is enormously low, e.g., 
   greater than or equal to `6` in Bitcoin mainnet.
-* Extracting transaction data for staking, unbonding, and withdrawal.
-  Specifications of identifying and parsing these transactions can be found 
-  [here](./doc/extract_tx_data.md). 
-* Identifying which staking transactions are active and which are inactive
-  depending on the staking parameters. The protocol for identifying whether a
-  transaction is active or not can be found
-  [here](./doc/staking_activation.md).
+* Extraction transaction data for staking, unbonding, and withdrawal. These
+  transactions are verified and compared against the current system parameters
+  to identify whether they are active, inactive due to staking cap overflow, or
+  invalid. The details of the protocol for verifying and activating
+  transactions can be found [here](./doc/staking.md).
 * Storing the extracted transaction data in a database. The database schema 
   can be found [here](./doc/db_schema.md).
 * Pushing staking, unbonding, and withdrawal events to the message queues.
