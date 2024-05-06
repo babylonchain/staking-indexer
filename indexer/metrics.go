@@ -123,6 +123,13 @@ var (
 		},
 	)
 
+	invalidStakingTxsCounter = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "si_invalid_staking_txs_counter",
+			Help: "Total number of invalid transactions",
+		},
+	)
+
 	failedVerifyingUnbondingTxsCounter = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "si_failed_checking_unbonding_txs_counter",

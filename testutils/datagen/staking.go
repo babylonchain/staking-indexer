@@ -36,7 +36,7 @@ func GenerateTestStakingData(
 	require.NoError(t, err)
 
 	stakingAmount := btcutil.Amount(r.Int63n(int64(params.MaxStakingAmount-params.MinStakingAmount)) + int64(params.MinStakingAmount) + 1)
-	stakingTime := uint16(r.Int31n(65535) + 1)
+	stakingTime := uint16(r.Int31n(int32(params.MaxStakingTime-params.MinStakingTime)) + int32(params.MinStakingTime) + 1)
 
 	return &TestStakingData{
 		StakerKey:           stakerPrivKey.PubKey(),
@@ -153,6 +153,10 @@ func genStoredStakingTx(t *testing.T, r *rand.Rand, maxStakingTime uint16, inclu
 	fpPirvKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
 
+	// Generate a random BTC value range from 0.1 to 1000
+	randomBTC := r.Float64()*(999.9-0.1) + 0.1
+	stakingValue := btcutil.Amount(randomBTC * btcutil.SatoshiPerBitcoin)
+
 	return &indexerstore.StoredStakingTransaction{
 		Tx:                 btcTx,
 		StakingOutputIdx:   outputIdx,
@@ -160,6 +164,8 @@ func genStoredStakingTx(t *testing.T, r *rand.Rand, maxStakingTime uint16, inclu
 		FinalityProviderPk: fpPirvKey.PubKey(),
 		StakerPk:           stakerPrivKey.PubKey(),
 		InclusionHeight:    inclusionHeight,
+		StakingValue:       uint64(stakingValue),
+		IsOverflow:         false,
 	}
 }
 
