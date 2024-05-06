@@ -69,7 +69,7 @@ func (bs *BtcPoller) Start(startHeight uint64) error {
 
 	bs.lastConfirmedHeight = startHeight - 1
 
-	bs.logger.Info("starting the BTC scanner")
+	bs.logger.Info("starting the BTC scanner", zap.Uint64("start_height", startHeight))
 
 	blockEventNotifier, err := bs.btcNotifier.RegisterBlockEpochNtfn(nil)
 	if err != nil {

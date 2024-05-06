@@ -217,7 +217,7 @@ func TestIndexerRestart(t *testing.T) {
 
 	// restart the testing manager again from 0
 	// which means the start height should be from local store
-	restartedTm2 := ReStartFromHeight(t, restartedTm, 0)
+	restartedTm2 := ReStartFromHeight(t, restartedTm, restartedTm.Si.GetStartHeight())
 	defer restartedTm2.Stop()
 
 	// wait until catch up

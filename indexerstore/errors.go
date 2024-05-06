@@ -17,4 +17,7 @@ var (
 
 	// ErrLastProcessedHeightNotFound the last processed height is not found in db
 	ErrLastProcessedHeightNotFound = errors.New("last processed height not found")
+
+	// ErrNegativeTvl the tvl is negative
+	ErrNegativeTvl = errors.New("negative tvl")
 )

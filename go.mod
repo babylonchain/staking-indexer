@@ -2,11 +2,9 @@ module github.com/babylonchain/staking-indexer
 
 go 1.21.6
 
-toolchain go1.22.0
-
 require (
 	github.com/babylonchain/babylon v0.8.6-0.20240426101001-7778c798e236
-	github.com/babylonchain/staking-queue-client v0.0.0-20240424061128-3ac950ef5f27
+	github.com/babylonchain/staking-queue-client v0.0.0-20240504141431-2907206a6a67
 	github.com/btcsuite/btcd v0.24.0
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/btcutil v1.1.5

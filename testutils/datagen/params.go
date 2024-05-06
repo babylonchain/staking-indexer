@@ -44,15 +44,21 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 		// Min Staking Amount should be more than the required unbonding fee
 		minStakingAmount := btcutil.Amount(r.Int63n(100000)+1) + unbondingFee
 		// Max Staking Amount should be more than the minimum staking amount
-		maxStakingAmount := btcutil.Amount(r.Int63n(1000000)) + minStakingAmount
+		maxStakingAmount := btcutil.Amount(r.Int63n(100000)) + minStakingAmount
 		minStakingTime := uint16(r.Intn(1000)) + 1
 		maxStakingTime := uint16(r.Intn(10000)) + minStakingTime
 
 		// These parameters should be monotonically increasing
 		// The staking cap should be more than the maximum staking amount
-		stakingCap := btcutil.Amount(r.Int63n(1000000)) + maxStakingAmount + lastStakingCap
+		stakingCap := btcutil.Amount(r.Int63n(1000000)) +
+			btcutil.Amount(r.Int63n(100000)) + maxStakingAmount + lastStakingCap
 		lastStakingCap = stakingCap
-		activationHeight := int32(r.Intn(1000)) + lastActivationHeight + 1
+		var activationHeight int32
+		if version == 0 {
+			activationHeight = 1
+		} else {
+			activationHeight = int32(r.Intn(1000)) + lastActivationHeight + 1
+		}
 		lastActivationHeight = activationHeight
 		paramsVersions.ParamsVersions = append(paramsVersions.ParamsVersions, &types.Params{
 			Version:          version,

@@ -76,19 +76,18 @@ func (si *StakingIndexer) Start(startHeight uint64) error {
 		si.wg.Add(1)
 		go si.confirmedBlocksLoop()
 
-		validatedStartHeight, err := si.validateStartHeight(startHeight)
-		if err != nil {
-			startErr = err
+		if err := si.ValidateStartHeight(startHeight); err != nil {
+			startErr = fmt.Errorf("invalid start height %d: %w", startHeight, err)
 			return
 		}
 
-		if err := si.btcScanner.Start(validatedStartHeight); err != nil {
+		if err := si.btcScanner.Start(startHeight); err != nil {
 			startErr = err
 			return
 		}
 
 		// record metrics
-		startBtcHeight.Set(float64(validatedStartHeight))
+		startBtcHeight.Set(float64(startHeight))
 
 		si.logger.Info("Staking Indexer App is successfully started!")
 	})
@@ -96,20 +95,40 @@ func (si *StakingIndexer) Start(startHeight uint64) error {
 	return startErr
 }
 
-// validateStartHeight ensures that the returned start height is positive
-// if the given startHeight is not positive, it returns the lastProcessHeight + 1
-// from the local store
-func (si *StakingIndexer) validateStartHeight(startHeight uint64) (uint64, error) {
+// ValidateStartHeight validates the given startHeight and returns an error
+// if the given startHeight is not in the range of
+// [base height, last processed height + 1]
+// The point of this validation is to ensure the indexer
+// (1) does not handle irrelevant blocks (impossible to have staking tx)
+// (2) does not miss relevant blocks (possible to have staking tx)
+func (si *StakingIndexer) ValidateStartHeight(startHeight uint64) error {
+	baseHeight := si.cfg.BTCScannerConfig.BaseHeight
+	if startHeight < baseHeight {
+		return fmt.Errorf("the start height should not be lower than the base height %d", baseHeight)
+	}
+
 	lastProcessedHeight, err := si.is.GetLastProcessedHeight()
-	if err != nil && startHeight == 0 {
-		return 0, fmt.Errorf("the last processed height not set, the specified start height must be positive")
+	if err != nil && startHeight != baseHeight {
+		return fmt.Errorf("the database is empty, the start height should be equal to the base height %d", baseHeight)
 	}
 
-	if startHeight == 0 {
-		startHeight = lastProcessedHeight + 1
+	if startHeight > lastProcessedHeight+1 {
+		return fmt.Errorf("the start height should not be higher than %d (the last processed height + 1)", lastProcessedHeight+1)
 	}
 
-	return startHeight, nil
+	return nil
+}
+
+// GetStartHeight returns a start height that can pass ValidateStartHeight()
+// if the database is empty, then the base height in the config will be returned
+// otherwise, it will return the last processed height + 1
+func (si *StakingIndexer) GetStartHeight() uint64 {
+	lastProcessedHeight, err := si.is.GetLastProcessedHeight()
+	if err != nil {
+		return si.cfg.BTCScannerConfig.BaseHeight
+	}
+
+	return lastProcessedHeight + 1
 }
 
 func (si *StakingIndexer) confirmedBlocksLoop() {
@@ -145,8 +164,19 @@ func (si *StakingIndexer) handleConfirmedBlock(b *types.IndexedBlock) error {
 		// 1. try to parse staking tx
 		stakingData, err := si.tryParseStakingTx(msgTx, params)
 		if err == nil {
-			if err := si.ProcessStakingTx(msgTx, stakingData, uint64(b.Height), b.Header.Timestamp); err != nil {
-				if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
+			if err := si.ProcessStakingTx(
+				msgTx, stakingData, uint64(b.Height), b.Header.Timestamp, params,
+			); err != nil {
+				if errors.Is(err, ErrInvalidStakingTx) {
+					invalidStakingTxsCounter.Inc()
+					si.logger.Error("found an invalid staking tx",
+						zap.String("tx_hash", msgTx.TxHash().String()),
+						zap.Error(err),
+					)
+					// We will continue to the next tx as the staking tx is invalid
+					// and we don't want to stop the indexer
+					continue
+				} else if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
 					// record metrics
 					failedProcessingStakingTxsCounter.Inc()
 
@@ -168,12 +198,17 @@ func (si *StakingIndexer) handleConfirmedBlock(b *types.IndexedBlock) error {
 		stakingTx, spentInputIdx := si.getSpentStakingTx(msgTx)
 		if spentInputIdx >= 0 {
 			stakingTxHash := stakingTx.Tx.TxHash()
+			paramsFromStakingTxHeight, err := si.paramsVersions.GetParamsForBTCHeight(
+				int32(stakingTx.InclusionHeight),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to get the params for the staking tx height: %w", err)
+			}
 			// 3. is a spending tx, check whether it is a valid unbonding tx
-			isUnbonding, err := si.IsValidUnbondingTx(msgTx, stakingTx, params)
+			isUnbonding, err := si.IsValidUnbondingTx(msgTx, stakingTx, paramsFromStakingTxHeight)
 			if err != nil {
 				if errors.Is(err, ErrInvalidUnbondingTx) {
 					invalidUnbondingTxsCounter.Inc()
-
 					si.logger.Error("found an invalid unbonding tx",
 						zap.String("tx_hash", msgTx.TxHash().String()),
 						zap.Error(err),
@@ -181,10 +216,8 @@ func (si *StakingIndexer) handleConfirmedBlock(b *types.IndexedBlock) error {
 
 					continue
 				}
-
 				// record metrics
 				failedVerifyingUnbondingTxsCounter.Inc()
-
 				return err
 			}
 			if !isUnbonding {
@@ -200,7 +233,10 @@ func (si *StakingIndexer) handleConfirmedBlock(b *types.IndexedBlock) error {
 			}
 
 			// 5. this is an unbonding tx
-			if err := si.processUnbondingTx(msgTx, &stakingTxHash, uint64(b.Height), b.Header.Timestamp, params); err != nil {
+			if err := si.ProcessUnbondingTx(
+				msgTx, &stakingTxHash, uint64(b.Height), b.Header.Timestamp,
+				paramsFromStakingTxHeight,
+			); err != nil {
 				if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
 					// record metrics
 					failedProcessingUnbondingTxsCounter.Inc()
@@ -338,6 +374,7 @@ func (si *StakingIndexer) ProcessStakingTx(
 	tx *wire.MsgTx,
 	stakingData *btcstaking.ParsedV0StakingTx,
 	height uint64, timestamp time.Time,
+	params *types.Params,
 ) error {
 
 	si.logger.Info("found a staking tx",
@@ -352,6 +389,18 @@ func (si *StakingIndexer) ProcessStakingTx(
 
 	stakerPkHex := hex.EncodeToString(stakingData.OpReturnData.StakerPublicKey.Marshall())
 	fpPkHex := hex.EncodeToString(stakingData.OpReturnData.FinalityProviderPublicKey.Marshall())
+
+	// Step 1: Check against global parameters such as min/max staking amount and staking time
+	validationErr := si.validateStakingTx(params, stakingData)
+	if validationErr != nil {
+		return validationErr
+	}
+	// Step 2: Overflow check (staking cap)
+	isOverflow, err := si.isOverflow(uint64(params.StakingCap), uint64(stakingData.StakingOutput.Value))
+	if err != nil {
+		return fmt.Errorf("failed to check the overflow of staking tx: %w", err)
+	}
+
 	stakingEvent := queuecli.NewActiveStakingEvent(
 		tx.TxHash().String(),
 		stakerPkHex,
@@ -362,6 +411,7 @@ func (si *StakingIndexer) ProcessStakingTx(
 		uint64(stakingData.OpReturnData.StakingTime),
 		uint64(stakingData.StakingOutputIdx),
 		txHex,
+		isOverflow,
 	)
 
 	// push the events first with the assumption that the consumer can handle duplicate events
@@ -380,6 +430,8 @@ func (si *StakingIndexer) ProcessStakingTx(
 		stakingData.OpReturnData.StakerPublicKey.PubKey,
 		uint32(stakingData.OpReturnData.StakingTime),
 		stakingData.OpReturnData.FinalityProviderPublicKey.PubKey,
+		uint64(stakingData.StakingOutput.Value),
+		isOverflow,
 	); err != nil {
 		return fmt.Errorf("failed to add the staking tx to store: %w", err)
 	}
@@ -401,7 +453,7 @@ func (si *StakingIndexer) ProcessStakingTx(
 	return nil
 }
 
-func (si *StakingIndexer) processUnbondingTx(
+func (si *StakingIndexer) ProcessUnbondingTx(
 	tx *wire.MsgTx,
 	stakingTxHash *chainhash.Hash,
 	height uint64, timestamp time.Time,
@@ -557,4 +609,47 @@ func getTxHex(tx *wire.MsgTx) (string, error) {
 	txHex := hex.EncodeToString(buf.Bytes())
 
 	return txHex, nil
+}
+
+// validateStakingTx performs the validation checks for the staking tx
+// such as min and max staking amount and staking time
+func (si *StakingIndexer) validateStakingTx(params *types.Params, stakingData *btcstaking.ParsedV0StakingTx) error {
+	value := stakingData.StakingOutput.Value
+	// Minimum staking amount check
+	if value < int64(params.MinStakingAmount) {
+		return fmt.Errorf("%w: staking amount is too low, expected: %v, got: %v",
+			ErrInvalidStakingTx, params.MinStakingAmount, value)
+	}
+
+	// Maximum staking amount check
+	if value > int64(params.MaxStakingAmount) {
+		return fmt.Errorf("%w: staking amount is too high, expected: %v, got: %v",
+			ErrInvalidStakingTx, params.MaxStakingAmount, value)
+	}
+
+	// Maximum staking time check
+	if uint64(stakingData.OpReturnData.StakingTime) > uint64(params.MaxStakingTime) {
+		return fmt.Errorf("%w: staking time is too high, expected: %v, got: %v",
+			ErrInvalidStakingTx, params.MaxStakingTime, stakingData.OpReturnData.StakingTime)
+	}
+
+	// Minimum staking time check
+	if uint64(stakingData.OpReturnData.StakingTime) < uint64(params.MinStakingTime) {
+		return fmt.Errorf("%w: staking time is too low, expected: %v, got: %v",
+			ErrInvalidStakingTx, params.MinStakingTime, stakingData.OpReturnData.StakingTime)
+	}
+	return nil
+}
+
+func (si *StakingIndexer) isOverflow(cap uint64, stakingValue uint64) (bool, error) {
+	confirmedTvl, err := si.is.GetConfirmedTvl()
+	if err != nil {
+		return false, fmt.Errorf("failed to get the confirmed TVL: %w", err)
+	}
+
+	return confirmedTvl+stakingValue > cap, nil
+}
+
+func (si *StakingIndexer) GetConfirmedTvl() (uint64, error) {
+	return si.is.GetConfirmedTvl()
 }

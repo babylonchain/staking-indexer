@@ -25,6 +25,9 @@ var (
 
 	// stores indexer state
 	indexerStateBucketName = []byte("indexerstate")
+
+	// stores the confirmed tvl
+	confirmedTvlBucketName = []byte("confirmedtvl")
 )
 
 type IndexerStore struct {
@@ -38,6 +41,8 @@ type StoredStakingTransaction struct {
 	StakerPk           *btcec.PublicKey
 	StakingTime        uint32
 	FinalityProviderPk *btcec.PublicKey
+	IsOverflow         bool
+	StakingValue       uint64
 }
 
 type StoredUnbondingTransaction struct {
@@ -74,6 +79,11 @@ func (c *IndexerStore) initBuckets() error {
 			return err
 		}
 
+		_, err = tx.CreateTopLevelBucket(confirmedTvlBucketName)
+		if err != nil {
+			return err
+		}
+
 		return nil
 	})
 }
@@ -85,6 +95,8 @@ func (is *IndexerStore) AddStakingTransaction(
 	stakerPk *btcec.PublicKey,
 	stakingTime uint32,
 	fpPk *btcec.PublicKey,
+	stakingValue uint64,
+	isOverflow bool,
 ) error {
 	txHash := tx.TxHash()
 	serializedTx, err := utils.SerializeBtcTransaction(tx)
@@ -100,6 +112,8 @@ func (is *IndexerStore) AddStakingTransaction(
 		StakingTime:        stakingTime,
 		StakerPk:           schnorr.SerializePubKey(stakerPk),
 		FinalityProviderPk: schnorr.SerializePubKey(fpPk),
+		IsOverflow:         isOverflow,
+		StakingValue:       stakingValue,
 	}
 
 	return is.addStakingTransaction(txHash[:], &msg)
@@ -125,7 +139,16 @@ func (is *IndexerStore) addStakingTransaction(
 			return err
 		}
 
-		return txBucket.Put(txHashBytes, marshalled)
+		err = txBucket.Put(txHashBytes, marshalled)
+		if err != nil {
+			return err
+		}
+
+		// if the staking tx is an overflow, we don't increment the confirmed tvl
+		if st.IsOverflow {
+			return nil
+		}
+		return is.incrementConfirmedTvl(tx, st.StakingValue)
 	})
 }
 
@@ -189,6 +212,8 @@ func protoStakingTxToStoredStakingTx(protoTx *proto.StakingTransaction) (*Stored
 		StakerPk:           stakerPk,
 		StakingTime:        protoTx.StakingTime,
 		FinalityProviderPk: fpPk,
+		IsOverflow:         protoTx.IsOverflow,
+		StakingValue:       protoTx.StakingValue,
 	}, nil
 }
 
@@ -228,6 +253,11 @@ func (is *IndexerStore) addUnbondingTransaction(
 		if maybeStakingTx == nil {
 			return ErrTransactionNotFound
 		}
+		// parse it, make sure it's valid
+		var storedTxProto proto.StakingTransaction
+		if err := pm.Unmarshal(maybeStakingTx, &storedTxProto); err != nil {
+			return ErrCorruptedTransactionsDb
+		}
 
 		unbondingTxBucket := tx.ReadWriteBucket(unbondingTxBucketName)
 		if unbondingTxBucket == nil {
@@ -245,7 +275,20 @@ func (is *IndexerStore) addUnbondingTransaction(
 			return err
 		}
 
-		return unbondingTxBucket.Put(txHashBytes, marshalled)
+		err = unbondingTxBucket.Put(txHashBytes, marshalled)
+		if err != nil {
+			return err
+		}
+
+		// if the staking tx is an overflow, we don't decrement the confirmed tvl
+		// as it was never added
+		if storedTxProto.IsOverflow {
+			return nil
+		}
+
+		return is.subtractConfirmedTvl(
+			tx, storedTxProto.StakingValue,
+		)
 	})
 }
 
@@ -301,6 +344,100 @@ func protoUnbondingTxToStoredUnbondingTx(protoTx *proto.UnbondingTransaction) (*
 		Tx:            &unbondingTx,
 		StakingTxHash: stakingTxHash,
 	}, nil
+}
+
+func getConfirmedTvlKey() []byte {
+	return []byte("confirmedtvl")
+}
+
+// incrementConfirmedTvl increments the confirmed tvl
+func (is *IndexerStore) incrementConfirmedTvl(
+	tx kvdb.RwTx, tvlIncrement uint64,
+) error {
+	tvlBucket := tx.ReadWriteBucket(confirmedTvlBucketName)
+	key := getConfirmedTvlKey()
+	if tvlBucket == nil {
+		return ErrCorruptedStateDb
+	}
+
+	currentTvl := tvlBucket.Get(key)
+	var confirmedTvl uint64
+	if currentTvl != nil {
+		var err error
+		confirmedTvl, err = uint64FromBytes(currentTvl)
+		if err != nil {
+			return err
+		}
+	}
+
+	newTvl := confirmedTvl + tvlIncrement
+	newTvlBytes := uint64ToBytes(newTvl)
+
+	return tvlBucket.Put(key, newTvlBytes)
+}
+
+// SubtractConfirmedTvl subtracts the confirmed tvl
+func (is *IndexerStore) subtractConfirmedTvl(
+	tx kvdb.RwTx, tvlSubtract uint64,
+) error {
+	key := getConfirmedTvlKey()
+	tvlBucket := tx.ReadWriteBucket(confirmedTvlBucketName)
+	if tvlBucket == nil {
+		return ErrCorruptedStateDb
+	}
+
+	currentTvl := tvlBucket.Get(key)
+	if currentTvl == nil {
+		// This should never happen, return an error
+		return ErrCorruptedStateDb
+	}
+	confirmedTvl, err := uint64FromBytes(currentTvl)
+	if err != nil {
+		return err
+	}
+
+	if tvlSubtract > confirmedTvl {
+		return ErrNegativeTvl
+	}
+
+	newTvlBytes := uint64ToBytes(confirmedTvl - tvlSubtract)
+
+	return tvlBucket.Put(key, newTvlBytes)
+}
+
+// GetConfirmedTvl returns the confirmed tvl
+func (is *IndexerStore) GetConfirmedTvl() (uint64, error) {
+	key := getConfirmedTvlKey()
+
+	var confirmedTvl uint64
+	err := is.db.View(func(tx kvdb.RTx) error {
+		tvlBucket := tx.ReadBucket(confirmedTvlBucketName)
+		if tvlBucket == nil {
+			return ErrCorruptedStateDb
+		}
+
+		v := tvlBucket.Get(key)
+		if v == nil {
+			// This could happen if the indexer is started for the first time
+			confirmedTvl = 0
+			return nil
+		}
+
+		tvl, err := uint64FromBytes(v)
+		if err != nil {
+			return err
+		}
+
+		confirmedTvl = tvl
+
+		return nil
+	}, func() {})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return confirmedTvl, nil
 }
 
 func getLastProcessedHeightKey() []byte {
