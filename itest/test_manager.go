@@ -46,6 +46,7 @@ type TestManager struct {
 	StakingEventChan   <-chan queuecli.QueueMessage
 	UnbondingEventChan <-chan queuecli.QueueMessage
 	WithdrawEventChan  <-chan queuecli.QueueMessage
+	ConfirmationDepth  uint16
 }
 
 // bitcoin params used for testing
@@ -158,6 +159,7 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 		StakingEventChan:   stakingEventChan,
 		UnbondingEventChan: unbondingEventChan,
 		WithdrawEventChan:  withdrawEventChan,
+		ConfirmationDepth:  versionedParams.ParamsVersions[0].ConfirmationDepth,
 	}
 }
 
