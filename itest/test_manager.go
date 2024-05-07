@@ -189,7 +189,6 @@ func defaultStakingIndexerConfig(homePath string) *config.Config {
 	defaultConfig.BTCConfig.RPCHost = bitcoindHost
 	defaultConfig.BTCConfig.RPCUser = bitcoindUser
 	defaultConfig.BTCConfig.RPCPass = bitcoindPass
-	defaultConfig.BTCConfig.RPCPolling = true
 	defaultConfig.BTCConfig.BlockPollingInterval = 1 * time.Second
 	defaultConfig.BTCConfig.TxPollingInterval = 1 * time.Second
 

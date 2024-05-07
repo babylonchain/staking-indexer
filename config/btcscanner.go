@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	defaultPollingInterval   = 1 * time.Second
+	defaultPollingInterval   = 10 * time.Minute
 	defaultConfirmationDepth = 10
 	defaultBaseHeight        = 1
 )
