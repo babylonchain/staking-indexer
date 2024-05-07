@@ -161,6 +161,16 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 	for _, tx := range b.Txs {
 		msgTx := tx.MsgTx()
 
+		// 0. check whether the tx has already processed
+		processed, err := si.IsTxProcessed(tx.Hash())
+		if err != nil {
+			// indicates the db is corrupted
+			return err
+		}
+		if processed {
+			continue
+		}
+
 		// 1. try to parse staking tx
 		stakingData, err := si.tryParseStakingTx(msgTx, params)
 		if err == nil {
@@ -176,17 +186,12 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 					// We will continue to the next tx as the staking tx is invalid
 					// and we don't want to stop the indexer
 					continue
-				} else if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
+				} else {
 					// record metrics
 					failedProcessingStakingTxsCounter.Inc()
 
 					return err
 				}
-				// we don't consider duplicate error critical as it can happen
-				// when the indexer restarts
-				si.logger.Warn("found a duplicate tx",
-					zap.String("tx_hash", msgTx.TxHash().String()))
-				continue
 			}
 
 			// should not use *continue* here as a special case is
@@ -275,6 +280,10 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 	lastProcessedBtcHeight.Set(float64(b.Height))
 
 	return nil
+}
+
+func (si *StakingIndexer) IsTxProcessed(txHash *chainhash.Hash) (bool, error) {
+	return si.is.TxExists(txHash)
 }
 
 // getSpentStakingTx checks if the given tx spends any of the stored staking tx

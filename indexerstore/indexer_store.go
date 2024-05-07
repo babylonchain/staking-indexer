@@ -328,6 +328,44 @@ func (is *IndexerStore) GetUnbondingTransaction(txHash *chainhash.Hash) (*Stored
 	return storedTx, nil
 }
 
+func (is *IndexerStore) TxExists(txHash *chainhash.Hash) (bool, error) {
+	txHashBytes := txHash.CloneBytes()
+
+	existed := false
+
+	err := is.db.View(func(tx kvdb.RTx) error {
+		stakingTxBucket := tx.ReadBucket(stakingTxBucketName)
+		if stakingTxBucket == nil {
+			return ErrCorruptedTransactionsDb
+		}
+
+		maybeTx := stakingTxBucket.Get(txHashBytes)
+		if maybeTx != nil {
+			existed = true
+			return nil
+		}
+
+		unbondingTxBucket := tx.ReadBucket(unbondingTxBucketName)
+		if unbondingTxBucket == nil {
+			return ErrCorruptedTransactionsDb
+		}
+
+		maybeTx = unbondingTxBucket.Get(txHashBytes)
+		if maybeTx != nil {
+			existed = true
+			return nil
+		}
+
+		return nil
+	}, func() {})
+
+	if err != nil {
+		return false, err
+	}
+
+	return existed, nil
+}
+
 func protoUnbondingTxToStoredUnbondingTx(protoTx *proto.UnbondingTransaction) (*StoredUnbondingTransaction, error) {
 	var unbondingTx wire.MsgTx
 	err := unbondingTx.Deserialize(bytes.NewReader(protoTx.TransactionBytes))
