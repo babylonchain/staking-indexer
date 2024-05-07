@@ -112,7 +112,7 @@ func (si *StakingIndexer) ValidateStartHeight(startHeight uint64) error {
 		return fmt.Errorf("the database is empty, the start height should be equal to the base height %d", baseHeight)
 	}
 
-	if startHeight > lastProcessedHeight+1 {
+	if lastProcessedHeight != 0 && startHeight > lastProcessedHeight+1 {
 		return fmt.Errorf("the start height should not be higher than %d (the last processed height + 1)", lastProcessedHeight+1)
 	}
 
@@ -140,7 +140,7 @@ func (si *StakingIndexer) confirmedBlocksLoop() {
 			b := block
 			si.logger.Info("received confirmed block",
 				zap.Int32("height", block.Height))
-			if err := si.handleConfirmedBlock(b); err != nil {
+			if err := si.HandleConfirmedBlock(b); err != nil {
 				// this indicates systematic failure
 				si.logger.Fatal("failed to handle block", zap.Error(err))
 			}
@@ -151,9 +151,9 @@ func (si *StakingIndexer) confirmedBlocksLoop() {
 	}
 }
 
-// handleConfirmedBlock iterates all the tx set in the block and
-// parse staking tx, unbonding tx, and withdrawal tx if there are any
-func (si *StakingIndexer) handleConfirmedBlock(b *types.IndexedBlock) error {
+// HandleConfirmedBlock iterates through the tx set of a confirmed block and
+// parse the staking, unbonding, and withdrawal txs if there are any.
+func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 	params, err := si.paramsVersions.GetParamsForBTCHeight(b.Height)
 	if err != nil {
 		return err
