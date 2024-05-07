@@ -27,7 +27,7 @@ type TestStakingData struct {
 func GenerateTestStakingData(
 	t *testing.T,
 	r *rand.Rand,
-	params *types.Params,
+	params *types.GlobalParams,
 ) *TestStakingData {
 	stakerPrivKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
@@ -46,7 +46,7 @@ func GenerateTestStakingData(
 	}
 }
 
-func GenerateStakingTxFromTestData(t *testing.T, r *rand.Rand, params *types.Params, stakingData *TestStakingData) (*btcstaking.IdentifiableStakingInfo, *btcutil.Tx) {
+func GenerateStakingTxFromTestData(t *testing.T, r *rand.Rand, params *types.GlobalParams, stakingData *TestStakingData) (*btcstaking.IdentifiableStakingInfo, *btcutil.Tx) {
 	stakingInfo, tx, err := btcstaking.BuildV0IdentifiableStakingOutputsAndTx(
 		params.Tag,
 		stakingData.StakerKey,
@@ -73,7 +73,7 @@ func GenerateStakingTxFromTestData(t *testing.T, r *rand.Rand, params *types.Par
 	return stakingInfo, btcutil.NewTx(tx)
 }
 
-func GenerateUnbondingTxFromStaking(t *testing.T, params *types.Params, stakingData *TestStakingData, stakingTxHash *chainhash.Hash, stakingOutputIdx uint32) *btcutil.Tx {
+func GenerateUnbondingTxFromStaking(t *testing.T, params *types.GlobalParams, stakingData *TestStakingData, stakingTxHash *chainhash.Hash, stakingOutputIdx uint32) *btcutil.Tx {
 	unbondingInfo, err := btcstaking.BuildUnbondingInfo(
 		stakingData.StakerKey,
 		[]*btcec.PublicKey{stakingData.FinalityProviderKey},

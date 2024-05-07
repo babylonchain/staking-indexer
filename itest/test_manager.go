@@ -99,9 +99,10 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 	)
 	require.NoError(t, err)
 
-	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
+	paramsRetriever, err := params.NewGlobalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	versionedParams := paramsRetriever.GetParamsVersions()
+	versionedParams := paramsRetriever.VersionedParams()
+	require.NoError(t, err)
 	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, versionedParams, logger, btcClient, btcNotifier)
 	require.NoError(t, err)
 

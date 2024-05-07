@@ -96,7 +96,7 @@ func TestStakingLifeCycle(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	sysParamsVersions := paramsRetriever.GetParamsVersions()
+	sysParamsVersions := paramsRetriever.ParamsByHeight()
 	// TODO: test with multiple system parameters
 	sysParams := sysParamsVersions.ParamsVersions[0]
 	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
@@ -174,7 +174,7 @@ func TestIndexerRestart(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	sysParamsVersions := paramsRetriever.GetParamsVersions()
+	sysParamsVersions := paramsRetriever.ParamsByHeight()
 	// TODO: test with multiple system parameters
 	sysParams := sysParamsVersions.ParamsVersions[0]
 	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
@@ -246,7 +246,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	// generate valid staking tx data
 	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	sysParamsVersions := paramsRetriever.GetParamsVersions()
+	sysParamsVersions := paramsRetriever.ParamsByHeight()
 	// TODO: test with multiple system parameters
 	sysParams := sysParamsVersions.ParamsVersions[0]
 	testStakingData := getTestStakingData(t)
@@ -345,7 +345,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 
 func buildUnbondingTx(
 	t *testing.T,
-	params *types.Params,
+	params *types.GlobalParams,
 	stakerPrivKey *btcec.PrivateKey,
 	fpKey *btcec.PublicKey,
 	stakingAmount btcutil.Amount,

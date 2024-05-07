@@ -33,7 +33,7 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 	tag := []byte{0x01, 0x02, 0x03, 0x04}
 
 	paramsVersions := &types.ParamsVersions{
-		ParamsVersions: make([]*types.Params, 0),
+		ParamsVersions: make([]*types.GlobalParams, 0),
 	}
 	lastStakingCap := btcutil.Amount(0)
 	lastActivationHeight := int32(0)
@@ -60,10 +60,10 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 		lastActivationHeight = activationHeight
 		rotatedKeys := rotateCovenantPks(lastCovKeys, r, t)
 		copy(lastCovKeys, rotatedKeys)
-		paramsVersions.ParamsVersions = append(paramsVersions.ParamsVersions, &types.Params{
+		paramsVersions.ParamsVersions = append(paramsVersions.ParamsVersions, &types.GlobalParams{
 			Version:           version,
 			StakingCap:        stakingCap,
-			ActivationHeight:  activationHeight,
+			ActivationHeight:  uint64(activationHeight),
 			Tag:               tag,
 			CovenantPks:       rotatedKeys,
 			CovenantQuorum:    covQuorum,

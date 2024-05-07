@@ -8,12 +8,12 @@ import (
 )
 
 type ParamsVersions struct {
-	ParamsVersions []*Params
+	ParamsVersions []*GlobalParams
 }
 
-type Params struct {
+type GlobalParams struct {
 	Version           uint16
-	ActivationHeight  int32
+	ActivationHeight  uint64
 	StakingCap        btcutil.Amount
 	Tag               []byte
 	CovenantPks       []*btcec.PublicKey
@@ -31,13 +31,13 @@ type Params struct {
 // for a particular BTC height.
 // Makes the assumption that the parameters are ordered by monotonically increasing `ActivationHeight`
 // and that there are no overlaps between parameter activations.
-func (pv *ParamsVersions) GetParamsForBTCHeight(btcHeight int32) (*Params, error) {
+func (pv *ParamsVersions) GetParamsForBTCHeight(btcHeight int32) (*GlobalParams, error) {
 	// Iterate the list in reverse (i.e. decreasing ActivationHeight)
 	// and identify the first element that has an activation height below
 	// the specified BTC height.
 	for i := len(pv.ParamsVersions) - 1; i >= 0; i-- {
 		paramsVersion := pv.ParamsVersions[i]
-		if paramsVersion.ActivationHeight <= btcHeight {
+		if paramsVersion.ActivationHeight <= uint64(btcHeight) {
 			return paramsVersion, nil
 		}
 	}

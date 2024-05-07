@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	defaultPollingInterval = 10 * time.Minute
+	defaultPollingInterval = 1 * time.Minute
 	defaultBaseHeight      = 1
 )
 

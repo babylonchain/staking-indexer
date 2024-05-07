@@ -86,11 +86,11 @@ func start(ctx *cli.Context) error {
 		return fmt.Errorf("failed to create db backend: %w", err)
 	}
 
-	paramsRetriever, err := params.NewLocalParamsRetriever(ctx.String(paramsPathFlag))
+	paramsRetriever, err := params.NewGlobalParamsRetriever(ctx.String(paramsPathFlag))
 	if err != nil {
 		return fmt.Errorf("failed to initialize params retriever: %w", err)
 	}
-	versionedParams := paramsRetriever.GetParamsVersions()
+	versionedParams := paramsRetriever.VersionedParams()
 
 	// create BTC scanner
 	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, versionedParams, logger, btcClient, btcNotifier)
