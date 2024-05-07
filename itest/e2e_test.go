@@ -6,11 +6,12 @@ package e2etest
 import (
 	"encoding/hex"
 	"encoding/json"
+	"math/rand"
+	"testing"
+	"time"
+
 	"github.com/babylonchain/babylon/btcstaking"
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
-	"github.com/babylonchain/staking-indexer/config"
-	"github.com/babylonchain/staking-indexer/params"
-	"github.com/babylonchain/staking-indexer/testutils"
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -19,9 +20,10 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/stretchr/testify/require"
-	"math/rand"
-	"testing"
-	"time"
+
+	"github.com/babylonchain/staking-indexer/config"
+	"github.com/babylonchain/staking-indexer/params"
+	"github.com/babylonchain/staking-indexer/testutils"
 
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
 	"github.com/babylonchain/staking-indexer/types"
@@ -212,8 +214,8 @@ func TestIndexerRestart(t *testing.T) {
 	restartedTm := ReStartFromHeight(t, tm, uint64(n))
 	defer restartedTm.Stop()
 
-	// check the staking event is replayed
-	restartedTm.CheckNextStakingEvent(t, stakingTxHash)
+	// check the staking event will not be replayed
+	restartedTm.CheckNoStakingEvent(t)
 
 	// restart the testing manager again from 0
 	// which means the start height should be from local store
@@ -222,10 +224,6 @@ func TestIndexerRestart(t *testing.T) {
 
 	// wait until catch up
 	restartedTm2.WaitForNConfirmations(t, int(k))
-
-	// no staking event should be replayed as
-	// the indexer starts from a higher height
-	restartedTm2.CheckNoStakingEvent(t)
 }
 
 // TestStakingUnbondingLifeCycle covers the following life cycle
