@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 )
@@ -11,18 +12,19 @@ type ParamsVersions struct {
 }
 
 type Params struct {
-	Version          uint16
-	ActivationHeight int32
-	StakingCap       btcutil.Amount
-	Tag              []byte
-	CovenantPks      []*btcec.PublicKey
-	CovenantQuorum   uint32
-	UnbondingTime    uint16
-	UnbondingFee     btcutil.Amount
-	MaxStakingAmount btcutil.Amount
-	MinStakingAmount btcutil.Amount
-	MaxStakingTime   uint16
-	MinStakingTime   uint16
+	Version           uint16
+	ActivationHeight  int32
+	StakingCap        btcutil.Amount
+	Tag               []byte
+	CovenantPks       []*btcec.PublicKey
+	CovenantQuorum    uint32
+	UnbondingTime     uint16
+	UnbondingFee      btcutil.Amount
+	MaxStakingAmount  btcutil.Amount
+	MinStakingAmount  btcutil.Amount
+	MaxStakingTime    uint16
+	MinStakingTime    uint16
+	ConfirmationDepth uint16
 }
 
 // GetParamsForBTCHeight Retrieve the parameters that should take into effect

@@ -23,18 +23,19 @@ type internalParamsVersions struct {
 }
 
 type internalParams struct {
-	Version          uint16         `json:"version"`
-	ActivationHeight int32          `json:"activation_height"`
-	StakingCap       btcutil.Amount `json:"staking_cap"`
-	Tag              string         `json:"tag"`
-	CovenantPks      []string       `json:"covenant_pks"`
-	CovenantQuorum   uint32         `json:"covenant_quorum"`
-	UnbondingTime    uint16         `json:"unbonding_time"`
-	UnbondingFee     btcutil.Amount `json:"unbonding_fee"`
-	MaxStakingAmount btcutil.Amount `json:"max_staking_amount"`
-	MinStakingAmount btcutil.Amount `json:"min_staking_amount"`
-	MaxStakingTime   uint16         `json:"max_staking_time"`
-	MinStakingTime   uint16         `json:"min_staking_time"`
+	Version           uint16         `json:"version"`
+	ActivationHeight  int32          `json:"activation_height"`
+	StakingCap        btcutil.Amount `json:"staking_cap"`
+	Tag               string         `json:"tag"`
+	CovenantPks       []string       `json:"covenant_pks"`
+	CovenantQuorum    uint32         `json:"covenant_quorum"`
+	UnbondingTime     uint16         `json:"unbonding_time"`
+	UnbondingFee      btcutil.Amount `json:"unbonding_fee"`
+	MaxStakingAmount  btcutil.Amount `json:"max_staking_amount"`
+	MinStakingAmount  btcutil.Amount `json:"min_staking_amount"`
+	MaxStakingTime    uint16         `json:"max_staking_time"`
+	MinStakingTime    uint16         `json:"min_staking_time"`
+	ConfirmationDepth uint16         `json:"confirmation_depth"`
 }
 
 func FuzzParamsRetriever(f *testing.F) {
@@ -72,6 +73,7 @@ func FuzzParamsRetriever(f *testing.F) {
 			require.Equal(t, globalParams.MaxStakingTime, p.MaxStakingTime)
 			require.Equal(t, globalParams.MinStakingAmount, p.MinStakingAmount)
 			require.Equal(t, globalParams.MaxStakingAmount, p.MaxStakingAmount)
+			require.Equal(t, globalParams.ConfirmationDepth, p.ConfirmationDepth)
 			require.Equal(t, globalParams.CovenantQuorum, p.CovenantQuorum)
 			require.Equal(t, globalParams.UnbondingTime, p.UnbondingTime)
 			require.True(t, testutils.PubKeysSliceEqual(globalParams.CovenantPks, p.CovenantPks))
@@ -90,17 +92,18 @@ func paramsToInternalParams(pv *types.ParamsVersions) *internalParamsVersions {
 		}
 
 		paramsVersions.ParamsVersions = append(paramsVersions.ParamsVersions, &internalParams{
-			Version:          p.Version,
-			ActivationHeight: p.ActivationHeight,
-			StakingCap:       p.StakingCap,
-			Tag:              hex.EncodeToString(p.Tag),
-			CovenantPks:      covPksHex,
-			CovenantQuorum:   p.CovenantQuorum,
-			UnbondingTime:    p.UnbondingTime,
-			MaxStakingAmount: p.MaxStakingAmount,
-			MinStakingAmount: p.MinStakingAmount,
-			MaxStakingTime:   p.MaxStakingTime,
-			MinStakingTime:   p.MinStakingTime,
+			Version:           p.Version,
+			ActivationHeight:  p.ActivationHeight,
+			StakingCap:        p.StakingCap,
+			Tag:               hex.EncodeToString(p.Tag),
+			CovenantPks:       covPksHex,
+			CovenantQuorum:    p.CovenantQuorum,
+			UnbondingTime:     p.UnbondingTime,
+			MaxStakingAmount:  p.MaxStakingAmount,
+			MinStakingAmount:  p.MinStakingAmount,
+			MaxStakingTime:    p.MaxStakingTime,
+			MinStakingTime:    p.MinStakingTime,
+			ConfirmationDepth: p.ConfirmationDepth,
 		})
 	}
 	return paramsVersions

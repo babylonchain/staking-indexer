@@ -98,7 +98,10 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 	)
 	require.NoError(t, err)
 
-	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, btcNotifier)
+	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
+	require.NoError(t, err)
+	versionedParams := paramsRetriever.GetParamsVersions()
+	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, versionedParams, logger, btcClient, btcNotifier)
 	require.NoError(t, err)
 
 	// create event consumer
@@ -114,9 +117,7 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 
 	db, err := cfg.DatabaseConfig.GetDbBackend()
 	require.NoError(t, err)
-	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
-	require.NoError(t, err)
-	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, db, paramsRetriever.GetParamsVersions(), scanner)
+	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, db, versionedParams, scanner)
 	require.NoError(t, err)
 
 	interceptor, err := signal.Intercept()

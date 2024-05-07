@@ -6,24 +6,18 @@ import (
 )
 
 const (
-	defaultPollingInterval   = 10 * time.Minute
-	defaultConfirmationDepth = 10
-	defaultBaseHeight        = 1
+	defaultPollingInterval = 10 * time.Minute
+	defaultBaseHeight      = 1
 )
 
 type BTCScannerConfig struct {
-	BaseHeight        uint64        `long:"baseheight" description:"the base height before which no staking transactions exist"`
-	PollingInterval   time.Duration `long:"pollinginterval" description:"the time interval between each polling of new confirmed blocks"`
-	ConfirmationDepth uint64        `long:"confirmationdepth" description:"the confirmation depth to consider a BTC block as confirmed"`
+	BaseHeight      uint64        `long:"baseheight" description:"the base height before which no staking transactions exist"`
+	PollingInterval time.Duration `long:"pollinginterval" description:"the time interval between each polling of new confirmed blocks"`
 }
 
 func (cfg *BTCScannerConfig) Validate() error {
 	if cfg.BaseHeight == 0 {
 		return fmt.Errorf("base-height %d must be positive", cfg.BaseHeight)
-	}
-
-	if cfg.ConfirmationDepth == 0 {
-		return fmt.Errorf("confirmation-depth %d must be positive", cfg.ConfirmationDepth)
 	}
 
 	if cfg.PollingInterval <= 0 {
@@ -34,8 +28,7 @@ func (cfg *BTCScannerConfig) Validate() error {
 
 func DefaultBTCScannerConfig() *BTCScannerConfig {
 	return &BTCScannerConfig{
-		BaseHeight:        defaultBaseHeight,
-		PollingInterval:   defaultPollingInterval,
-		ConfirmationDepth: defaultConfirmationDepth,
+		BaseHeight:      defaultBaseHeight,
+		PollingInterval: defaultPollingInterval,
 	}
 }
