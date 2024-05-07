@@ -7,7 +7,7 @@ Bitcoin Staking protocol.
 
 ### Staking Transactions
 
-The Bitcoin Staking protocol specifies three transactions:
+The Bitcoin Staking protocol classifies a transaction into three types:
 - *Staking Transaction*: A transaction that contains an output that commits to
   the self-custodial Bitcoin Staking script. The value specified in this output
   corresponds to the Bitcoin staked. The Bitcoin Staking script defines
@@ -16,9 +16,6 @@ The Bitcoin Staking protocol specifies three transactions:
   output and commits to the self-custodial Bitcoin Unbonding script. This
   script contains conditions for timelock based withdrawal with the timelock
   being lower than the one in the staking script and slashing.
-- *Withdrawal Transaction*: A transaction that consumes the Bitcoin Staking or
-  the Bitcoin Unbonding output through the timelock condition. It extracts the
-  unlocked stake amount from the staking script.
 
 More details on the Bitcoin Staking transactions and scripts can be found in
 this [reference](https://github.com/babylonchain/babylon/blob/v0.8.5/docs/staking-script.md).
@@ -32,7 +29,7 @@ governance wallet owned by it. They are additionally included in a GitHub
 registry for easy retrieval and timestamp verification.
 
 There are different versions of parameters with each one having a particular
-Bitcoin Activation height. Each version contains the following:
+Bitcoin activation height. Each version contains the following:
 ```json
 {
   "version": <params_version>,
@@ -66,8 +63,8 @@ system considers active at any moment.
 ## Staking Transactions Processing
 
 In the phase-1 system, Bitcoin serves as the only source of truth about the
-events of the system. Events correspond to Bitcoin Staking, Unbonding, and
-Withdrawal transactions and based on their ordering in the Bitcoin ledger we
+events of the system. Events correspond to Bitcoin Staking and Unbonding
+transactions and based on their ordering in the Bitcoin ledger we
 can identify the parameters they should be validated against to be accepted.
 
 The system described below, assumes that it is dealing with irreversible
@@ -78,7 +75,10 @@ history can be replayed in order to reach the same state conclusions,
 as long as a fork larger than the confirmation parameter has happened.
 
 The system processes Bitcoin blocks and transactions in the order they appear
-on Bitcoin.
+on Bitcoin and are decoded based on the spec [here](/doc/extract_tx_data.md).
+In the below sections,
+we define the state of the system and its transitions,
+as well as the validation conditions for the different transactions.
 
 ### State
 
@@ -92,7 +92,7 @@ The system maintains two pieces of state:
 
 ### New Staking Transactions
 
-We implement a first-come first-serve process for activating
+We implement a first-come-first-serve process for activating
 valid staking transactions based on the system parameters. If a transaction
 contains a valid set of parameters, it is classified into `Active` and
 `Overflow` depending on whether it can fit to the current parameter's staking
@@ -157,10 +157,3 @@ active/overflow staking transactions set. This effectivelly means,
 that if the staking transaction was active and the staking cap
 had previously been filled, now there is space for new staking transactions.
 These staking transactions need to come later than the unbonding transaction.
-
-### Withdrawal Transactions
-
-For Bitcoin transactions that adhere to the Withdraw transaction format,
-we check whether they are valid and whether the transaction that they withdraw
-is tracked by our state. If so, the system just marks the transaction as
-withdrawn.

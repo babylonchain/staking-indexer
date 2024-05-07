@@ -5,17 +5,17 @@ increasing manner. This is to ensure the causal order of the events.
 
 The indexer performs the following steps to process transactions:
 1. Try to parse it as a staking transaction. The staking data and parsing 
-   details can be found in [the staking tx spec](/doc/staking_tx.md). 
+   details can be found in [the staking tx spec](/doc/staking.md#new-staking-transactions). 
    1. If a staking transaction is found, emit `ActiveStakingEvent` and 
       persist the parsed staking transaction data in the database. The
       `ActiveStakingEvent` specifies whether the transaction is `Active` or
-      `Overflow` based on the [stake activation
-      process](/doc/staking_activation.md).
+      `Overflow`.
 2. Check whether the transaction spends any previous staking transactions 
    stored in the database. 
    1. If a spending transaction is found, check whether it is a valid unbonding 
       transaction. The definition of an unbonding transaction and validation 
-      details can be found in [the unbonding tx spec](/doc/unbonding_tx.md).
+      details can be found in [the unbonding tx
+      spec](/doc/staking.md#unbonding-transactions).
       1. If a valid unbonding transaction is found, emit `UnbondingEvent` and 
          persist the unbonding transaction data in the database. This happens
          for both active and overflow staking transactions.
