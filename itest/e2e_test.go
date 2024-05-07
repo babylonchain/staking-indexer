@@ -94,9 +94,9 @@ func TestStakingLifeCycle(t *testing.T) {
 
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
+	paramsRetriever, err := params.NewGlobalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	sysParamsVersions := paramsRetriever.ParamsByHeight()
+	sysParamsVersions := paramsRetriever.VersionedParams()
 	// TODO: test with multiple system parameters
 	sysParams := sysParamsVersions.ParamsVersions[0]
 	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
@@ -172,9 +172,9 @@ func TestIndexerRestart(t *testing.T) {
 
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
+	paramsRetriever, err := params.NewGlobalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	sysParamsVersions := paramsRetriever.ParamsByHeight()
+	sysParamsVersions := paramsRetriever.VersionedParams()
 	// TODO: test with multiple system parameters
 	sysParams := sysParamsVersions.ParamsVersions[0]
 	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
@@ -244,9 +244,9 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	k := uint64(tm.ConfirmationDepth)
 
 	// generate valid staking tx data
-	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
+	paramsRetriever, err := params.NewGlobalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	sysParamsVersions := paramsRetriever.ParamsByHeight()
+	sysParamsVersions := paramsRetriever.VersionedParams()
 	// TODO: test with multiple system parameters
 	sysParams := sysParamsVersions.ParamsVersions[0]
 	testStakingData := getTestStakingData(t)
