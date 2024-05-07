@@ -1,6 +1,7 @@
 package params
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -58,8 +59,15 @@ func NewLocalParamsRetriever(filePath string) (*LocalParamsRetriever, error) {
 	// Define prior params to compare against
 	var previousParams *internalParams = nil
 	for _, p := range pv.ParamsVersions {
-		if len(p.Tag) != btcstaking.MagicBytesLen {
-			return nil, fmt.Errorf("invalid tag length, expected %d, got %d", btcstaking.MagicBytesLen, len(p.Tag))
+
+		tagDecoded, err := hex.DecodeString(p.Tag)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode tag: %w", err)
+		}
+
+		if len(tagDecoded) != btcstaking.MagicBytesLen {
+			return nil, fmt.Errorf("invalid tag length, expected %d, got %d", btcstaking.MagicBytesLen, len(tagDecoded))
 		}
 
 		if len(p.CovenantPks) == 0 {
@@ -108,7 +116,7 @@ func NewLocalParamsRetriever(filePath string) (*LocalParamsRetriever, error) {
 			Version:          p.Version,
 			StakingCap:       p.StakingCap,
 			ActivationHeight: p.ActivationHeight,
-			Tag:              []byte(p.Tag),
+			Tag:              tagDecoded,
 			CovenantPks:      covPks,
 			CovenantQuorum:   p.CovenantQuorum,
 			UnbondingTime:    p.UnbondingTime,

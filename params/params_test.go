@@ -93,7 +93,7 @@ func paramsToInternalParams(pv *types.ParamsVersions) *internalParamsVersions {
 			Version:          p.Version,
 			ActivationHeight: p.ActivationHeight,
 			StakingCap:       p.StakingCap,
-			Tag:              string(p.Tag),
+			Tag:              hex.EncodeToString(p.Tag),
 			CovenantPks:      covPksHex,
 			CovenantQuorum:   p.CovenantQuorum,
 			UnbondingTime:    p.UnbondingTime,

@@ -30,7 +30,7 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 
 	// Keep the same tag across versions
 	// TODO: consider tag updates
-	tag := "bbt4"
+	tag := []byte{0x01, 0x02, 0x03, 0x04}
 
 	paramsVersions := &types.ParamsVersions{
 		ParamsVersions: make([]*types.Params, 0),
@@ -63,7 +63,7 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 			Version:          version,
 			StakingCap:       stakingCap,
 			ActivationHeight: activationHeight,
-			Tag:              []byte(tag),
+			Tag:              tag,
 			CovenantPks:      rotatedKeys,
 			CovenantQuorum:   covQuorum,
 			UnbondingTime:    unbondingTime,
