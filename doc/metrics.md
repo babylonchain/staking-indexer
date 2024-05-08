@@ -50,10 +50,12 @@ global parameters.
 * `failedProcessingWithdrawTxsFromUnbondingCounter`: Total number of 
   failures when processing valid withdrawal transactions from unbonding
 
+* `invalidUnbondingTxsCounter`: Total number of invalid unbonding transactions
+
+* `invalidStakingTxsCounter`: Total number of invalid staking transactions
+
 * `irregularTxsFromStakingCounter`: Total number of irregular transactions 
   that spend a staking tx
 
 * `irregularTxsFromUnbondingCounter`: Total number of irregular transactions 
   that spend an unbonding tx
-
-* `invalidUnbondingTxsCounter`: Total number of invalid unbonding transactions

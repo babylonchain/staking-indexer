@@ -5,9 +5,9 @@ Bitcoin Staking protocol.
 
 ## Preliminaries
 
-### Staking Transactions
+### Transaction Types
 
-The Bitcoin Staking protocol classifies a transaction into three types:
+The Bitcoin Staking protocol considers two types of transactions relevant to staking:
 - *Staking Transaction*: A transaction that contains an output that commits to
   the self-custodial Bitcoin Staking script. The value specified in this output
   corresponds to the Bitcoin staked. The Bitcoin Staking script defines
@@ -47,7 +47,8 @@ Bitcoin activation height. Each version contains the following:
   "max_staking_amount": <max_staking_amount_satoshis>,
   "min_staking_amount": <min_staking_amount_satoshis>,
   "max_staking_time": <max_staking_time_btc_blocks>,
-  "min_staking_time": <min_staking_time_btc_blocks>
+  "min_staking_time": <min_staking_time_btc_blocks>,
+  "confirmation_depth": <confirmation_depth_btc_blocks>
 }
 ```
 
@@ -69,7 +70,8 @@ can identify the parameters they should be validated against to be accepted.
 
 The system described below, assumes that it is dealing with irreversible
 transactions, i.e. transactions that are deep enough on the Bitcoin ledger that
-their reversal is highly improbable. Therefore, no forking considerations are
+their reversal is highly improbable, governed by the `confirmation_depth` in the
+global parameters. Therefore, no forking considerations are
 taken into account. Further, the system is replayable, meaning that the Bitcoin
 history can be replayed in order to reach the same state conclusions,
 as long as a fork larger than the confirmation parameter has happened.

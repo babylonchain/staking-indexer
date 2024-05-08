@@ -126,7 +126,7 @@ var (
 	invalidStakingTxsCounter = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "si_invalid_staking_txs_counter",
-			Help: "Total number of invalid transactions",
+			Help: "Total number of invalid staking transactions",
 		},
 	)
 
