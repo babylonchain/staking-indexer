@@ -60,7 +60,7 @@ type TestScenario struct {
 // staking txs and unbonding txs
 func NewTestScenario(r *rand.Rand, t *testing.T, stakingChance int, numEvents int) *TestScenario {
 	versionedParams := datagen.GenerateGlobalParamsVersions(r, t)
-	startHeight := r.Int31n(1000) + 1 + versionedParams.ParamsVersions[0].ActivationHeight
+	startHeight := r.Int31n(1000) + 1 + int32(versionedParams.ParamsVersions[0].ActivationHeight)
 	lastEventHeight := startHeight
 	stakingEvents := make([]*StakingEvent, 0)
 	unbondingEvents := make([]*UnbondingEvent, 0)
@@ -136,7 +136,7 @@ func NewTestScenario(r *rand.Rand, t *testing.T, stakingChance int, numEvents in
 	}
 }
 
-func buildUnbondingEvent(stakingEvent *StakingEvent, height int32, p *types.Params, t *testing.T) *UnbondingEvent {
+func buildUnbondingEvent(stakingEvent *StakingEvent, height int32, p *types.GlobalParams, t *testing.T) *UnbondingEvent {
 	stakingTxHash := stakingEvent.StakingTx.Hash()
 	unbondingTx := datagen.GenerateUnbondingTxFromStaking(t, p, stakingEvent.StakingTxData, stakingTxHash, 0)
 
@@ -170,7 +170,7 @@ func hasActiveStakingEvent(stakingEvents []*StakingEvent) bool {
 	return false
 }
 
-func buildStakingEvent(r *rand.Rand, t *testing.T, height int32, p *types.Params) *StakingEvent {
+func buildStakingEvent(r *rand.Rand, t *testing.T, height int32, p *types.GlobalParams) *StakingEvent {
 	stakingData := datagen.GenerateTestStakingData(t, r, p)
 	_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, p, stakingData)
 
@@ -187,7 +187,7 @@ func FuzzBlockHandler(f *testing.F) {
 	// Note: before committing, it should be tested with large seed
 	// to avoid flaky
 	// small seed for ci because db open/close is slow
-	bbndatagen.AddRandomSeedsToFuzzer(f, 10)
+	bbndatagen.AddRandomSeedsToFuzzer(f, 20)
 
 	f.Fuzz(func(t *testing.T, seed int64) {
 		r := rand.New(rand.NewSource(seed))
@@ -531,7 +531,7 @@ func FuzzTestOverflow(f *testing.F) {
 	})
 }
 
-func getParsedStakingData(data *datagen.TestStakingData, tx *wire.MsgTx, params *types.Params) *btcstaking.ParsedV0StakingTx {
+func getParsedStakingData(data *datagen.TestStakingData, tx *wire.MsgTx, params *types.GlobalParams) *btcstaking.ParsedV0StakingTx {
 	return &btcstaking.ParsedV0StakingTx{
 		StakingOutput:     tx.TxOut[0],
 		StakingOutputIdx:  0,
@@ -572,7 +572,7 @@ func NewMockedBtcScanner(t *testing.T, confirmedBlocksChan chan *types.IndexedBl
 // This helper method will randomly select a staking tx from stakingTxData and unbond it
 func sendUnbondingTx(
 	t *testing.T, stakingIndexer *indexer.StakingIndexer,
-	params *types.Params, stakingTxData []*StakingTxData, r *rand.Rand,
+	params *types.GlobalParams, stakingTxData []*StakingTxData, r *rand.Rand,
 ) {
 	// select a random staking tx from stakingTxData and unbond it if it is not already unbonded
 	data := stakingTxData[r.Intn(len(stakingTxData))]
@@ -592,7 +592,7 @@ func sendUnbondingTx(
 
 func sendStakingTx(
 	t *testing.T, r *rand.Rand, stakingIndexer *indexer.StakingIndexer,
-	params *types.Params, stakingTxData []*StakingTxData, height uint64,
+	params *types.GlobalParams, stakingTxData []*StakingTxData, height uint64,
 ) (*datagen.TestStakingData, uint64, *indexerstore.StoredStakingTransaction, *btcutil.Tx) {
 	stakingData := datagen.GenerateTestStakingData(t, r, params)
 	_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, params, stakingData)

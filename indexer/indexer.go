@@ -329,7 +329,7 @@ func (si *StakingIndexer) getSpentUnbondingTx(tx *wire.MsgTx) (*indexerstore.Sto
 // It returns error when (1) it fails to verify the unbonding tx due
 // to invalid parameters, and (2) the tx spends the unbonding path
 // but is invalid
-func (si *StakingIndexer) IsValidUnbondingTx(tx *wire.MsgTx, stakingTx *indexerstore.StoredStakingTransaction, params *types.Params) (bool, error) {
+func (si *StakingIndexer) IsValidUnbondingTx(tx *wire.MsgTx, stakingTx *indexerstore.StoredStakingTransaction, params *types.GlobalParams) (bool, error) {
 	// 1. an unbonding tx must have exactly one input and output
 	if len(tx.TxIn) != 1 {
 		return false, nil
@@ -383,7 +383,7 @@ func (si *StakingIndexer) ProcessStakingTx(
 	tx *wire.MsgTx,
 	stakingData *btcstaking.ParsedV0StakingTx,
 	height uint64, timestamp time.Time,
-	params *types.Params,
+	params *types.GlobalParams,
 ) error {
 
 	si.logger.Info("found a staking tx",
@@ -466,7 +466,7 @@ func (si *StakingIndexer) ProcessUnbondingTx(
 	tx *wire.MsgTx,
 	stakingTxHash *chainhash.Hash,
 	height uint64, timestamp time.Time,
-	params *types.Params,
+	params *types.GlobalParams,
 ) error {
 
 	si.logger.Info("found an unbonding tx",
@@ -564,7 +564,7 @@ func (si *StakingIndexer) processWithdrawTx(tx *wire.MsgTx, stakingTxHash *chain
 	return nil
 }
 
-func (si *StakingIndexer) tryParseStakingTx(tx *wire.MsgTx, params *types.Params) (*btcstaking.ParsedV0StakingTx, error) {
+func (si *StakingIndexer) tryParseStakingTx(tx *wire.MsgTx, params *types.GlobalParams) (*btcstaking.ParsedV0StakingTx, error) {
 	possible := btcstaking.IsPossibleV0StakingTx(tx, params.Tag)
 	if !possible {
 		return nil, fmt.Errorf("not staking tx")
@@ -622,7 +622,7 @@ func getTxHex(tx *wire.MsgTx) (string, error) {
 
 // validateStakingTx performs the validation checks for the staking tx
 // such as min and max staking amount and staking time
-func (si *StakingIndexer) validateStakingTx(params *types.Params, stakingData *btcstaking.ParsedV0StakingTx) error {
+func (si *StakingIndexer) validateStakingTx(params *types.GlobalParams, stakingData *btcstaking.ParsedV0StakingTx) error {
 	value := stakingData.StakingOutput.Value
 	// Minimum staking amount check
 	if value < int64(params.MinStakingAmount) {

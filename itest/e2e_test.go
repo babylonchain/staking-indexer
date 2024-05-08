@@ -24,7 +24,6 @@ import (
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/params"
 	"github.com/babylonchain/staking-indexer/testutils"
-
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
 	"github.com/babylonchain/staking-indexer/types"
 )
@@ -38,11 +37,11 @@ func TestBTCScanner(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, n, count)
 
-	tm.WaitForNConfirmations(t, int(tm.Config.BTCScannerConfig.ConfirmationDepth))
+	tm.WaitForNConfirmations(t, int(tm.ConfirmationDepth))
 
 	_ = tm.BitcoindHandler.GenerateBlocks(10)
 
-	tm.WaitForNConfirmations(t, int(tm.Config.BTCScannerConfig.ConfirmationDepth))
+	tm.WaitForNConfirmations(t, int(tm.ConfirmationDepth))
 }
 
 func TestQueueConsumer(t *testing.T) {
@@ -91,13 +90,13 @@ func TestStakingLifeCycle(t *testing.T) {
 	n := 110
 	tm := StartManagerWithNBlocks(t, n)
 	defer tm.Stop()
-	k := tm.Config.BTCScannerConfig.ConfirmationDepth
+	k := uint64(tm.ConfirmationDepth)
 
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
+	paramsRetriever, err := params.NewGlobalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	sysParamsVersions := paramsRetriever.GetParamsVersions()
+	sysParamsVersions := paramsRetriever.VersionedParams()
 	// TODO: test with multiple system parameters
 	sysParams := sysParamsVersions.ParamsVersions[0]
 	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
@@ -169,13 +168,13 @@ func TestIndexerRestart(t *testing.T) {
 	n := 110
 	tm := StartManagerWithNBlocks(t, n)
 	defer tm.Stop()
-	k := tm.Config.BTCScannerConfig.ConfirmationDepth
+	k := tm.ConfirmationDepth
 
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
+	paramsRetriever, err := params.NewGlobalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	sysParamsVersions := paramsRetriever.GetParamsVersions()
+	sysParamsVersions := paramsRetriever.VersionedParams()
 	// TODO: test with multiple system parameters
 	sysParams := sysParamsVersions.ParamsVersions[0]
 	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
@@ -238,12 +237,12 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	n := 110
 	tm := StartManagerWithNBlocks(t, n)
 	defer tm.Stop()
-	k := tm.Config.BTCScannerConfig.ConfirmationDepth
+	k := uint64(tm.ConfirmationDepth)
 
 	// generate valid staking tx data
-	paramsRetriever, err := params.NewLocalParamsRetriever(testParamsPath)
+	paramsRetriever, err := params.NewGlobalParamsRetriever(testParamsPath)
 	require.NoError(t, err)
-	sysParamsVersions := paramsRetriever.GetParamsVersions()
+	sysParamsVersions := paramsRetriever.VersionedParams()
 	// TODO: test with multiple system parameters
 	sysParams := sysParamsVersions.ParamsVersions[0]
 	testStakingData := getTestStakingData(t)
@@ -342,7 +341,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 
 func buildUnbondingTx(
 	t *testing.T,
-	params *types.Params,
+	params *types.GlobalParams,
 	stakerPrivKey *btcec.PrivateKey,
 	fpKey *btcec.PublicKey,
 	stakingAmount btcutil.Amount,
