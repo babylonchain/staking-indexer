@@ -1,6 +1,7 @@
 package e2etest
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/babylonchain/staking-queue-client/queuemngr"
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -246,7 +248,18 @@ func (tm *TestManager) CheckNextStakingEvent(t *testing.T, stakingTxHash chainha
 	var activeStakingEvent queuecli.ActiveStakingEvent
 	err := json.Unmarshal([]byte(stakingEventBytes.Body), &activeStakingEvent)
 	require.NoError(t, err)
+
+	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
+	require.NoError(t, err)
 	require.Equal(t, stakingTxHash.String(), activeStakingEvent.StakingTxHashHex)
+	require.Equal(t, storedStakingTx.Tx.TxHash().String(), activeStakingEvent.StakingTxHashHex)
+	require.Equal(t, uint64(storedStakingTx.StakingTime), activeStakingEvent.StakingTimeLock)
+	require.Equal(t, storedStakingTx.StakingValue, activeStakingEvent.StakingValue)
+	require.Equal(t, uint64(storedStakingTx.StakingOutputIdx), activeStakingEvent.StakingOutputIndex)
+	require.Equal(t, storedStakingTx.InclusionHeight, activeStakingEvent.StakingStartHeight)
+	require.Equal(t, storedStakingTx.IsOverflow, activeStakingEvent.IsOverflow)
+	require.Equal(t, hex.EncodeToString(schnorr.SerializePubKey(storedStakingTx.StakerPk)), activeStakingEvent.StakerPkHex)
+	require.Equal(t, hex.EncodeToString(schnorr.SerializePubKey(storedStakingTx.FinalityProviderPk)), activeStakingEvent.FinalityProviderPkHex)
 
 	err = tm.QueueConsumer.StakingQueue.DeleteMessage(stakingEventBytes.Receipt)
 	require.NoError(t, err)
@@ -267,6 +280,11 @@ func (tm *TestManager) CheckNextUnbondingEvent(t *testing.T, unbondingTxHash cha
 	err := json.Unmarshal([]byte(unbondingEventBytes.Body), &unbondingEvent)
 	require.NoError(t, err)
 	require.Equal(t, unbondingTxHash.String(), unbondingEvent.UnbondingTxHashHex)
+
+	storedUnbondingTx, err := tm.Si.GetUnbondingTxByHash(&unbondingTxHash)
+	require.NoError(t, err)
+	require.Equal(t, storedUnbondingTx.Tx.TxHash().String(), unbondingEvent.UnbondingTxHashHex)
+	require.Equal(t, storedUnbondingTx.StakingTxHash.String(), unbondingEvent.StakingTxHashHex)
 
 	err = tm.QueueConsumer.UnbondingQueue.DeleteMessage(unbondingEventBytes.Receipt)
 	require.NoError(t, err)
