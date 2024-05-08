@@ -3,13 +3,11 @@ package btcscanner
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	notifier "github.com/lightningnetwork/lnd/chainntnfs"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
-	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/types"
 )
 
@@ -27,7 +25,6 @@ type BtcPoller struct {
 	btcClient   Client
 	btcNotifier notifier.ChainNotifier
 
-	cfg            *config.BTCScannerConfig
 	paramsVersions *types.ParamsVersions
 
 	// the last confirmed BTC height
@@ -42,7 +39,6 @@ type BtcPoller struct {
 }
 
 func NewBTCScanner(
-	scannerCfg *config.BTCScannerConfig,
 	paramsVersions *types.ParamsVersions,
 	logger *zap.Logger,
 	btcClient Client,
@@ -52,7 +48,6 @@ func NewBTCScanner(
 		logger:              logger.With(zap.String("module", "btcscanner")),
 		btcClient:           btcClient,
 		btcNotifier:         btcNotifier,
-		cfg:                 scannerCfg,
 		paramsVersions:      paramsVersions,
 		confirmedBlocksChan: make(chan *types.IndexedBlock),
 		isStarted:           atomic.NewBool(false),
@@ -123,8 +118,6 @@ func (bs *BtcPoller) pollBlocksLoop(blockNotifier *notifier.BlockEpochEvent) {
 	defer bs.wg.Done()
 	defer blockNotifier.Cancel()
 
-	pollBlocksTicker := time.NewTicker(bs.cfg.PollingInterval)
-
 	for {
 		select {
 		case blockEpoch, ok := <-blockNotifier.Epochs:
@@ -132,27 +125,12 @@ func (bs *BtcPoller) pollBlocksLoop(blockNotifier *notifier.BlockEpochEvent) {
 				bs.logger.Error("block event channel is closed")
 				return
 			}
-			pollBlocksTicker.Reset(bs.cfg.PollingInterval)
 
 			newBlock := blockEpoch
 			bs.logger.Info("received a new best btc block",
 				zap.Int32("height", newBlock.Height))
 
 			err := bs.pollConfirmedBlocks(uint64(newBlock.Height))
-			if err != nil {
-				bs.logger.Error("failed to poll confirmed blocks", zap.Error(err))
-				continue
-			}
-
-		case <-pollBlocksTicker.C:
-			tipHeight, err := bs.btcClient.GetTipHeight()
-			if err != nil {
-				bs.logger.Error("failed to get the best block", zap.Error(err))
-				continue
-			}
-			bs.logger.Info("polling confirmed blocks",
-				zap.Uint64("tip_height", tipHeight))
-			err = bs.pollConfirmedBlocks(tipHeight)
 			if err != nil {
 				bs.logger.Error("failed to poll confirmed blocks", zap.Error(err))
 				continue
