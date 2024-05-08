@@ -213,8 +213,8 @@ func TestIndexerRestart(t *testing.T) {
 	restartedTm := ReStartFromHeight(t, tm, uint64(n))
 	defer restartedTm.Stop()
 
-	// check the staking event will not be replayed
-	restartedTm.CheckNextWithdrawEvent(t, stakingTxHash)
+	// check the staking event is replayed
+	restartedTm.CheckNextStakingEvent(t, stakingTxHash)
 
 	// restart the testing manager again from last processed height + 1
 	restartedTm2 := ReStartFromHeight(t, restartedTm, restartedTm.Si.GetStartHeight())
@@ -222,6 +222,10 @@ func TestIndexerRestart(t *testing.T) {
 
 	// wait until catch up
 	restartedTm2.WaitForNConfirmations(t, int(k))
+
+	// no staking event should be replayed as
+	// the indexer starts from a higher height
+	restartedTm2.CheckNoStakingEvent(t)
 }
 
 // TestStakingUnbondingLifeCycle covers the following life cycle

@@ -170,7 +170,7 @@ func (tm *TestManager) Stop() {
 }
 
 func ReStartFromHeight(t *testing.T, tm *TestManager, height uint64) *TestManager {
-	t.Log("restarting the test manager...")
+	t.Logf("restarting the test manager from height %d", height)
 	tm.Stop()
 
 	restartedTm := StartWithBitcoinHandler(t, tm.BitcoindHandler, tm.MinerAddr, tm.DirPath, height)
