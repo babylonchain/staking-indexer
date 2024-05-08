@@ -18,9 +18,4 @@ func TestBTCScannerParams(t *testing.T) {
 	params.PollingInterval = -1
 	err = params.Validate()
 	require.ErrorContains(t, err, "polling-interval")
-
-	// test invalid confirmation-depth
-	params.ConfirmationDepth = 0
-	err = params.Validate()
-	require.ErrorContains(t, err, "confirmation-depth")
 }

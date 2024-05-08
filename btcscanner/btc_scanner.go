@@ -27,7 +27,8 @@ type BtcPoller struct {
 	btcClient   Client
 	btcNotifier notifier.ChainNotifier
 
-	cfg *config.BTCScannerConfig
+	cfg            *config.BTCScannerConfig
+	paramsVersions *types.ParamsVersions
 
 	// the last confirmed BTC height
 	lastConfirmedHeight uint64
@@ -42,6 +43,7 @@ type BtcPoller struct {
 
 func NewBTCScanner(
 	scannerCfg *config.BTCScannerConfig,
+	paramsVersions *types.ParamsVersions,
 	logger *zap.Logger,
 	btcClient Client,
 	btcNotifier notifier.ChainNotifier,
@@ -51,6 +53,7 @@ func NewBTCScanner(
 		btcClient:           btcClient,
 		btcNotifier:         btcNotifier,
 		cfg:                 scannerCfg,
+		paramsVersions:      paramsVersions,
 		confirmedBlocksChan: make(chan *types.IndexedBlock),
 		isStarted:           atomic.NewBool(false),
 		quit:                make(chan struct{}),
@@ -163,7 +166,11 @@ func (bs *BtcPoller) pollBlocksLoop(blockNotifier *notifier.BlockEpochEvent) {
 }
 
 func (bs *BtcPoller) pollConfirmedBlocks(tipHeight uint64) error {
-	k := bs.cfg.ConfirmationDepth
+	p, err := bs.paramsVersions.GetParamsForBTCHeight(int32(tipHeight))
+	if err != nil {
+		return fmt.Errorf("failed to get params: %w", err)
+	}
+	k := uint64(p.ConfirmationDepth)
 
 	if bs.lastConfirmedHeight+k >= tipHeight {
 		bs.logger.Info("no confirmed blocks to poll",

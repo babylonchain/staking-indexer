@@ -33,11 +33,12 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 	tag := []byte{0x01, 0x02, 0x03, 0x04}
 
 	paramsVersions := &types.ParamsVersions{
-		ParamsVersions: make([]*types.Params, 0),
+		ParamsVersions: make([]*types.GlobalParams, 0),
 	}
 	lastStakingCap := btcutil.Amount(0)
 	lastActivationHeight := int32(0)
 	lastCovKeys := make([]*btcec.PublicKey, numCovenants)
+	confirmationDepth := uint16(r.Intn(100) + 1)
 	copy(lastCovKeys, covPks)
 	for version := uint16(0); version <= numVersions; version++ {
 		// These parameters can freely change between versions
@@ -59,19 +60,20 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 		lastActivationHeight = activationHeight
 		rotatedKeys := rotateCovenantPks(lastCovKeys, r, t)
 		copy(lastCovKeys, rotatedKeys)
-		paramsVersions.ParamsVersions = append(paramsVersions.ParamsVersions, &types.Params{
-			Version:          version,
-			StakingCap:       stakingCap,
-			ActivationHeight: activationHeight,
-			Tag:              tag,
-			CovenantPks:      rotatedKeys,
-			CovenantQuorum:   covQuorum,
-			UnbondingTime:    unbondingTime,
-			UnbondingFee:     unbondingFee,
-			MaxStakingAmount: maxStakingAmount,
-			MinStakingAmount: minStakingAmount,
-			MaxStakingTime:   maxStakingTime,
-			MinStakingTime:   minStakingTime,
+		paramsVersions.ParamsVersions = append(paramsVersions.ParamsVersions, &types.GlobalParams{
+			Version:           version,
+			StakingCap:        stakingCap,
+			ActivationHeight:  uint64(activationHeight),
+			Tag:               tag,
+			CovenantPks:       rotatedKeys,
+			CovenantQuorum:    covQuorum,
+			UnbondingTime:     unbondingTime,
+			UnbondingFee:      unbondingFee,
+			MaxStakingAmount:  maxStakingAmount,
+			MinStakingAmount:  minStakingAmount,
+			MaxStakingTime:    maxStakingTime,
+			MinStakingTime:    minStakingTime,
+			ConfirmationDepth: confirmationDepth,
 		})
 	}
 

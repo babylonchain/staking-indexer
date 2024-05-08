@@ -24,7 +24,8 @@ func FuzzPollConfirmedBlocks(f *testing.F) {
 	f.Fuzz(func(t *testing.T, seed int64) {
 		r := rand.New(rand.NewSource(seed))
 		cfg := config.DefaultBTCScannerConfig()
-		k := cfg.ConfirmationDepth
+		versionedParams := datagen.GenerateGlobalParamsVersions(r, t)
+		k := uint64(versionedParams.ParamsVersions[0].ConfirmationDepth)
 		// Generate a random number of blocks
 		numBlocks := bbndatagen.RandomIntOtherThan(r, 0, 50) + k // make sure we have at least k+1 entry
 		chainIndexedBlocks := datagen.GetRandomIndexedBlocks(r, numBlocks)
@@ -48,7 +49,7 @@ func FuzzPollConfirmedBlocks(f *testing.F) {
 			ConfChan:  make(chan *chainntnfs.TxConfirmation),
 		}
 
-		btcScanner, err := btcscanner.NewBTCScanner(cfg, zap.NewNop(), mockBtcClient, mockBtcNotifier)
+		btcScanner, err := btcscanner.NewBTCScanner(cfg, versionedParams, zap.NewNop(), mockBtcClient, mockBtcNotifier)
 		require.NoError(t, err)
 
 		var wg sync.WaitGroup

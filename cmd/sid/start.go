@@ -86,8 +86,14 @@ func start(ctx *cli.Context) error {
 		return fmt.Errorf("failed to create db backend: %w", err)
 	}
 
+	paramsRetriever, err := params.NewGlobalParamsRetriever(ctx.String(paramsPathFlag))
+	if err != nil {
+		return fmt.Errorf("failed to initialize params retriever: %w", err)
+	}
+	versionedParams := paramsRetriever.VersionedParams()
+
 	// create BTC scanner
-	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, logger, btcClient, btcNotifier)
+	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, versionedParams, logger, btcClient, btcNotifier)
 	if err != nil {
 		return fmt.Errorf("failed to initialize the BTC scanner: %w", err)
 	}
@@ -98,13 +104,8 @@ func start(ctx *cli.Context) error {
 		return fmt.Errorf("failed to initialize event consumer: %w", err)
 	}
 
-	paramsRetriever, err := params.NewLocalParamsRetriever(ctx.String(paramsPathFlag))
-	if err != nil {
-		return fmt.Errorf("failed to initialize params retriever: %w", err)
-	}
-
 	// create the staking indexer app
-	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, dbBackend, paramsRetriever.GetParamsVersions(), scanner)
+	si, err := indexer.NewStakingIndexer(cfg, logger, queueConsumer, dbBackend, versionedParams, scanner)
 	if err != nil {
 		return fmt.Errorf("failed to initialize the staking indexer app: %w", err)
 	}

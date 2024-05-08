@@ -1,9 +1,12 @@
 # Staking Indexer
 
-The staking indexer is a tool that extracts BTC staking relevant data from 
-the Bitcoin blockchain, transforms it into a structured form, stores it in a 
-database, and pushes events to consumers. Data from the staking indexer is 
-the ground truth for the BTC staking system.
+The staking indexer is a tool that extracts BTC staking relevant data from the
+Bitcoin blockchain, ensures that it follows the pre-requisites for a valid
+staking transaction, and determines whether the transaction should be active or
+not. All valid staking transactions are transformed into a structured form,
+stored in a database, and published as events in a RabbitMQ messaging queue for
+consumption by consumers. The staking indexer is the enforcer of the Bitcoin
+Staking protocol and serves as the ground truth for the Bitcoin Staking system.
 
 ## Features
 
@@ -12,9 +15,11 @@ the ground truth for the BTC staking system.
   where `N` is a configurable value, which should be large enough so that 
   the chance of the output blocks being forked is enormously low, e.g., 
   greater than or equal to `6` in Bitcoin mainnet.
-* Extracting transaction data for staking, unbonding, and withdrawal.
-  Specifications of identifying and parsing these transactions can be found 
-  [here](./doc/extract_tx_data.md). 
+* Extraction transaction data for staking, unbonding, and withdrawal. These
+  transactions are verified and compared against the current system parameters
+  to identify whether they are active, inactive due to staking cap overflow, or
+  invalid. The details of the protocol for verifying and activating
+  transactions can be found [here](./doc/staking.md).
 * Storing the extracted transaction data in a database. The database schema 
   can be found [here](./doc/db_schema.md).
 * Pushing staking, unbonding, and withdrawal events to the message queues.
