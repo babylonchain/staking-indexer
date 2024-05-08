@@ -142,6 +142,7 @@ func TestStakingLifeCycle(t *testing.T) {
 
 	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
 	require.NoError(t, err)
+	require.NotNil(t, storedStakingTx)
 	withdrawTx := buildWithdrawTx(
 		t,
 		tm.WalletPrivKey,
@@ -284,6 +285,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	require.NoError(t, err)
 	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
 	require.NoError(t, err)
+	require.NotNil(t, storedStakingTx)
 	unbondingTx := buildUnbondingTx(
 		t,
 		sysParams,

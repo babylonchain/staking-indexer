@@ -226,6 +226,7 @@ func FuzzBlockHandler(f *testing.F) {
 		for _, stakingEv := range testScenario.StakingEvents {
 			storedTx, err := stakingIndexer.GetStakingTxByHash(stakingEv.StakingTx.Hash())
 			require.NoError(t, err)
+			require.NotNil(t, storedTx)
 			require.Equal(t, stakingEv.StakingTx.Hash().String(), storedTx.Tx.TxHash().String())
 			require.True(t, testutils.PubKeysEqual(stakingEv.StakingTxData.StakerKey, storedTx.StakerPk))
 			require.Equal(t, uint32(stakingEv.StakingTxData.StakingTime), storedTx.StakingTime)
@@ -236,6 +237,7 @@ func FuzzBlockHandler(f *testing.F) {
 		for _, unbondingEv := range testScenario.UnbondingEvents {
 			storedTx, err := stakingIndexer.GetUnbondingTxByHash(unbondingEv.UnbondingTx.Hash())
 			require.NoError(t, err)
+			require.NotNil(t, storedTx)
 			require.Equal(t, unbondingEv.StakingTxHash, storedTx.StakingTxHash)
 			require.Equal(t, unbondingEv.UnbondingTx.Hash().String(), storedTx.Tx.TxHash().String())
 		}
@@ -252,6 +254,7 @@ func FuzzBlockHandler(f *testing.F) {
 		for _, stakingEv := range testScenario.StakingEvents {
 			storedTx, err := stakingIndexer.GetStakingTxByHash(stakingEv.StakingTx.Hash())
 			require.NoError(t, err)
+			require.NotNil(t, storedTx)
 			require.Equal(t, stakingEv.StakingTx.Hash().String(), storedTx.Tx.TxHash().String())
 			require.True(t, testutils.PubKeysEqual(stakingEv.StakingTxData.StakerKey, storedTx.StakerPk))
 			require.Equal(t, uint32(stakingEv.StakingTxData.StakingTime), storedTx.StakingTime)
@@ -262,6 +265,7 @@ func FuzzBlockHandler(f *testing.F) {
 		for _, unbondingEv := range testScenario.UnbondingEvents {
 			storedTx, err := stakingIndexer.GetUnbondingTxByHash(unbondingEv.UnbondingTx.Hash())
 			require.NoError(t, err)
+			require.NotNil(t, storedTx)
 			require.Equal(t, unbondingEv.StakingTxHash, storedTx.StakingTxHash)
 			require.Equal(t, unbondingEv.UnbondingTx.Hash().String(), storedTx.Tx.TxHash().String())
 		}
@@ -392,6 +396,7 @@ func FuzzVerifyUnbondingTx(f *testing.F) {
 		require.NoError(t, err)
 		storedStakingTx, err := stakingIndexer.GetStakingTxByHash(stakingTx.Hash())
 		require.NoError(t, err)
+		require.NotNil(t, storedStakingTx)
 
 		// 2. test IsValidUnbondingTx with valid unbonding tx, expect (true, nil)
 		unbondingTx := datagen.GenerateUnbondingTxFromStaking(t, params, stakingData, stakingTx.Hash(), 0)
@@ -511,6 +516,7 @@ func FuzzTestOverflow(f *testing.F) {
 			require.NoError(t, err)
 			storedStakingTx, err := stakingIndexer.GetStakingTxByHash(stakingTx.Hash())
 			require.NoError(t, err)
+			require.NotNil(t, storedStakingTx)
 
 			stakingTxData = append(stakingTxData, &StakingTxData{
 				StakingTx:   stakingTx,
@@ -605,6 +611,7 @@ func sendStakingTx(
 	require.NoError(t, err)
 	storedStakingTx, err := stakingIndexer.GetStakingTxByHash(stakingTx.Hash())
 	require.NoError(t, err)
+	require.NotNil(t, storedStakingTx)
 
 	return stakingData, tvl, storedStakingTx, stakingTx
 }

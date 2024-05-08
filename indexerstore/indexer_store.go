@@ -3,6 +3,7 @@ package indexerstore
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -152,6 +153,8 @@ func (is *IndexerStore) addStakingTransaction(
 	})
 }
 
+// GetStakingTransaction retrieves the stored staking transaction by the given hash
+// it returns (nil, nil) if the transaction is not found
 func (is *IndexerStore) GetStakingTransaction(txHash *chainhash.Hash) (*StoredStakingTransaction, error) {
 	var storedTx *StoredStakingTransaction
 	txHashBytes := txHash.CloneBytes()
@@ -181,7 +184,7 @@ func (is *IndexerStore) GetStakingTransaction(txHash *chainhash.Hash) (*StoredSt
 		return nil
 	}, func() {})
 
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrTransactionNotFound) {
 		return nil, err
 	}
 
@@ -292,6 +295,8 @@ func (is *IndexerStore) addUnbondingTransaction(
 	})
 }
 
+// GetUnbondingTransaction retrieves the stored unbonding transaction by the given hash
+// it returns (nil, nil) if the transaction is not found
 func (is *IndexerStore) GetUnbondingTransaction(txHash *chainhash.Hash) (*StoredUnbondingTransaction, error) {
 	var storedTx *StoredUnbondingTransaction
 	txHashBytes := txHash.CloneBytes()
@@ -321,7 +326,7 @@ func (is *IndexerStore) GetUnbondingTransaction(txHash *chainhash.Hash) (*Stored
 		return nil
 	}, func() {})
 
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrTransactionNotFound) {
 		return nil, err
 	}
 

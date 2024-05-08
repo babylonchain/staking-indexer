@@ -284,7 +284,7 @@ func (si *StakingIndexer) getSpentStakingTx(tx *wire.MsgTx) (*indexerstore.Store
 	for i, txIn := range tx.TxIn {
 		maybeStakingTxHash := txIn.PreviousOutPoint.Hash
 		stakingTx, err := si.GetStakingTxByHash(&maybeStakingTxHash)
-		if err != nil {
+		if err != nil || stakingTx == nil {
 			continue
 		}
 
@@ -306,7 +306,7 @@ func (si *StakingIndexer) getSpentUnbondingTx(tx *wire.MsgTx) (*indexerstore.Sto
 	for i, txIn := range tx.TxIn {
 		maybeUnbondingTxHash := txIn.PreviousOutPoint.Hash
 		unbondingTx, err := si.GetUnbondingTxByHash(&maybeUnbondingTxHash)
-		if err != nil {
+		if err != nil || unbondingTx == nil {
 			continue
 		}
 
@@ -392,7 +392,10 @@ func (si *StakingIndexer) ProcessStakingTx(
 	// the current tvl
 	txHash := tx.TxHash()
 	storedStakingTx, err := si.is.GetStakingTransaction(&txHash)
-	if err == nil {
+	if err != nil {
+		return err
+	}
+	if storedStakingTx != nil {
 		isOverflow = storedStakingTx.IsOverflow
 	} else {
 		// this is a new staking tx, validate it against staking requirement

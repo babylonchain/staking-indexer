@@ -250,6 +250,7 @@ func (tm *TestManager) CheckNextStakingEvent(t *testing.T, stakingTxHash chainha
 	require.NoError(t, err)
 
 	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
+	require.NotNil(t, storedStakingTx)
 	require.NoError(t, err)
 	require.Equal(t, stakingTxHash.String(), activeStakingEvent.StakingTxHashHex)
 	require.Equal(t, storedStakingTx.Tx.TxHash().String(), activeStakingEvent.StakingTxHashHex)
@@ -283,6 +284,7 @@ func (tm *TestManager) CheckNextUnbondingEvent(t *testing.T, unbondingTxHash cha
 
 	storedUnbondingTx, err := tm.Si.GetUnbondingTxByHash(&unbondingTxHash)
 	require.NoError(t, err)
+	require.NotNil(t, storedUnbondingTx)
 	require.Equal(t, storedUnbondingTx.Tx.TxHash().String(), unbondingEvent.UnbondingTxHashHex)
 	require.Equal(t, storedUnbondingTx.StakingTxHash.String(), unbondingEvent.StakingTxHashHex)
 
@@ -305,7 +307,7 @@ func (tm *TestManager) WaitForStakingTxStored(t *testing.T, txHash chainhash.Has
 	var storedTx indexerstore.StoredStakingTransaction
 	require.Eventually(t, func() bool {
 		storedStakingTx, err := tm.Si.GetStakingTxByHash(&txHash)
-		if err != nil {
+		if err != nil || storedStakingTx == nil {
 			return false
 		}
 		storedTx = *storedStakingTx
@@ -319,7 +321,7 @@ func (tm *TestManager) WaitForUnbondingTxStored(t *testing.T, txHash chainhash.H
 	var storedTx indexerstore.StoredUnbondingTransaction
 	require.Eventually(t, func() bool {
 		storedUnbondingTx, err := tm.Si.GetUnbondingTxByHash(&txHash)
-		if err != nil {
+		if err != nil || storedUnbondingTx == nil {
 			return false
 		}
 		storedTx = *storedUnbondingTx
