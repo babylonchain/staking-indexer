@@ -214,10 +214,9 @@ func TestIndexerRestart(t *testing.T) {
 	defer restartedTm.Stop()
 
 	// check the staking event will not be replayed
-	restartedTm.CheckNoStakingEvent(t)
+	restartedTm.CheckNextWithdrawEvent(t, stakingTxHash)
 
-	// restart the testing manager again from 0
-	// which means the start height should be from local store
+	// restart the testing manager again from last processed height + 1
 	restartedTm2 := ReStartFromHeight(t, restartedTm, restartedTm.Si.GetStartHeight())
 	defer restartedTm2.Stop()
 
