@@ -199,7 +199,7 @@ func FuzzBlockHandler(f *testing.F) {
 		n := r.Intn(200) + 1
 		testScenario := NewTestScenario(r, t, 80, n)
 		sysParamsVersions := testScenario.VersionedParams
-		cfg.BTCScannerConfig.BaseHeight = uint64(sysParamsVersions.ParamsVersions[0].ActivationHeight)
+		cfg.BaseHeight = sysParamsVersions.ParamsVersions[0].ActivationHeight
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
@@ -280,7 +280,7 @@ func FuzzGetStartHeight(f *testing.F) {
 
 		confirmedBlockChan := make(chan *types.IndexedBlock)
 		sysParams := datagen.GenerateGlobalParamsVersions(r, t)
-		cfg.BTCScannerConfig.BaseHeight = uint64(sysParams.ParamsVersions[0].ActivationHeight)
+		cfg.BaseHeight = sysParams.ParamsVersions[0].ActivationHeight
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
@@ -290,7 +290,7 @@ func FuzzGetStartHeight(f *testing.F) {
 
 		// 1. no blocks have been processed, the start height should be equal to the base height
 		initialHeight := stakingIndexer.GetStartHeight()
-		require.Equal(t, cfg.BTCScannerConfig.BaseHeight, initialHeight)
+		require.Equal(t, cfg.BaseHeight, initialHeight)
 		err = stakingIndexer.ValidateStartHeight(initialHeight)
 		require.NoError(t, err)
 

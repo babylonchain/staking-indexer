@@ -13,7 +13,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/babylonchain/staking-indexer/btcscanner"
-	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
 	"github.com/babylonchain/staking-indexer/testutils/mocks"
 )
@@ -23,7 +22,6 @@ func FuzzPollConfirmedBlocks(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, seed int64) {
 		r := rand.New(rand.NewSource(seed))
-		cfg := config.DefaultBTCScannerConfig()
 		versionedParams := datagen.GenerateGlobalParamsVersions(r, t)
 		k := uint64(versionedParams.ParamsVersions[0].ConfirmationDepth)
 		// Generate a random number of blocks
@@ -49,7 +47,7 @@ func FuzzPollConfirmedBlocks(f *testing.F) {
 			ConfChan:  make(chan *chainntnfs.TxConfirmation),
 		}
 
-		btcScanner, err := btcscanner.NewBTCScanner(cfg, versionedParams, zap.NewNop(), mockBtcClient, mockBtcNotifier)
+		btcScanner, err := btcscanner.NewBTCScanner(versionedParams, zap.NewNop(), mockBtcClient, mockBtcNotifier)
 		require.NoError(t, err)
 
 		var wg sync.WaitGroup

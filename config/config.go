@@ -19,6 +19,7 @@ const (
 	defaultParamsFileName = "global-params.json"
 	defaultBitcoinNetwork = "signet"
 	defaultDataDirname    = "data"
+	defaultBaseHeight     = 1
 )
 
 var (
@@ -31,26 +32,26 @@ var (
 
 // Config is the main config for the fpd cli command
 type Config struct {
-	LogLevel         string            `long:"loglevel" description:"Logging level for all subsystems" choice:"trace" choice:"debug" choice:"info" choice:"warn" choice:"error" choice:"fatal"`
-	BitcoinNetwork   string            `long:"bitcoinnetwork" description:"Bitcoin network to run on" choise:"mainnet" choice:"regtest" choice:"testnet" choice:"simnet" choice:"signet"`
-	BTCScannerConfig *BTCScannerConfig `group:"btcscannerconfig" namespace:"btcscannerconfig"`
-	BTCConfig        *BTCConfig        `group:"btcconfig" namespace:"btcconfig"`
-	DatabaseConfig   *DBConfig         `group:"dbconfig" namespace:"dbconfig"`
-	QueueConfig      *QueueConfig      `group:"queueconfig" namespace:"queueconfig"`
-	MetricsConfig    *MetricsConfig    `group:"metricsconfig" namespace:"metricsconfig"`
+	LogLevel       string         `long:"loglevel" description:"Logging level for all subsystems" choice:"trace" choice:"debug" choice:"info" choice:"warn" choice:"error" choice:"fatal"`
+	BitcoinNetwork string         `long:"bitcoinnetwork" description:"Bitcoin network to run on" choise:"mainnet" choice:"regtest" choice:"testnet" choice:"simnet" choice:"signet"`
+	BaseHeight     uint64         `long:"baseheight" description:"the base height before which no staking transactions exist"`
+	BTCConfig      *BTCConfig     `group:"btcconfig" namespace:"btcconfig"`
+	DatabaseConfig *DBConfig      `group:"dbconfig" namespace:"dbconfig"`
+	QueueConfig    *QueueConfig   `group:"queueconfig" namespace:"queueconfig"`
+	MetricsConfig  *MetricsConfig `group:"metricsconfig" namespace:"metricsconfig"`
 
 	BTCNetParams chaincfg.Params
 }
 
 func DefaultConfigWithHome(homePath string) *Config {
 	cfg := &Config{
-		LogLevel:         defaultLogLevel,
-		BitcoinNetwork:   defaultBitcoinNetwork,
-		BTCScannerConfig: DefaultBTCScannerConfig(),
-		BTCConfig:        DefaultBTCConfig(),
-		DatabaseConfig:   DefaultDBConfigWithHomePath(homePath),
-		QueueConfig:      DefaultQueueConfig(),
-		MetricsConfig:    DefaultMetricsConfig(),
+		LogLevel:       defaultLogLevel,
+		BitcoinNetwork: defaultBitcoinNetwork,
+		BaseHeight:     defaultBaseHeight,
+		BTCConfig:      DefaultBTCConfig(),
+		DatabaseConfig: DefaultDBConfigWithHomePath(homePath),
+		QueueConfig:    DefaultQueueConfig(),
+		MetricsConfig:  DefaultMetricsConfig(),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -139,8 +140,8 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("invalid network: %v", cfg.BitcoinNetwork)
 	}
 
-	if err := cfg.BTCScannerConfig.Validate(); err != nil {
-		return err
+	if cfg.BaseHeight == 0 {
+		return fmt.Errorf("base-height %d must be positive", cfg.BaseHeight)
 	}
 
 	if err := cfg.DatabaseConfig.Validate(); err != nil {
