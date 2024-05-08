@@ -102,7 +102,7 @@ func (si *StakingIndexer) Start(startHeight uint64) error {
 // (1) does not handle irrelevant blocks (impossible to have staking tx)
 // (2) does not miss relevant blocks (possible to have staking tx)
 func (si *StakingIndexer) ValidateStartHeight(startHeight uint64) error {
-	baseHeight := si.cfg.BTCScannerConfig.BaseHeight
+	baseHeight := si.cfg.BaseHeight
 	if startHeight < baseHeight {
 		return fmt.Errorf("the start height should not be lower than the base height %d", baseHeight)
 	}
@@ -125,7 +125,7 @@ func (si *StakingIndexer) ValidateStartHeight(startHeight uint64) error {
 func (si *StakingIndexer) GetStartHeight() uint64 {
 	lastProcessedHeight, err := si.is.GetLastProcessedHeight()
 	if err != nil {
-		return si.cfg.BTCScannerConfig.BaseHeight
+		return si.cfg.BaseHeight
 	}
 
 	return lastProcessedHeight + 1
