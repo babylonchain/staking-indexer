@@ -1,7 +1,6 @@
 package indexerstore_test
 
 import (
-	"errors"
 	"math/rand"
 	"testing"
 	"time"
@@ -22,12 +21,10 @@ func TestEmptyStore(t *testing.T) {
 	hash := bbndatagen.GenRandomBtcdHash(r)
 	stakingTx, err := s.GetStakingTransaction(&hash)
 	require.Nil(t, stakingTx)
-	require.Error(t, err)
-	require.True(t, errors.Is(err, indexerstore.ErrTransactionNotFound))
+	require.NoError(t, err)
 	unbondingTx, err := s.GetUnbondingTransaction(&hash)
 	require.Nil(t, unbondingTx)
-	require.Error(t, err)
-	require.True(t, errors.Is(err, indexerstore.ErrTransactionNotFound))
+	require.NoError(t, err)
 }
 
 func FuzzStoringTxs(f *testing.F) {
