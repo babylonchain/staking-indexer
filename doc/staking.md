@@ -1,6 +1,6 @@
 # Staking
 
-In this document, we explore how the staking indexer transactions of the
+In this document, we explore how the staking indexer handles transactions of the
 Bitcoin Staking protocol.
 
 ## Preliminaries
@@ -85,8 +85,8 @@ as well as the validation conditions for the different transactions.
 ### State
 
 The system maintains two pieces of state:
-- *Active Staking Transactions*: A list of active staking transactions. It used
-  to identify the current amount of Bitcoin that is locked in the system.
+- *Active Staking Transactions*: A list of active staking transactions. It is
+  used to identify the current amount of Bitcoin that is locked in the system.
 - *Overflow Staking Transactions*: A list of valid staking transactions that
   are over the staking cap. This list is only maintained to keep track of the
   entire system state as well as provide more novice users with enough
@@ -155,7 +155,7 @@ verifications:
 - `v_n.UnbondingTime == UnbondingTransaction.UnbondingTime`
 
 If all the conditions are valid, the staking transaction is removed from the
-active/overflow staking transactions set. This effectivelly means,
+active/overflow staking transactions set. This effectively means,
 that if the staking transaction was active and the staking cap
 had previously been filled, now there is space for new staking transactions.
 These staking transactions need to come later than the unbonding transaction.
