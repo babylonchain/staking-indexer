@@ -155,7 +155,118 @@ func (si *StakingIndexer) confirmedBlocksLoop() {
 	}
 }
 
-func (si *StakingIndexer) HandleUnconfirmedBlocks()
+// processUnconfirmedInfo processes information from the last confirmed height + 1
+// to the current tip height. This method will not make any change to the system
+// state.
+// If the btc scanner is synced, it follows the steps below:
+// 1. download unconfirmed blocks
+// 2. get the current confirmed tvl
+// 3. iterate all txs of each unconfirmed block to identify staking and unbonding transactions,
+// and calculate total unconfirmed tvl
+// 4. push unconfirmed info event
+// 5. record metrics
+func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) error {
+	tipHeight := si.btcScanner.CurrentTipHeight()
+	params, err := si.paramsVersions.GetParamsForBTCHeight(int32(tipHeight))
+	if err != nil {
+		return fmt.Errorf("failed to get params for height %d: %w", tipHeight, err)
+	}
+
+	if lastConfirmedHeight+uint64(params.ConfirmationDepth) < tipHeight {
+		si.logger.Debug("the btc scanner is still catching up",
+			zap.Uint64("last_confirmed_height", lastConfirmedHeight),
+			zap.Uint64("tip_height", tipHeight))
+
+		return nil
+	}
+
+	unconfirmedBlocks, err := si.btcScanner.GetRangeBlocks(lastConfirmedHeight+1, tipHeight)
+	if err != nil {
+		return fmt.Errorf("failed to get a range of blocks, from height: %d, target height: %d: %w",
+			lastConfirmedHeight+1,
+			tipHeight, err)
+	}
+
+	unconfirmedTvl, err := si.CalculateUnconfirmedTvl(unconfirmedBlocks)
+	if err != nil {
+		return fmt.Errorf("failed to calculate unconfirmed tvl: %w", err)
+	}
+	confirmedTvl, err := si.GetConfirmedTvl()
+	if err != nil {
+		return fmt.Errorf("failed to get the confirmed TVL: %w", err)
+	}
+}
+
+func (si *StakingIndexer) CalculateUnconfirmedTvl(unconfirmedBlocks []*types.IndexedBlock) (btcutil.Amount, error) {
+	tvl := btcutil.Amount(0)
+	unconfirmedStakingTxs := make(map[chainhash.Hash]*indexerstore.StoredStakingTransaction)
+	for _, b := range unconfirmedBlocks {
+		params, err := si.paramsVersions.GetParamsForBTCHeight(b.Height)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get params for height %d: %w", b.Height, err)
+		}
+
+		for _, tx := range b.Txs {
+			msgTx := tx.MsgTx()
+
+			// 1. try to parse staking tx
+			stakingData, err := si.tryParseStakingTx(msgTx, params)
+			if err == nil {
+				// this is a new staking tx, validate it against staking requirement
+				if err := si.validateStakingTx(params, stakingData); err != nil {
+					if errors.Is(err, ErrInvalidStakingTx) {
+						continue
+					} else {
+						return 0, fmt.Errorf("failed to validate staking tx: %w", err)
+					}
+				}
+
+				tvl += btcutil.Amount(stakingData.StakingOutput.Value)
+				// save the staking tx in memory for later identifying unbonding tx
+				unconfirmedStakingTxs[msgTx.TxHash()] = &indexerstore.StoredStakingTransaction{
+					Tx:               msgTx,
+					StakingOutputIdx: uint32(stakingData.StakingOutputIdx),
+					InclusionHeight:  uint64(b.Height),
+					StakingValue:     0,
+				}
+				// TODO add logging
+				continue
+			}
+
+			// 2. not a staking tx, check whether it spends a stored staking tx
+			stakingTx, spentInputIdx := si.getSpentStakingTx(msgTx)
+			if spentInputIdx < 0 {
+				// it does not spend a stored staking tx, check whether it spends
+				// an unconfirmed staking tx
+				stakingTx, spentInputIdx = getSpentFromStakingTxs(msgTx, unconfirmedStakingTxs)
+			}
+			if spentInputIdx >= 0 {
+				// 3. is a spending tx, check whether it is a valid unbonding tx
+				paramsFromStakingTxHeight, err := si.paramsVersions.GetParamsForBTCHeight(
+					int32(stakingTx.InclusionHeight),
+				)
+				if err != nil {
+					return 0, fmt.Errorf("failed to get the params for the staking tx height %d: %w", stakingTx.InclusionHeight, err)
+				}
+				isUnbonding, err := si.IsValidUnbondingTx(msgTx, stakingTx, paramsFromStakingTxHeight)
+				if err != nil {
+					if errors.Is(err, ErrInvalidUnbondingTx) {
+						continue
+					} else {
+						return 0, fmt.Errorf("failed to validate unbonding tx: %w", err)
+					}
+				}
+				if isUnbonding {
+					// TODO logging
+					tvl -= btcutil.Amount(stakingTx.StakingValue)
+				}
+				continue
+			}
+		}
+	}
+
+	return tvl, nil
+}
 
 // HandleConfirmedBlock iterates through the tx set of a confirmed block and
 // parse the staking, unbonding, and withdrawal txs if there are any.
@@ -290,6 +401,32 @@ func (si *StakingIndexer) getSpentStakingTx(tx *wire.MsgTx) (*indexerstore.Store
 		maybeStakingTxHash := txIn.PreviousOutPoint.Hash
 		stakingTx, err := si.GetStakingTxByHash(&maybeStakingTxHash)
 		if err != nil || stakingTx == nil {
+			continue
+		}
+
+		// this ensures the spending tx spends the correct staking output
+		if txIn.PreviousOutPoint.Index != stakingTx.StakingOutputIdx {
+			continue
+		}
+
+		return stakingTx, i
+	}
+
+	return nil, -1
+}
+
+// getSpentFromStakingTxs checks if the given tx spends any of the
+// given staking txs.
+// if so, it returns the found staking tx and the spent staking input index,
+// otherwise, it returns nil and -1
+func getSpentFromStakingTxs(
+	tx *wire.MsgTx,
+	stakingTxs map[chainhash.Hash]*indexerstore.StoredStakingTransaction,
+) (*indexerstore.StoredStakingTransaction, int) {
+	for i, txIn := range tx.TxIn {
+		maybeStakingTxHash := txIn.PreviousOutPoint.Hash
+		stakingTx, exists := stakingTxs[maybeStakingTxHash]
+		if !exists {
 			continue
 		}
 
