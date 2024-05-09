@@ -283,6 +283,8 @@ func (si *StakingIndexer) CalculateUnconfirmedTvl(unconfirmedBlocks []*types.Ind
 				isUnbonding, err := si.IsValidUnbondingTx(msgTx, stakingTx, paramsFromStakingTxHeight)
 				if err != nil {
 					if errors.Is(err, ErrInvalidUnbondingTx) {
+						si.logger.Warn("found an invalid unbonding tx",
+							zap.String("tx_hash", msgTx.TxHash().String()))
 						continue
 					} else {
 						return 0, fmt.Errorf("failed to validate unbonding tx: %w", err)
@@ -298,6 +300,10 @@ func (si *StakingIndexer) CalculateUnconfirmedTvl(unconfirmedBlocks []*types.Ind
 					if !stakingTx.IsOverflow {
 						tvl -= btcutil.Amount(stakingTx.StakingValue)
 					}
+				} else {
+					si.logger.Warn("found a tx that spends the staking tx but not an unbonding tx",
+						zap.String("tx_hash", msgTx.TxHash().String()),
+						zap.String("staking_tx_hash", stakingTx.Tx.TxHash().String()))
 				}
 				continue
 			}
