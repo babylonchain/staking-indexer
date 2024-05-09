@@ -145,12 +145,17 @@ func (si *StakingIndexer) confirmedBlocksLoop() {
 				// this indicates systematic failure
 				si.logger.Fatal("failed to handle block", zap.Error(err))
 			}
+
+			// TODO if btc scanner is synced, download unconfirmed blocks
+			// get the current confirmed tvl, and calculate unconfirmed tvl
 		case <-si.quit:
 			si.logger.Info("closing the confirmed blocks loop")
 			return
 		}
 	}
 }
+
+func (si *StakingIndexer) HandleUnconfirmedBlocks()
 
 // HandleConfirmedBlock iterates through the tx set of a confirmed block and
 // parse the staking, unbonding, and withdrawal txs if there are any.
