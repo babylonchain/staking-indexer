@@ -1,6 +1,7 @@
 package e2etest
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/babylonchain/staking-queue-client/queuemngr"
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -103,7 +105,7 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 	require.NoError(t, err)
 	versionedParams := paramsRetriever.VersionedParams()
 	require.NoError(t, err)
-	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, versionedParams, logger, btcClient, btcNotifier)
+	scanner, err := btcscanner.NewBTCScanner(versionedParams, logger, btcClient, btcNotifier)
 	require.NoError(t, err)
 
 	// create event consumer
@@ -170,7 +172,7 @@ func (tm *TestManager) Stop() {
 }
 
 func ReStartFromHeight(t *testing.T, tm *TestManager, height uint64) *TestManager {
-	t.Log("restarting the test manager...")
+	t.Logf("restarting the test manager from height %d", height)
 	tm.Stop()
 
 	restartedTm := StartWithBitcoinHandler(t, tm.BitcoindHandler, tm.MinerAddr, tm.DirPath, height)
@@ -246,7 +248,19 @@ func (tm *TestManager) CheckNextStakingEvent(t *testing.T, stakingTxHash chainha
 	var activeStakingEvent queuecli.ActiveStakingEvent
 	err := json.Unmarshal([]byte(stakingEventBytes.Body), &activeStakingEvent)
 	require.NoError(t, err)
+
+	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
+	require.NotNil(t, storedStakingTx)
+	require.NoError(t, err)
 	require.Equal(t, stakingTxHash.String(), activeStakingEvent.StakingTxHashHex)
+	require.Equal(t, storedStakingTx.Tx.TxHash().String(), activeStakingEvent.StakingTxHashHex)
+	require.Equal(t, uint64(storedStakingTx.StakingTime), activeStakingEvent.StakingTimeLock)
+	require.Equal(t, storedStakingTx.StakingValue, activeStakingEvent.StakingValue)
+	require.Equal(t, uint64(storedStakingTx.StakingOutputIdx), activeStakingEvent.StakingOutputIndex)
+	require.Equal(t, storedStakingTx.InclusionHeight, activeStakingEvent.StakingStartHeight)
+	require.Equal(t, storedStakingTx.IsOverflow, activeStakingEvent.IsOverflow)
+	require.Equal(t, hex.EncodeToString(schnorr.SerializePubKey(storedStakingTx.StakerPk)), activeStakingEvent.StakerPkHex)
+	require.Equal(t, hex.EncodeToString(schnorr.SerializePubKey(storedStakingTx.FinalityProviderPk)), activeStakingEvent.FinalityProviderPkHex)
 
 	err = tm.QueueConsumer.StakingQueue.DeleteMessage(stakingEventBytes.Receipt)
 	require.NoError(t, err)
@@ -268,6 +282,12 @@ func (tm *TestManager) CheckNextUnbondingEvent(t *testing.T, unbondingTxHash cha
 	require.NoError(t, err)
 	require.Equal(t, unbondingTxHash.String(), unbondingEvent.UnbondingTxHashHex)
 
+	storedUnbondingTx, err := tm.Si.GetUnbondingTxByHash(&unbondingTxHash)
+	require.NoError(t, err)
+	require.NotNil(t, storedUnbondingTx)
+	require.Equal(t, storedUnbondingTx.Tx.TxHash().String(), unbondingEvent.UnbondingTxHashHex)
+	require.Equal(t, storedUnbondingTx.StakingTxHash.String(), unbondingEvent.StakingTxHashHex)
+
 	err = tm.QueueConsumer.UnbondingQueue.DeleteMessage(unbondingEventBytes.Receipt)
 	require.NoError(t, err)
 }
@@ -287,7 +307,7 @@ func (tm *TestManager) WaitForStakingTxStored(t *testing.T, txHash chainhash.Has
 	var storedTx indexerstore.StoredStakingTransaction
 	require.Eventually(t, func() bool {
 		storedStakingTx, err := tm.Si.GetStakingTxByHash(&txHash)
-		if err != nil {
+		if err != nil || storedStakingTx == nil {
 			return false
 		}
 		storedTx = *storedStakingTx
@@ -301,7 +321,7 @@ func (tm *TestManager) WaitForUnbondingTxStored(t *testing.T, txHash chainhash.H
 	var storedTx indexerstore.StoredUnbondingTransaction
 	require.Eventually(t, func() bool {
 		storedUnbondingTx, err := tm.Si.GetUnbondingTxByHash(&txHash)
-		if err != nil {
+		if err != nil || storedUnbondingTx == nil {
 			return false
 		}
 		storedTx = *storedUnbondingTx

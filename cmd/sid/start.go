@@ -93,7 +93,7 @@ func start(ctx *cli.Context) error {
 	versionedParams := paramsRetriever.VersionedParams()
 
 	// create BTC scanner
-	scanner, err := btcscanner.NewBTCScanner(cfg.BTCScannerConfig, versionedParams, logger, btcClient, btcNotifier)
+	scanner, err := btcscanner.NewBTCScanner(versionedParams, logger, btcClient, btcNotifier)
 	if err != nil {
 		return fmt.Errorf("failed to initialize the BTC scanner: %w", err)
 	}

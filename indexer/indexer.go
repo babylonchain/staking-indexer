@@ -12,6 +12,7 @@ import (
 	"github.com/babylonchain/babylon/btcstaking"
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
@@ -102,7 +103,7 @@ func (si *StakingIndexer) Start(startHeight uint64) error {
 // (1) does not handle irrelevant blocks (impossible to have staking tx)
 // (2) does not miss relevant blocks (possible to have staking tx)
 func (si *StakingIndexer) ValidateStartHeight(startHeight uint64) error {
-	baseHeight := si.cfg.BTCScannerConfig.BaseHeight
+	baseHeight := si.cfg.BaseHeight
 	if startHeight < baseHeight {
 		return fmt.Errorf("the start height should not be lower than the base height %d", baseHeight)
 	}
@@ -125,7 +126,7 @@ func (si *StakingIndexer) ValidateStartHeight(startHeight uint64) error {
 func (si *StakingIndexer) GetStartHeight() uint64 {
 	lastProcessedHeight, err := si.is.GetLastProcessedHeight()
 	if err != nil {
-		return si.cfg.BTCScannerConfig.BaseHeight
+		return si.cfg.BaseHeight
 	}
 
 	return lastProcessedHeight + 1
@@ -176,17 +177,12 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 					// We will continue to the next tx as the staking tx is invalid
 					// and we don't want to stop the indexer
 					continue
-				} else if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
+				} else {
 					// record metrics
 					failedProcessingStakingTxsCounter.Inc()
 
 					return err
 				}
-				// we don't consider duplicate error critical as it can happen
-				// when the indexer restarts
-				si.logger.Warn("found a duplicate tx",
-					zap.String("tx_hash", msgTx.TxHash().String()))
-				continue
 			}
 
 			// should not use *continue* here as a special case is
@@ -277,6 +273,10 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 	return nil
 }
 
+func (si *StakingIndexer) IsTxProcessed(txHash *chainhash.Hash) (bool, error) {
+	return si.is.TxExists(txHash)
+}
+
 // getSpentStakingTx checks if the given tx spends any of the stored staking tx
 // if so, it returns the found staking tx and the spent staking input index,
 // otherwise, it returns nil and -1
@@ -284,7 +284,7 @@ func (si *StakingIndexer) getSpentStakingTx(tx *wire.MsgTx) (*indexerstore.Store
 	for i, txIn := range tx.TxIn {
 		maybeStakingTxHash := txIn.PreviousOutPoint.Hash
 		stakingTx, err := si.GetStakingTxByHash(&maybeStakingTxHash)
-		if err != nil {
+		if err != nil || stakingTx == nil {
 			continue
 		}
 
@@ -306,7 +306,7 @@ func (si *StakingIndexer) getSpentUnbondingTx(tx *wire.MsgTx) (*indexerstore.Sto
 	for i, txIn := range tx.TxIn {
 		maybeUnbondingTxHash := txIn.PreviousOutPoint.Hash
 		unbondingTx, err := si.GetUnbondingTxByHash(&maybeUnbondingTxHash)
-		if err != nil {
+		if err != nil || unbondingTx == nil {
 			continue
 		}
 
@@ -376,77 +376,130 @@ func (si *StakingIndexer) ProcessStakingTx(
 	height uint64, timestamp time.Time,
 	params *types.GlobalParams,
 ) error {
+	var (
+		// whether the staking tx is overflow
+		isOverflow bool
+	)
 
 	si.logger.Info("found a staking tx",
 		zap.Uint64("height", height),
 		zap.String("tx_hash", tx.TxHash().String()),
 	)
 
+	// check whether the staking tx already exists in db
+	// if so, get the isOverflow from the data in db
+	// otherwise, check it against the staking cap along with
+	// the current tvl
+	txHash := tx.TxHash()
+	storedStakingTx, err := si.is.GetStakingTransaction(&txHash)
+	if err != nil {
+		return err
+	}
+	if storedStakingTx != nil {
+		isOverflow = storedStakingTx.IsOverflow
+	} else {
+		// this is a new staking tx, validate it against staking requirement
+		if err := si.validateStakingTx(params, stakingData); err != nil {
+			return err
+		}
+
+		// check if the staking tvl is overflow with this staking tx
+		stakingOverflow, err := si.isOverflow(uint64(params.StakingCap), uint64(stakingData.StakingOutput.Value))
+		if err != nil {
+			return fmt.Errorf("failed to check the overflow of staking tx: %w", err)
+		}
+
+		isOverflow = stakingOverflow
+	}
+
+	// add the staking transaction to the system state
+	if err := si.addStakingTransaction(
+		height, timestamp, tx,
+		stakingData.OpReturnData.StakerPublicKey.PubKey,
+		stakingData.OpReturnData.FinalityProviderPublicKey.PubKey,
+		uint64(stakingData.StakingOutput.Value),
+		uint32(stakingData.OpReturnData.StakingTime),
+		uint32(stakingData.StakingOutputIdx),
+		isOverflow,
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// addStakingTransaction pushes the staking event, saves it to the database
+// and records metrics
+func (si *StakingIndexer) addStakingTransaction(
+	height uint64,
+	timestamp time.Time,
+	tx *wire.MsgTx,
+	stakerPk *btcec.PublicKey,
+	fpPk *btcec.PublicKey,
+	stakingValue uint64,
+	stakingTime uint32,
+	stakingOutputIndex uint32,
+	isOverflow bool,
+) error {
 	txHex, err := getTxHex(tx)
 	if err != nil {
 		return err
 	}
 
-	stakerPkHex := hex.EncodeToString(stakingData.OpReturnData.StakerPublicKey.Marshall())
-	fpPkHex := hex.EncodeToString(stakingData.OpReturnData.FinalityProviderPublicKey.Marshall())
-
-	// Step 1: Check against global parameters such as min/max staking amount and staking time
-	validationErr := si.validateStakingTx(params, stakingData)
-	if validationErr != nil {
-		return validationErr
-	}
-	// Step 2: Overflow check (staking cap)
-	isOverflow, err := si.isOverflow(uint64(params.StakingCap), uint64(stakingData.StakingOutput.Value))
-	if err != nil {
-		return fmt.Errorf("failed to check the overflow of staking tx: %w", err)
-	}
-
 	stakingEvent := queuecli.NewActiveStakingEvent(
 		tx.TxHash().String(),
-		stakerPkHex,
-		fpPkHex,
-		uint64(stakingData.StakingOutput.Value),
+		hex.EncodeToString(schnorr.SerializePubKey(stakerPk)),
+		hex.EncodeToString(schnorr.SerializePubKey(fpPk)),
+		stakingValue,
 		height,
 		timestamp.Unix(),
-		uint64(stakingData.OpReturnData.StakingTime),
-		uint64(stakingData.StakingOutputIdx),
+		uint64(stakingTime),
+		uint64(stakingOutputIndex),
 		txHex,
 		isOverflow,
 	)
 
-	// push the events first with the assumption that the consumer can handle duplicate events
+	si.logger.Info("pushing staking event",
+		zap.String("tx_hash", tx.TxHash().String()),
+	)
+
+	// push the events first then save the tx due to the assumption
+	// that the consumer can handle duplicate events
 	if err := si.consumer.PushStakingEvent(&stakingEvent); err != nil {
-		return fmt.Errorf("failed to push the staking event to the consumer: %w", err)
+		return fmt.Errorf("failed to push the staking event to the queue: %w", err)
 	}
 
-	txHashHex := tx.TxHash().String()
-	si.logger.Info("successfully pushing the staking event",
-		zap.String("tx_hash", txHashHex))
+	si.logger.Info("successfully pushed staking event",
+		zap.String("tx_hash", tx.TxHash().String()),
+	)
 
+	si.logger.Info("saving the staking transaction",
+		zap.String("tx_hash", tx.TxHash().String()),
+	)
+
+	// save the staking tx in the db
 	if err := si.is.AddStakingTransaction(
-		tx,
-		uint32(stakingData.StakingOutputIdx),
-		height,
-		stakingData.OpReturnData.StakerPublicKey.PubKey,
-		uint32(stakingData.OpReturnData.StakingTime),
-		stakingData.OpReturnData.FinalityProviderPublicKey.PubKey,
-		uint64(stakingData.StakingOutput.Value),
-		isOverflow,
-	); err != nil {
+		tx, stakingOutputIndex, height,
+		stakerPk, stakingTime, fpPk,
+		stakingValue, isOverflow,
+	); err != nil && !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
 		return fmt.Errorf("failed to add the staking tx to store: %w", err)
 	}
 
-	si.logger.Info("successfully saving the staking tx",
-		zap.String("tx_hash", txHashHex))
+	si.logger.Info("successfully saved the staking transaction",
+		zap.String("tx_hash", tx.TxHash().String()),
+	)
 
 	// record metrics
+	stakerPkHex := hex.EncodeToString(schnorr.SerializePubKey(stakerPk))
+	fpPkHex := hex.EncodeToString(schnorr.SerializePubKey(fpPk))
 	totalStakingTxs.Inc()
 	lastFoundStakingTx.WithLabelValues(
-		strconv.Itoa(int(height)),
+		fmt.Sprintf("%d", height),
 		tx.TxHash().String(),
 		stakerPkHex,
-		strconv.Itoa(int(stakingData.StakingOutput.Value)),
-		strconv.Itoa(int(stakingData.OpReturnData.StakingTime)),
+		fmt.Sprintf("%d", stakingValue),
+		fmt.Sprintf("%d", stakingTime),
 		fpPkHex,
 	).SetToCurrentTime()
 
@@ -459,18 +512,18 @@ func (si *StakingIndexer) ProcessUnbondingTx(
 	height uint64, timestamp time.Time,
 	params *types.GlobalParams,
 ) error {
-
 	si.logger.Info("found an unbonding tx",
 		zap.Uint64("height", height),
 		zap.String("tx_hash", tx.TxHash().String()),
 		zap.String("staking_tx_hash", stakingTxHash.String()),
 	)
 
-	txHex, err := getTxHex(tx)
+	unbondingTxHex, err := getTxHex(tx)
 	if err != nil {
 		return err
 	}
 
+	unbondingTxHash := tx.TxHash()
 	unbondingEvent := queuecli.NewUnbondingStakingEvent(
 		stakingTxHash.String(),
 		height,
@@ -478,25 +531,31 @@ func (si *StakingIndexer) ProcessUnbondingTx(
 		uint64(params.UnbondingTime),
 		// valid unbonding tx always has one output
 		0,
-		txHex,
-		tx.TxHash().String(),
+		unbondingTxHex,
+		unbondingTxHash.String(),
 	)
 
+	si.logger.Info("pushing the unbonding event",
+		zap.String("tx_hash", unbondingTxHash.String()))
+
 	if err := si.consumer.PushUnbondingEvent(&unbondingEvent); err != nil {
-		return fmt.Errorf("failed to push the unbonding event to the consumer: %w", err)
+		return fmt.Errorf("failed to push the unbonding event to the queue: %w", err)
 	}
 
-	si.logger.Info("successfully pushing the unbonding event",
-		zap.String("tx_hash", tx.TxHash().String()))
+	si.logger.Info("successfully pushed unbonding event",
+		zap.String("tx_hash", unbondingTxHash.String()))
+
+	si.logger.Info("saving the unbonding tx",
+		zap.String("tx_hash", unbondingTxHash.String()))
 
 	if err := si.is.AddUnbondingTransaction(
 		tx,
 		stakingTxHash,
-	); err != nil {
+	); err != nil && !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
 		return fmt.Errorf("failed to add the unbonding tx to store: %w", err)
 	}
 
-	si.logger.Info("successfully saving the unbonding tx",
+	si.logger.Info("successfully saved the unbonding tx",
 		zap.String("tx_hash", tx.TxHash().String()))
 
 	// record metrics
