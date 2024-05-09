@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
@@ -216,13 +215,8 @@ func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) err
 		return fmt.Errorf("failed to push the unconfirmed event: %w", err)
 	}
 
-	lastCalculatedTvlInfo.WithLabelValues(
-		fmt.Sprintf("%d", tipHeight),
-		fmt.Sprintf("%d", lastConfirmedHeight),
-		fmt.Sprintf("%d", confirmedTvl),
-		fmt.Sprintf("%d", unconfirmedTvl),
-		fmt.Sprintf("%d", totalTvl),
-	).SetToCurrentTime()
+	// record metrics
+	lastCalculatedTvl.Set(float64(totalTvl))
 
 	return nil
 }
@@ -671,17 +665,8 @@ func (si *StakingIndexer) addStakingTransaction(
 	)
 
 	// record metrics
-	stakerPkHex := hex.EncodeToString(schnorr.SerializePubKey(stakerPk))
-	fpPkHex := hex.EncodeToString(schnorr.SerializePubKey(fpPk))
 	totalStakingTxs.Inc()
-	lastFoundStakingTx.WithLabelValues(
-		fmt.Sprintf("%d", height),
-		tx.TxHash().String(),
-		stakerPkHex,
-		fmt.Sprintf("%d", stakingValue),
-		fmt.Sprintf("%d", stakingTime),
-		fpPkHex,
-	).SetToCurrentTime()
+	lastFoundStakingTxHeight.Set(float64(height))
 
 	return nil
 }
@@ -734,11 +719,7 @@ func (si *StakingIndexer) ProcessUnbondingTx(
 
 	// record metrics
 	totalUnbondingTxs.Inc()
-	lastFoundUnbondingTx.WithLabelValues(
-		strconv.Itoa(int(height)),
-		tx.TxHash().String(),
-		stakingTxHash.String(),
-	).SetToCurrentTime()
+	lastFoundUnbondingTxHeight.Set(float64(height))
 
 	return nil
 }
@@ -767,19 +748,10 @@ func (si *StakingIndexer) processWithdrawTx(tx *wire.MsgTx, stakingTxHash *chain
 	// record metrics
 	if unbondingTxHash == nil {
 		totalWithdrawTxsFromStaking.Inc()
-		lastFoundWithdrawTxFromStaking.WithLabelValues(
-			strconv.Itoa(int(height)),
-			txHashHex,
-			stakingTxHash.String(),
-		).SetToCurrentTime()
+		lastFoundWithdrawTxFromStakingHeight.Set(float64(height))
 	} else {
 		totalWithdrawTxsFromUnbonding.Inc()
-		lastFoundWithdrawTxFromUnbonding.WithLabelValues(
-			strconv.Itoa(int(height)),
-			txHashHex,
-			unbondingTxHash.String(),
-			stakingTxHash.String(),
-		).SetToCurrentTime()
+		lastFoundWithdrawTxFromUnbondingHeight.Set(float64(height))
 	}
 
 	return nil
