@@ -62,6 +62,20 @@ func (mr *MockEventConsumerMockRecorder) PushUnbondingEvent(ev interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushUnbondingEvent", reflect.TypeOf((*MockEventConsumer)(nil).PushUnbondingEvent), ev)
 }
 
+// PushUnconfirmedInfoEvent mocks base method.
+func (m *MockEventConsumer) PushUnconfirmedInfoEvent(ev *client.UnconfirmedInfoEvent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PushUnconfirmedInfoEvent", ev)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PushUnconfirmedInfoEvent indicates an expected call of PushUnconfirmedInfoEvent.
+func (mr *MockEventConsumerMockRecorder) PushUnconfirmedInfoEvent(ev interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushUnconfirmedInfoEvent", reflect.TypeOf((*MockEventConsumer)(nil).PushUnconfirmedInfoEvent), ev)
+}
+
 // PushWithdrawEvent mocks base method.
 func (m *MockEventConsumer) PushWithdrawEvent(ev *client.WithdrawStakingEvent) error {
 	m.ctrl.T.Helper()

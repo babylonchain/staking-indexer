@@ -195,6 +195,16 @@ func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) err
 	if err != nil {
 		return fmt.Errorf("failed to get the confirmed TVL: %w", err)
 	}
+
+	totalUnconfirmedTvl := confirmedTvl + uint64(unconfirmedTvl)
+	unconfirmedEvent := queuecli.NewUnconfirmedInfoEvent(tipHeight, totalUnconfirmedTvl)
+	if err := si.consumer.PushUnconfirmedInfoEvent(&unconfirmedEvent); err != nil {
+		return fmt.Errorf("failed to push the unconfirmed event: %w", err)
+	}
+
+	// TODO metrics
+
+	return nil
 }
 
 func (si *StakingIndexer) CalculateUnconfirmedTvl(unconfirmedBlocks []*types.IndexedBlock) (btcutil.Amount, error) {
@@ -601,19 +611,11 @@ func (si *StakingIndexer) addStakingTransaction(
 		isOverflow,
 	)
 
-	si.logger.Info("pushing staking event",
-		zap.String("tx_hash", tx.TxHash().String()),
-	)
-
 	// push the events first then save the tx due to the assumption
 	// that the consumer can handle duplicate events
 	if err := si.consumer.PushStakingEvent(&stakingEvent); err != nil {
 		return fmt.Errorf("failed to push the staking event to the queue: %w", err)
 	}
-
-	si.logger.Info("successfully pushed staking event",
-		zap.String("tx_hash", tx.TxHash().String()),
-	)
 
 	si.logger.Info("saving the staking transaction",
 		zap.String("tx_hash", tx.TxHash().String()),
@@ -677,15 +679,9 @@ func (si *StakingIndexer) ProcessUnbondingTx(
 		unbondingTxHash.String(),
 	)
 
-	si.logger.Info("pushing the unbonding event",
-		zap.String("tx_hash", unbondingTxHash.String()))
-
 	if err := si.consumer.PushUnbondingEvent(&unbondingEvent); err != nil {
 		return fmt.Errorf("failed to push the unbonding event to the queue: %w", err)
 	}
-
-	si.logger.Info("successfully pushed unbonding event",
-		zap.String("tx_hash", unbondingTxHash.String()))
 
 	si.logger.Info("saving the unbonding tx",
 		zap.String("tx_hash", unbondingTxHash.String()))
@@ -731,9 +727,6 @@ func (si *StakingIndexer) processWithdrawTx(tx *wire.MsgTx, stakingTxHash *chain
 	if err := si.consumer.PushWithdrawEvent(&withdrawEvent); err != nil {
 		return fmt.Errorf("failed to push the withdraw event to the consumer: %w", err)
 	}
-
-	si.logger.Info("successfully pushing the withdraw event",
-		zap.String("tx_hash", txHashHex))
 
 	// record metrics
 	if unbondingTxHash == nil {
