@@ -142,6 +142,7 @@ func TestStakingLifeCycle(t *testing.T) {
 
 	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
 	require.NoError(t, err)
+	require.NotNil(t, storedStakingTx)
 	withdrawTx := buildWithdrawTx(
 		t,
 		tm.WalletPrivKey,
@@ -216,8 +217,7 @@ func TestIndexerRestart(t *testing.T) {
 	// check the staking event is replayed
 	restartedTm.CheckNextStakingEvent(t, stakingTxHash)
 
-	// restart the testing manager again from 0
-	// which means the start height should be from local store
+	// restart the testing manager again from last processed height + 1
 	restartedTm2 := ReStartFromHeight(t, restartedTm, restartedTm.Si.GetStartHeight())
 	defer restartedTm2.Stop()
 
@@ -285,6 +285,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	require.NoError(t, err)
 	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
 	require.NoError(t, err)
+	require.NotNil(t, storedStakingTx)
 	unbondingTx := buildUnbondingTx(
 		t,
 		sysParams,
