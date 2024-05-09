@@ -146,8 +146,9 @@ func (si *StakingIndexer) confirmedBlocksLoop() {
 				si.logger.Fatal("failed to handle block", zap.Error(err))
 			}
 
-			// TODO if btc scanner is synced, download unconfirmed blocks
-			// get the current confirmed tvl, and calculate unconfirmed tvl
+			if err := si.processUnconfirmedInfo(uint64(b.Height)); err != nil {
+				si.logger.Error("failed to process unconfirmed info", zap.Error(err))
+			}
 		case <-si.quit:
 			si.logger.Info("closing the confirmed blocks loop")
 			return

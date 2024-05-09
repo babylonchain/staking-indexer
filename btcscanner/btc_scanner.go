@@ -14,6 +14,7 @@ import (
 type BtcScanner interface {
 	Start(startHeight uint64) error
 	ConfirmedBlocksChan() chan *types.IndexedBlock
+	LastConfirmedHeight() uint64
 	GetRangeBlocks(fromHeight, targetHeight uint64) ([]*types.IndexedBlock, error)
 	CurrentTipHeight() uint64
 	Stop() error
@@ -209,6 +210,10 @@ func (bs *BtcPoller) GetRangeBlocks(fromHeight, targetHeight uint64) ([]*types.I
 
 func (bs *BtcPoller) CurrentTipHeight() uint64 {
 	return bs.currentTipHeight
+}
+
+func (bs *BtcPoller) LastConfirmedHeight() uint64 {
+	return bs.lastConfirmedHeight
 }
 
 func (bs *BtcPoller) Stop() error {

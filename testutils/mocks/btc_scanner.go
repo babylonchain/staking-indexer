@@ -77,6 +77,20 @@ func (mr *MockBtcScannerMockRecorder) GetRangeBlocks(fromHeight, targetHeight in
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRangeBlocks", reflect.TypeOf((*MockBtcScanner)(nil).GetRangeBlocks), fromHeight, targetHeight)
 }
 
+// LastConfirmedHeight mocks base method.
+func (m *MockBtcScanner) LastConfirmedHeight() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LastConfirmedHeight")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// LastConfirmedHeight indicates an expected call of LastConfirmedHeight.
+func (mr *MockBtcScannerMockRecorder) LastConfirmedHeight() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastConfirmedHeight", reflect.TypeOf((*MockBtcScanner)(nil).LastConfirmedHeight))
+}
+
 // Start mocks base method.
 func (m *MockBtcScanner) Start(startHeight uint64) error {
 	m.ctrl.T.Helper()
