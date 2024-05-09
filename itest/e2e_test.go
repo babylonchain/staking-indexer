@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/babylonchain/staking-indexer/config"
-	"github.com/babylonchain/staking-indexer/params"
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
 	"github.com/babylonchain/staking-indexer/types"
@@ -37,11 +36,12 @@ func TestBTCScanner(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, n, count)
 
-	tm.WaitForNConfirmations(t, int(tm.ConfirmationDepth))
+	k := int(tm.VersionedParams.ParamsVersions[0].ConfirmationDepth)
+	tm.WaitForNConfirmations(t, k)
 
 	_ = tm.BitcoindHandler.GenerateBlocks(10)
 
-	tm.WaitForNConfirmations(t, int(tm.ConfirmationDepth))
+	tm.WaitForNConfirmations(t, k)
 }
 
 func TestQueueConsumer(t *testing.T) {
@@ -90,15 +90,12 @@ func TestStakingLifeCycle(t *testing.T) {
 	n := 110
 	tm := StartManagerWithNBlocks(t, n)
 	defer tm.Stop()
-	k := uint64(tm.ConfirmationDepth)
 
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	paramsRetriever, err := params.NewGlobalParamsRetriever(testParamsPath)
-	require.NoError(t, err)
-	sysParamsVersions := paramsRetriever.VersionedParams()
 	// TODO: test with multiple system parameters
-	sysParams := sysParamsVersions.ParamsVersions[0]
+	sysParams := tm.VersionedParams.ParamsVersions[0]
+	k := uint64(sysParams.ConfirmationDepth)
 	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
 	testStakingData.StakingTime = 120
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
@@ -159,6 +156,44 @@ func TestStakingLifeCycle(t *testing.T) {
 	tm.CheckNextWithdrawEvent(t, stakingTx.TxHash())
 }
 
+func TestUnconfirmedTVL(t *testing.T) {
+	// ensure we have UTXOs
+	n := 110
+	tm := StartManagerWithNBlocks(t, n)
+	defer tm.Stop()
+
+	// generate valid staking tx data
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// TODO: test with multiple system parameters
+	sysParams := tm.VersionedParams.ParamsVersions[0]
+	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
+	testStakingData.StakingTime = 120
+	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
+		sysParams.Tag,
+		tm.WalletPrivKey.PubKey(),
+		testStakingData.FinalityProviderKey,
+		sysParams.CovenantPks,
+		sysParams.CovenantQuorum,
+		testStakingData.StakingTime,
+		testStakingData.StakingAmount,
+		regtestParams,
+	)
+	require.NoError(t, err)
+
+	// send the staking tx and mine blocks
+	require.NoError(t, err)
+	stakingTx, err := testutils.CreateTxFromOutputsAndSign(
+		tm.WalletClient,
+		[]*wire.TxOut{stakingInfo.OpReturnOutput, stakingInfo.StakingOutput},
+		1000,
+		tm.MinerAddr,
+	)
+	require.NoError(t, err)
+	tm.SendTxWithNConfirmations(t, stakingTx, 1)
+
+	tm.CheckNextUnconfirmedEvent(t, uint64(stakingInfo.StakingOutput.Value))
+}
+
 // TestIndexerRestart tests following cases upon restart
 //  1. it restarts from a previous height before a staking tx is found.
 //     We expect the staking event to be replayed
@@ -169,15 +204,12 @@ func TestIndexerRestart(t *testing.T) {
 	n := 110
 	tm := StartManagerWithNBlocks(t, n)
 	defer tm.Stop()
-	k := tm.ConfirmationDepth
 
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	paramsRetriever, err := params.NewGlobalParamsRetriever(testParamsPath)
-	require.NoError(t, err)
-	sysParamsVersions := paramsRetriever.VersionedParams()
 	// TODO: test with multiple system parameters
-	sysParams := sysParamsVersions.ParamsVersions[0]
+	sysParams := tm.VersionedParams.ParamsVersions[0]
+	k := sysParams.ConfirmationDepth
 	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
 	testStakingData.StakingTime = 120
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
@@ -241,14 +273,11 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	n := 110
 	tm := StartManagerWithNBlocks(t, n)
 	defer tm.Stop()
-	k := uint64(tm.ConfirmationDepth)
 
 	// generate valid staking tx data
-	paramsRetriever, err := params.NewGlobalParamsRetriever(testParamsPath)
-	require.NoError(t, err)
-	sysParamsVersions := paramsRetriever.VersionedParams()
 	// TODO: test with multiple system parameters
-	sysParams := sysParamsVersions.ParamsVersions[0]
+	sysParams := tm.VersionedParams.ParamsVersions[0]
+	k := uint64(sysParams.ConfirmationDepth)
 	testStakingData := getTestStakingData(t)
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
 		sysParams.Tag,

@@ -75,7 +75,7 @@ func (si *StakingIndexer) Start(startHeight uint64) error {
 		si.logger.Info("Starting Staking Indexer App")
 
 		si.wg.Add(1)
-		go si.confirmedBlocksLoop()
+		go si.blocksEventLoop()
 
 		if err := si.ValidateStartHeight(startHeight); err != nil {
 			startErr = fmt.Errorf("invalid start height %d: %w", startHeight, err)
@@ -132,7 +132,7 @@ func (si *StakingIndexer) GetStartHeight() uint64 {
 	return lastProcessedHeight + 1
 }
 
-func (si *StakingIndexer) confirmedBlocksLoop() {
+func (si *StakingIndexer) blocksEventLoop() {
 	defer si.wg.Done()
 
 	for {
@@ -198,6 +198,13 @@ func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) err
 	}
 
 	totalUnconfirmedTvl := confirmedTvl + uint64(unconfirmedTvl)
+
+	si.logger.Info("successfully calculated unconfirmed TVL",
+		zap.Uint64("height", tipHeight),
+		zap.Uint64("confirmed_tvl", confirmedTvl),
+		zap.Uint64("unconfirmed_tvl", uint64(unconfirmedTvl)),
+		zap.Uint64("total_tvl", totalUnconfirmedTvl))
+
 	unconfirmedEvent := queuecli.NewUnconfirmedInfoEvent(tipHeight, totalUnconfirmedTvl)
 	if err := si.consumer.PushUnconfirmedInfoEvent(&unconfirmedEvent); err != nil {
 		return fmt.Errorf("failed to push the unconfirmed event: %w", err)
@@ -234,6 +241,7 @@ func (si *StakingIndexer) CalculateUnconfirmedTvl(unconfirmedBlocks []*types.Ind
 
 				tvl += btcutil.Amount(stakingData.StakingOutput.Value)
 				// save the staking tx in memory for later identifying unbonding tx
+				stakingValue := uint64(stakingData.StakingOutput.Value)
 				unconfirmedStakingTxs[msgTx.TxHash()] = &indexerstore.StoredStakingTransaction{
 					Tx:                 msgTx,
 					StakingOutputIdx:   uint32(stakingData.StakingOutputIdx),
@@ -241,9 +249,13 @@ func (si *StakingIndexer) CalculateUnconfirmedTvl(unconfirmedBlocks []*types.Ind
 					StakerPk:           stakingData.OpReturnData.StakerPublicKey.PubKey,
 					StakingTime:        uint32(stakingData.OpReturnData.StakingTime),
 					FinalityProviderPk: stakingData.OpReturnData.FinalityProviderPublicKey.PubKey,
-					StakingValue:       uint64(stakingData.StakingOutput.Value),
+					StakingValue:       stakingValue,
 				}
-				// TODO add logging
+
+				si.logger.Info("found an unconfirmed staking tx",
+					zap.String("tx_hash", msgTx.TxHash().String()),
+					zap.Uint64("value", stakingValue))
+
 				continue
 			}
 
@@ -271,7 +283,11 @@ func (si *StakingIndexer) CalculateUnconfirmedTvl(unconfirmedBlocks []*types.Ind
 					}
 				}
 				if isUnbonding {
-					// TODO logging
+					si.logger.Info("found an unconfirmed unbonding tx",
+						zap.String("tx_hash", msgTx.TxHash().String()),
+						zap.String("staking_tx_hash", stakingTx.Tx.TxHash().String()),
+						zap.Uint64("value", stakingTx.StakingValue))
+
 					// only subtract the tvl if the staking tx is not overflow
 					if !stakingTx.IsOverflow {
 						tvl -= btcutil.Amount(stakingTx.StakingValue)
@@ -543,6 +559,7 @@ func (si *StakingIndexer) ProcessStakingTx(
 	si.logger.Info("found a staking tx",
 		zap.Uint64("height", height),
 		zap.String("tx_hash", tx.TxHash().String()),
+		zap.Int64("value", stakingData.StakingOutput.Value),
 	)
 
 	// check whether the staking tx already exists in db
