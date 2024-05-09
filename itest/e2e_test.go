@@ -189,7 +189,7 @@ func TestUnconfirmedTVL(t *testing.T) {
 		tm.MinerAddr,
 	)
 	require.NoError(t, err)
-	tm.SendTxWithNConfirmations(t, stakingTx, 1)
+	tm.SendTxWithNConfirmations(t, stakingTx, 2)
 
 	tm.CheckNextUnconfirmedEvent(t, uint64(stakingInfo.StakingOutput.Value))
 }

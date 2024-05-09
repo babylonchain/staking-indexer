@@ -86,6 +86,25 @@ var (
 		},
 	)
 
+	lastCalculatedTvlInfo = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "si_last_calculated_active_tvl",
+			Help: "The info of the last calculated TVL",
+		},
+		[]string{
+			// the BTC block height up to which the tvl is calculated
+			"tip_height",
+			// the confirmed BTC block height
+			"confirmed_height",
+			// the value of the confirmed tvl in satoshis
+			"confirmed_tvl",
+			// the value of the unconfirmed tvl in satoshis
+			"unconfirmed_tvl",
+			// the value of the total tvl in satoshis
+			"total_tvl",
+		},
+	)
+
 	totalStakingTxs = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "si_total_staking_txs",

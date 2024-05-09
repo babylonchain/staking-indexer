@@ -197,20 +197,32 @@ func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) err
 		return fmt.Errorf("failed to get the confirmed TVL: %w", err)
 	}
 
-	totalUnconfirmedTvl := confirmedTvl + uint64(unconfirmedTvl)
+	totalTvl := confirmedTvl + uint64(unconfirmedTvl)
 
 	si.logger.Info("successfully calculated unconfirmed TVL",
-		zap.Uint64("height", tipHeight),
+		zap.Uint64("tip_height", tipHeight),
+		zap.Uint64("confirmed_height", lastConfirmedHeight),
 		zap.Uint64("confirmed_tvl", confirmedTvl),
 		zap.Uint64("unconfirmed_tvl", uint64(unconfirmedTvl)),
-		zap.Uint64("total_tvl", totalUnconfirmedTvl))
+		zap.Uint64("total_tvl", totalTvl))
 
-	unconfirmedEvent := queuecli.NewUnconfirmedInfoEvent(tipHeight, totalUnconfirmedTvl)
+	// don't need to push event if the calculation is 0
+	if unconfirmedTvl == 0 {
+		return nil
+	}
+
+	unconfirmedEvent := queuecli.NewUnconfirmedInfoEvent(tipHeight, totalTvl)
 	if err := si.consumer.PushUnconfirmedInfoEvent(&unconfirmedEvent); err != nil {
 		return fmt.Errorf("failed to push the unconfirmed event: %w", err)
 	}
 
-	// TODO metrics
+	lastCalculatedTvlInfo.WithLabelValues(
+		fmt.Sprintf("%d", tipHeight),
+		fmt.Sprintf("%d", lastConfirmedHeight),
+		fmt.Sprintf("%d", confirmedTvl),
+		fmt.Sprintf("%d", unconfirmedTvl),
+		fmt.Sprintf("%d", totalTvl),
+	).SetToCurrentTime()
 
 	return nil
 }

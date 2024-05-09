@@ -18,6 +18,8 @@ metrics:
 
 * `lastFoundWithdrawTxFromUnbonding`: The info of the last found withdrawal 
   transaction spending a previous unbonding transaction
+ 
+* `lastCalculatedTvlInfo`: The info of the last calculated TVL
 
 * `totalStakingTxs`: Total number of staking transactions
 
