@@ -235,10 +235,13 @@ func (si *StakingIndexer) CalculateUnconfirmedTvl(unconfirmedBlocks []*types.Ind
 				tvl += btcutil.Amount(stakingData.StakingOutput.Value)
 				// save the staking tx in memory for later identifying unbonding tx
 				unconfirmedStakingTxs[msgTx.TxHash()] = &indexerstore.StoredStakingTransaction{
-					Tx:               msgTx,
-					StakingOutputIdx: uint32(stakingData.StakingOutputIdx),
-					InclusionHeight:  uint64(b.Height),
-					StakingValue:     0,
+					Tx:                 msgTx,
+					StakingOutputIdx:   uint32(stakingData.StakingOutputIdx),
+					InclusionHeight:    uint64(b.Height),
+					StakerPk:           stakingData.OpReturnData.StakerPublicKey.PubKey,
+					StakingTime:        uint32(stakingData.OpReturnData.StakingTime),
+					FinalityProviderPk: stakingData.OpReturnData.FinalityProviderPublicKey.PubKey,
+					StakingValue:       uint64(stakingData.StakingOutput.Value),
 				}
 				// TODO add logging
 				continue
@@ -269,7 +272,10 @@ func (si *StakingIndexer) CalculateUnconfirmedTvl(unconfirmedBlocks []*types.Ind
 				}
 				if isUnbonding {
 					// TODO logging
-					tvl -= btcutil.Amount(stakingTx.StakingValue)
+					// only subtract the tvl if the staking tx is not overflow
+					if !stakingTx.IsOverflow {
+						tvl -= btcutil.Amount(stakingTx.StakingValue)
+					}
 				}
 				continue
 			}
