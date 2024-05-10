@@ -29,7 +29,7 @@ func (bs *BtcPoller) blockEventLoop(blockNotifier *notifier.BlockEpochEvent) {
 					zap.Int32("height", newBlock.Height),
 					zap.Error(err))
 				if bs.isSynced.Swap(false) {
-					err := bs.Bootstrap(uint64(bs.confirmedTipBlock.Height) + 1)
+					err := bs.Bootstrap(bs.LastConfirmedHeight() + 1)
 					if err != nil {
 						bs.logger.Error("failed to bootstrap",
 							zap.Error(err))
