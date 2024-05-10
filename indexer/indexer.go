@@ -166,25 +166,19 @@ func (si *StakingIndexer) blocksEventLoop() {
 // 4. push unconfirmed info event
 // 5. record metrics
 func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) error {
-	tipHeight := si.btcScanner.CurrentTipHeight()
-	params, err := si.paramsVersions.GetParamsForBTCHeight(int32(tipHeight))
-	if err != nil {
-		return fmt.Errorf("failed to get params for height %d: %w", tipHeight, err)
-	}
-
-	if lastConfirmedHeight+uint64(params.ConfirmationDepth) < tipHeight {
-		si.logger.Debug("the btc scanner is still catching up",
-			zap.Uint64("last_confirmed_height", lastConfirmedHeight),
-			zap.Uint64("tip_height", tipHeight))
-
+	if !si.btcScanner.IsSynced() {
+		si.logger.Debug("the btc scanner is still catching up, skip processing unconfirmed info")
 		return nil
 	}
 
-	unconfirmedBlocks, err := si.btcScanner.GetRangeBlocks(lastConfirmedHeight+1, tipHeight)
-	if err != nil {
-		return fmt.Errorf("failed to get a range of blocks, from height: %d, target height: %d: %w",
-			lastConfirmedHeight+1,
-			tipHeight, err)
+	if si.btcScanner.LastConfirmedHeight() != lastConfirmedHeight {
+		return fmt.Errorf("the last confirmed height does not match, btc scanner expected: %d, got: %d",
+			si.btcScanner.LastConfirmedHeight(), lastConfirmedHeight)
+	}
+
+	unconfirmedBlocks := si.btcScanner.GetUnconfirmedBlocks()
+	if len(unconfirmedBlocks) == 0 {
+		return nil
 	}
 
 	unconfirmedTvl, err := si.CalculateUnconfirmedTvl(unconfirmedBlocks)
@@ -198,8 +192,9 @@ func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) err
 
 	totalTvl := confirmedTvl + uint64(unconfirmedTvl)
 
+	unconfirmedTipHeight := uint64(unconfirmedBlocks[len(unconfirmedBlocks)-1].Height)
 	si.logger.Info("successfully calculated unconfirmed TVL",
-		zap.Uint64("tip_height", tipHeight),
+		zap.Uint64("tip_height", unconfirmedTipHeight),
 		zap.Uint64("confirmed_height", lastConfirmedHeight),
 		zap.Uint64("confirmed_tvl", confirmedTvl),
 		zap.Uint64("unconfirmed_tvl", uint64(unconfirmedTvl)),
@@ -210,7 +205,7 @@ func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) err
 		return nil
 	}
 
-	unconfirmedEvent := queuecli.NewUnconfirmedInfoEvent(tipHeight, totalTvl)
+	unconfirmedEvent := queuecli.NewUnconfirmedInfoEvent(unconfirmedTipHeight, totalTvl)
 	if err := si.consumer.PushUnconfirmedInfoEvent(&unconfirmedEvent); err != nil {
 		return fmt.Errorf("failed to push the unconfirmed event: %w", err)
 	}

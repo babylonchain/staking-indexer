@@ -48,33 +48,32 @@ func (mr *MockBtcScannerMockRecorder) ConfirmedBlocksChan() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfirmedBlocksChan", reflect.TypeOf((*MockBtcScanner)(nil).ConfirmedBlocksChan))
 }
 
-// CurrentTipHeight mocks base method.
-func (m *MockBtcScanner) CurrentTipHeight() uint64 {
+// GetUnconfirmedBlocks mocks base method.
+func (m *MockBtcScanner) GetUnconfirmedBlocks() []*types.IndexedBlock {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CurrentTipHeight")
-	ret0, _ := ret[0].(uint64)
+	ret := m.ctrl.Call(m, "GetUnconfirmedBlocks")
+	ret0, _ := ret[0].([]*types.IndexedBlock)
 	return ret0
 }
 
-// CurrentTipHeight indicates an expected call of CurrentTipHeight.
-func (mr *MockBtcScannerMockRecorder) CurrentTipHeight() *gomock.Call {
+// GetUnconfirmedBlocks indicates an expected call of GetUnconfirmedBlocks.
+func (mr *MockBtcScannerMockRecorder) GetUnconfirmedBlocks() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentTipHeight", reflect.TypeOf((*MockBtcScanner)(nil).CurrentTipHeight))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUnconfirmedBlocks", reflect.TypeOf((*MockBtcScanner)(nil).GetUnconfirmedBlocks))
 }
 
-// GetRangeBlocks mocks base method.
-func (m *MockBtcScanner) GetRangeBlocks(fromHeight, targetHeight uint64) ([]*types.IndexedBlock, error) {
+// IsSynced mocks base method.
+func (m *MockBtcScanner) IsSynced() bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRangeBlocks", fromHeight, targetHeight)
-	ret0, _ := ret[0].([]*types.IndexedBlock)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "IsSynced")
+	ret0, _ := ret[0].(bool)
+	return ret0
 }
 
-// GetRangeBlocks indicates an expected call of GetRangeBlocks.
-func (mr *MockBtcScannerMockRecorder) GetRangeBlocks(fromHeight, targetHeight interface{}) *gomock.Call {
+// IsSynced indicates an expected call of IsSynced.
+func (mr *MockBtcScannerMockRecorder) IsSynced() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRangeBlocks", reflect.TypeOf((*MockBtcScanner)(nil).GetRangeBlocks), fromHeight, targetHeight)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSynced", reflect.TypeOf((*MockBtcScanner)(nil).IsSynced))
 }
 
 // LastConfirmedHeight mocks base method.

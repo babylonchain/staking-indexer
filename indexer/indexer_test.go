@@ -292,7 +292,6 @@ func FuzzGetStartHeight(f *testing.F) {
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
 		mockBtcScanner := NewMockedBtcScanner(t, confirmedBlockChan)
-		mockBtcScanner.EXPECT().CurrentTipHeight().Return(uint64(0)).AnyTimes()
 		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParams, mockBtcScanner)
 		require.NoError(t, err)
 
