@@ -18,71 +18,38 @@ var (
 		Help: "Last processed BTC height",
 	})
 
-	lastFoundStakingTx = promauto.NewGaugeVec(
+	lastCalculatedTvl = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "si_last_found_staking_tx",
-			Help: "The info of the last found staking transaction",
-		},
-		[]string{
-			// the height of the block containing the staking tx
-			"height",
-			// the tx id of the staking tx
-			"txid",
-			// the public key of the staker
-			"staker_pk",
-			// the staking value
-			"staking_value",
-			// the time that the staked BTC is locked in terms of blocks
-			"staking_time",
-			// the public key of the delegated finality provider
-			"finality_provider_pk",
+			Name: "si_last_calculated_active_tvl",
+			Help: "The value of the last calculated TVL in satoshis",
 		},
 	)
 
-	lastFoundUnbondingTx = promauto.NewGaugeVec(
+	lastFoundStakingTxHeight = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "si_last_found_unbonding_tx",
-			Help: "The info of the last found unbonding transaction",
-		},
-		[]string{
-			// the height of the block containing the unbonding tx
-			"height",
-			// the tx id of the unbonding tx
-			"txid",
-			// the tx id of the relevant staking tx
-			"staking_txid",
+			Name: "si_last_found_staking_tx_height",
+			Help: "The inclusion height of the last found staking transaction",
 		},
 	)
 
-	lastFoundWithdrawTxFromStaking = promauto.NewGaugeVec(
+	lastFoundUnbondingTxHeight = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "si_last_found_withdraw_tx_from_staking",
-			Help: "The info of the last found withdrawal transaction spending a previous staking transaction ",
-		},
-		[]string{
-			// the height of the block containing the withdrawal tx
-			"height",
-			// the tx id of the withdrawal tx
-			"txid",
-			// the tx id of the relevant staking tx
-			"staking_txid",
+			Name: "si_last_found_unbonding_tx_height",
+			Help: "The inclusion height of the last found unbonding transaction",
 		},
 	)
 
-	lastFoundWithdrawTxFromUnbonding = promauto.NewGaugeVec(
+	lastFoundWithdrawTxFromStakingHeight = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "si_last_found_withdraw_tx_from_unbonding",
-			Help: "The info of the last found withdrawal transaction spending a previous unbonding transaction",
+			Name: "si_last_found_withdraw_tx_from_staking_height",
+			Help: "The inclusion height of the last found withdrawal transaction spending a previous staking transaction ",
 		},
-		[]string{
-			// the height of the block containing the withdrawal tx
-			"height",
-			// the tx id of the withdrawal tx
-			"txid",
-			// the tx id of the relevant unbonding tx
-			"unbonding_txid",
-			// the tx id of the relevant staking tx
-			"staking_txid",
+	)
+
+	lastFoundWithdrawTxFromUnbondingHeight = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "si_last_found_withdraw_tx_from_unbonding_height",
+			Help: "The inclusion height of the last found withdrawal transaction spending a previous unbonding transaction",
 		},
 	)
 

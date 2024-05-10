@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
@@ -75,7 +74,7 @@ func (si *StakingIndexer) Start(startHeight uint64) error {
 		si.logger.Info("Starting Staking Indexer App")
 
 		si.wg.Add(1)
-		go si.confirmedBlocksLoop()
+		go si.blocksEventLoop()
 
 		if err := si.ValidateStartHeight(startHeight); err != nil {
 			startErr = fmt.Errorf("invalid start height %d: %w", startHeight, err)
@@ -132,7 +131,7 @@ func (si *StakingIndexer) GetStartHeight() uint64 {
 	return lastProcessedHeight + 1
 }
 
-func (si *StakingIndexer) confirmedBlocksLoop() {
+func (si *StakingIndexer) blocksEventLoop() {
 	defer si.wg.Done()
 
 	for {
@@ -145,11 +144,173 @@ func (si *StakingIndexer) confirmedBlocksLoop() {
 				// this indicates systematic failure
 				si.logger.Fatal("failed to handle block", zap.Error(err))
 			}
+
+			if err := si.processUnconfirmedInfo(uint64(b.Height)); err != nil {
+				si.logger.Error("failed to process unconfirmed info", zap.Error(err))
+			}
 		case <-si.quit:
 			si.logger.Info("closing the confirmed blocks loop")
 			return
 		}
 	}
+}
+
+// processUnconfirmedInfo processes information from the last confirmed height + 1
+// to the current tip height. This method will not make any change to the system
+// state.
+// If the btc scanner is synced, it follows the steps below:
+// 1. download unconfirmed blocks
+// 2. get the current confirmed tvl
+// 3. iterate all txs of each unconfirmed block to identify staking and unbonding transactions,
+// and calculate total unconfirmed tvl
+// 4. push unconfirmed info event
+// 5. record metrics
+func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) error {
+	tipHeight := si.btcScanner.CurrentTipHeight()
+	params, err := si.paramsVersions.GetParamsForBTCHeight(int32(tipHeight))
+	if err != nil {
+		return fmt.Errorf("failed to get params for height %d: %w", tipHeight, err)
+	}
+
+	if lastConfirmedHeight+uint64(params.ConfirmationDepth) < tipHeight {
+		si.logger.Debug("the btc scanner is still catching up",
+			zap.Uint64("last_confirmed_height", lastConfirmedHeight),
+			zap.Uint64("tip_height", tipHeight))
+
+		return nil
+	}
+
+	unconfirmedBlocks, err := si.btcScanner.GetRangeBlocks(lastConfirmedHeight+1, tipHeight)
+	if err != nil {
+		return fmt.Errorf("failed to get a range of blocks, from height: %d, target height: %d: %w",
+			lastConfirmedHeight+1,
+			tipHeight, err)
+	}
+
+	unconfirmedTvl, err := si.CalculateUnconfirmedTvl(unconfirmedBlocks)
+	if err != nil {
+		return fmt.Errorf("failed to calculate unconfirmed tvl: %w", err)
+	}
+	confirmedTvl, err := si.GetConfirmedTvl()
+	if err != nil {
+		return fmt.Errorf("failed to get the confirmed TVL: %w", err)
+	}
+
+	totalTvl := confirmedTvl + uint64(unconfirmedTvl)
+
+	si.logger.Info("successfully calculated unconfirmed TVL",
+		zap.Uint64("tip_height", tipHeight),
+		zap.Uint64("confirmed_height", lastConfirmedHeight),
+		zap.Uint64("confirmed_tvl", confirmedTvl),
+		zap.Uint64("unconfirmed_tvl", uint64(unconfirmedTvl)),
+		zap.Uint64("total_tvl", totalTvl))
+
+	// don't need to push event if the calculation is 0
+	if unconfirmedTvl == 0 {
+		return nil
+	}
+
+	unconfirmedEvent := queuecli.NewUnconfirmedInfoEvent(tipHeight, totalTvl)
+	if err := si.consumer.PushUnconfirmedInfoEvent(&unconfirmedEvent); err != nil {
+		return fmt.Errorf("failed to push the unconfirmed event: %w", err)
+	}
+
+	// record metrics
+	lastCalculatedTvl.Set(float64(totalTvl))
+
+	return nil
+}
+
+func (si *StakingIndexer) CalculateUnconfirmedTvl(unconfirmedBlocks []*types.IndexedBlock) (btcutil.Amount, error) {
+	tvl := btcutil.Amount(0)
+	unconfirmedStakingTxs := make(map[chainhash.Hash]*indexerstore.StoredStakingTransaction)
+	for _, b := range unconfirmedBlocks {
+		params, err := si.paramsVersions.GetParamsForBTCHeight(b.Height)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get params for height %d: %w", b.Height, err)
+		}
+
+		for _, tx := range b.Txs {
+			msgTx := tx.MsgTx()
+
+			// 1. try to parse staking tx
+			stakingData, err := si.tryParseStakingTx(msgTx, params)
+			if err == nil {
+				// this is a new staking tx, validate it against staking requirement
+				if err := si.validateStakingTx(params, stakingData); err != nil {
+					if errors.Is(err, ErrInvalidStakingTx) {
+						continue
+					} else {
+						return 0, fmt.Errorf("failed to validate staking tx: %w", err)
+					}
+				}
+
+				tvl += btcutil.Amount(stakingData.StakingOutput.Value)
+				// save the staking tx in memory for later identifying unbonding tx
+				stakingValue := uint64(stakingData.StakingOutput.Value)
+				unconfirmedStakingTxs[msgTx.TxHash()] = &indexerstore.StoredStakingTransaction{
+					Tx:                 msgTx,
+					StakingOutputIdx:   uint32(stakingData.StakingOutputIdx),
+					InclusionHeight:    uint64(b.Height),
+					StakerPk:           stakingData.OpReturnData.StakerPublicKey.PubKey,
+					StakingTime:        uint32(stakingData.OpReturnData.StakingTime),
+					FinalityProviderPk: stakingData.OpReturnData.FinalityProviderPublicKey.PubKey,
+					StakingValue:       stakingValue,
+				}
+
+				si.logger.Info("found an unconfirmed staking tx",
+					zap.String("tx_hash", msgTx.TxHash().String()),
+					zap.Uint64("value", stakingValue))
+
+				continue
+			}
+
+			// 2. not a staking tx, check whether it spends a stored staking tx
+			stakingTx, spentInputIdx := si.getSpentStakingTx(msgTx)
+			if spentInputIdx < 0 {
+				// it does not spend a stored staking tx, check whether it spends
+				// an unconfirmed staking tx
+				stakingTx, spentInputIdx = getSpentFromStakingTxs(msgTx, unconfirmedStakingTxs)
+			}
+			if spentInputIdx >= 0 {
+				// 3. is a spending tx, check whether it is a valid unbonding tx
+				paramsFromStakingTxHeight, err := si.paramsVersions.GetParamsForBTCHeight(
+					int32(stakingTx.InclusionHeight),
+				)
+				if err != nil {
+					return 0, fmt.Errorf("failed to get the params for the staking tx height %d: %w", stakingTx.InclusionHeight, err)
+				}
+				isUnbonding, err := si.IsValidUnbondingTx(msgTx, stakingTx, paramsFromStakingTxHeight)
+				if err != nil {
+					if errors.Is(err, ErrInvalidUnbondingTx) {
+						si.logger.Warn("found an invalid unbonding tx",
+							zap.String("tx_hash", msgTx.TxHash().String()))
+						continue
+					} else {
+						return 0, fmt.Errorf("failed to validate unbonding tx: %w", err)
+					}
+				}
+				if isUnbonding {
+					si.logger.Info("found an unconfirmed unbonding tx",
+						zap.String("tx_hash", msgTx.TxHash().String()),
+						zap.String("staking_tx_hash", stakingTx.Tx.TxHash().String()),
+						zap.Uint64("value", stakingTx.StakingValue))
+
+					// only subtract the tvl if the staking tx is not overflow
+					if !stakingTx.IsOverflow {
+						tvl -= btcutil.Amount(stakingTx.StakingValue)
+					}
+				} else {
+					si.logger.Warn("found a tx that spends the staking tx but not an unbonding tx",
+						zap.String("tx_hash", msgTx.TxHash().String()),
+						zap.String("staking_tx_hash", stakingTx.Tx.TxHash().String()))
+				}
+				continue
+			}
+		}
+	}
+
+	return tvl, nil
 }
 
 // HandleConfirmedBlock iterates through the tx set of a confirmed block and
@@ -299,6 +460,32 @@ func (si *StakingIndexer) getSpentStakingTx(tx *wire.MsgTx) (*indexerstore.Store
 	return nil, -1
 }
 
+// getSpentFromStakingTxs checks if the given tx spends any of the
+// given staking txs.
+// if so, it returns the found staking tx and the spent staking input index,
+// otherwise, it returns nil and -1
+func getSpentFromStakingTxs(
+	tx *wire.MsgTx,
+	stakingTxs map[chainhash.Hash]*indexerstore.StoredStakingTransaction,
+) (*indexerstore.StoredStakingTransaction, int) {
+	for i, txIn := range tx.TxIn {
+		maybeStakingTxHash := txIn.PreviousOutPoint.Hash
+		stakingTx, exists := stakingTxs[maybeStakingTxHash]
+		if !exists {
+			continue
+		}
+
+		// this ensures the spending tx spends the correct staking output
+		if txIn.PreviousOutPoint.Index != stakingTx.StakingOutputIdx {
+			continue
+		}
+
+		return stakingTx, i
+	}
+
+	return nil, -1
+}
+
 // getSpentStakingTx checks if the given tx spends any of the stored staking tx
 // if so, it returns the found staking tx and the spent staking input index,
 // otherwise, it returns nil and -1
@@ -384,6 +571,7 @@ func (si *StakingIndexer) ProcessStakingTx(
 	si.logger.Info("found a staking tx",
 		zap.Uint64("height", height),
 		zap.String("tx_hash", tx.TxHash().String()),
+		zap.Int64("value", stakingData.StakingOutput.Value),
 	)
 
 	// check whether the staking tx already exists in db
@@ -459,19 +647,11 @@ func (si *StakingIndexer) addStakingTransaction(
 		isOverflow,
 	)
 
-	si.logger.Info("pushing staking event",
-		zap.String("tx_hash", tx.TxHash().String()),
-	)
-
 	// push the events first then save the tx due to the assumption
 	// that the consumer can handle duplicate events
 	if err := si.consumer.PushStakingEvent(&stakingEvent); err != nil {
 		return fmt.Errorf("failed to push the staking event to the queue: %w", err)
 	}
-
-	si.logger.Info("successfully pushed staking event",
-		zap.String("tx_hash", tx.TxHash().String()),
-	)
 
 	si.logger.Info("saving the staking transaction",
 		zap.String("tx_hash", tx.TxHash().String()),
@@ -491,17 +671,8 @@ func (si *StakingIndexer) addStakingTransaction(
 	)
 
 	// record metrics
-	stakerPkHex := hex.EncodeToString(schnorr.SerializePubKey(stakerPk))
-	fpPkHex := hex.EncodeToString(schnorr.SerializePubKey(fpPk))
 	totalStakingTxs.Inc()
-	lastFoundStakingTx.WithLabelValues(
-		fmt.Sprintf("%d", height),
-		tx.TxHash().String(),
-		stakerPkHex,
-		fmt.Sprintf("%d", stakingValue),
-		fmt.Sprintf("%d", stakingTime),
-		fpPkHex,
-	).SetToCurrentTime()
+	lastFoundStakingTxHeight.Set(float64(height))
 
 	return nil
 }
@@ -535,15 +706,9 @@ func (si *StakingIndexer) ProcessUnbondingTx(
 		unbondingTxHash.String(),
 	)
 
-	si.logger.Info("pushing the unbonding event",
-		zap.String("tx_hash", unbondingTxHash.String()))
-
 	if err := si.consumer.PushUnbondingEvent(&unbondingEvent); err != nil {
 		return fmt.Errorf("failed to push the unbonding event to the queue: %w", err)
 	}
-
-	si.logger.Info("successfully pushed unbonding event",
-		zap.String("tx_hash", unbondingTxHash.String()))
 
 	si.logger.Info("saving the unbonding tx",
 		zap.String("tx_hash", unbondingTxHash.String()))
@@ -560,11 +725,7 @@ func (si *StakingIndexer) ProcessUnbondingTx(
 
 	// record metrics
 	totalUnbondingTxs.Inc()
-	lastFoundUnbondingTx.WithLabelValues(
-		strconv.Itoa(int(height)),
-		tx.TxHash().String(),
-		stakingTxHash.String(),
-	).SetToCurrentTime()
+	lastFoundUnbondingTxHeight.Set(float64(height))
 
 	return nil
 }
@@ -590,25 +751,13 @@ func (si *StakingIndexer) processWithdrawTx(tx *wire.MsgTx, stakingTxHash *chain
 		return fmt.Errorf("failed to push the withdraw event to the consumer: %w", err)
 	}
 
-	si.logger.Info("successfully pushing the withdraw event",
-		zap.String("tx_hash", txHashHex))
-
 	// record metrics
 	if unbondingTxHash == nil {
 		totalWithdrawTxsFromStaking.Inc()
-		lastFoundWithdrawTxFromStaking.WithLabelValues(
-			strconv.Itoa(int(height)),
-			txHashHex,
-			stakingTxHash.String(),
-		).SetToCurrentTime()
+		lastFoundWithdrawTxFromStakingHeight.Set(float64(height))
 	} else {
 		totalWithdrawTxsFromUnbonding.Inc()
-		lastFoundWithdrawTxFromUnbonding.WithLabelValues(
-			strconv.Itoa(int(height)),
-			txHashHex,
-			unbondingTxHash.String(),
-			stakingTxHash.String(),
-		).SetToCurrentTime()
+		lastFoundWithdrawTxFromUnbondingHeight.Set(float64(height))
 	}
 
 	return nil
