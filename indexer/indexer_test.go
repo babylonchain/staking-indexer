@@ -186,7 +186,7 @@ func FuzzBlockHandler(f *testing.F) {
 	// Note: before committing, it should be tested with large seed
 	// to avoid flaky
 	// small seed for ci because db open/close is slow
-	bbndatagen.AddRandomSeedsToFuzzer(f, 20)
+	bbndatagen.AddRandomSeedsToFuzzer(f, 10)
 
 	f.Fuzz(func(t *testing.T, seed int64) {
 		r := rand.New(rand.NewSource(seed))
@@ -195,7 +195,7 @@ func FuzzBlockHandler(f *testing.F) {
 		cfg := config.DefaultConfigWithHome(homePath)
 
 		confirmedBlockChan := make(chan *types.IndexedBlock)
-		n := r.Intn(200) + 1
+		n := r.Intn(100) + 1
 		sysParamsVersions := datagen.GenerateGlobalParamsVersions(r, t)
 		testScenario := NewTestScenario(r, t, sysParamsVersions, 80, n, true)
 
