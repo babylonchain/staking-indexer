@@ -32,6 +32,7 @@ func FuzzPollConfirmedBlocks(f *testing.F) {
 
 		ctl := gomock.NewController(t)
 		mockBtcClient := mocks.NewMockClient(ctl)
+		mockBtcClient.EXPECT().GetTipHeight().Return(uint64(bestHeight), nil).AnyTimes()
 		confirmedBlocks := chainIndexedBlocks[:numBlocks-k]
 		for i := 0; i < int(numBlocks); i++ {
 			mockBtcClient.EXPECT().GetBlockByHeight(gomock.Eq(uint64(chainIndexedBlocks[i].Height))).
