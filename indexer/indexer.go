@@ -187,39 +187,40 @@ func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) err
 			tipHeight, err)
 	}
 
-	unconfirmedTvl, err := si.CalculateUnconfirmedTvl(unconfirmedBlocks)
+	tvlInUnconfirmedBlocks, err := si.CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks)
 	if err != nil {
 		return fmt.Errorf("failed to calculate unconfirmed tvl: %w", err)
 	}
+
 	confirmedTvl, err := si.GetConfirmedTvl()
 	if err != nil {
 		return fmt.Errorf("failed to get the confirmed TVL: %w", err)
 	}
 
-	totalTvl := btcutil.Amount(confirmedTvl) + unconfirmedTvl
-	if totalTvl < 0 {
-		return fmt.Errorf("total tvl %d is negative", totalTvl)
+	unconfirmedTvl := btcutil.Amount(confirmedTvl) + tvlInUnconfirmedBlocks
+	if unconfirmedTvl < 0 {
+		return fmt.Errorf("total tvl %d is negative", unconfirmedTvl)
 	}
 
 	si.logger.Info("successfully calculated unconfirmed TVL",
 		zap.Uint64("tip_height", tipHeight),
 		zap.Uint64("confirmed_height", lastConfirmedHeight),
 		zap.Uint64("confirmed_tvl", confirmedTvl),
-		zap.Int64("unconfirmed_tvl", int64(unconfirmedTvl)),
-		zap.Int64("total_tvl", int64(totalTvl)))
+		zap.Int64("tvl_in_unconfirmed_blocks", int64(tvlInUnconfirmedBlocks)),
+		zap.Int64("unconfirmed_tvl", int64(unconfirmedTvl)))
 
-	btcInfoEvent := queuecli.NewBtcInfoEvent(tipHeight, confirmedTvl, uint64(totalTvl))
+	btcInfoEvent := queuecli.NewBtcInfoEvent(tipHeight, confirmedTvl, uint64(unconfirmedTvl))
 	if err := si.consumer.PushBtcInfoEvent(&btcInfoEvent); err != nil {
 		return fmt.Errorf("failed to push the unconfirmed event: %w", err)
 	}
 
 	// record metrics
-	lastCalculatedTvl.Set(float64(totalTvl))
+	lastCalculatedTvl.Set(float64(unconfirmedTvl))
 
 	return nil
 }
 
-func (si *StakingIndexer) CalculateUnconfirmedTvl(unconfirmedBlocks []*types.IndexedBlock) (btcutil.Amount, error) {
+func (si *StakingIndexer) CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks []*types.IndexedBlock) (btcutil.Amount, error) {
 	tvl := btcutil.Amount(0)
 	unconfirmedStakingTxs := make(map[chainhash.Hash]*indexerstore.StoredStakingTransaction)
 	for _, b := range unconfirmedBlocks {
