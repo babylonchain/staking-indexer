@@ -22,8 +22,8 @@ Staking protocol and serves as the ground truth for the Bitcoin Staking system.
    transactions can be found [here](./doc/staking.md).
 3. Calculating confirmed and unconfirmed TVL (total value locked) based on
    observed transactions.
-4. Storing the extracted transaction data in a database. The database schema 
-   can be found [here](./doc/db_schema.md).
+4. Storing the extracted transaction data and system state in a database. The 
+   details can be found [here](./doc/state).
 5. Pushing staking, unbonding, withdrawal events, and TVL calculation 
    results to the message queues. 
    A reference implementation based on [rabbitmq](https://www.rabbitmq.com/) 

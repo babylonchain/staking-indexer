@@ -44,3 +44,14 @@ type WithdrawStakingEvent struct {
     StakingTxHashHex string    `json:"staking_tx_hash_hex"`
 }
 ```
+
+### BTC Info Event
+
+```go
+type BtcInfoEvent struct {
+	EventType      EventType `json:"event_type"` // always 6. BtcInfoEventType
+	Height         uint64    `json:"height"`
+	ConfirmedTvl   uint64    `json:"confirmed_tvl"`
+	UnconfirmedTvl uint64    `json:"unconfirmed_tvl"`
+}
+```

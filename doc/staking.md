@@ -1,4 +1,4 @@
-# Staking
+# Bitcoin Staking
 
 In this document, we explore how the staking indexer handles transactions of the
 Bitcoin Staking protocol.
