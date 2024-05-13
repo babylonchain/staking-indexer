@@ -197,6 +197,11 @@ func TestUnconfirmedTVL(t *testing.T) {
 	tm.SendTxWithNConfirmations(t, stakingTx, 1)
 	tm.CheckNextUnconfirmedEvent(t, 0, uint64(stakingInfo.StakingOutput.Value))
 
+	// confirm the staking tx
+	tm.BitcoindHandler.GenerateBlocks(int(k))
+	tm.WaitForNConfirmations(t, int(k))
+	tm.CheckNextUnconfirmedEvent(t, uint64(stakingInfo.StakingOutput.Value), uint64(stakingInfo.StakingOutput.Value))
+
 	// build and send unbonding tx from the previous staking tx
 	unbondingSpendInfo, err := stakingInfo.UnbondingPathSpendInfo()
 	require.NoError(t, err)
@@ -214,6 +219,10 @@ func TestUnconfirmedTVL(t *testing.T) {
 		getCovenantPrivKeys(t),
 	)
 	tm.SendTxWithNConfirmations(t, unbondingTx, 1)
+	tm.CheckNextUnconfirmedEvent(t, uint64(stakingInfo.StakingOutput.Value), 0)
+
+	// confirm the unbonding tx
+	tm.BitcoindHandler.GenerateBlocks(int(k))
 	tm.CheckNextUnconfirmedEvent(t, 0, 0)
 }
 

@@ -313,9 +313,7 @@ func (tm *TestManager) CheckNextUnconfirmedEvent(t *testing.T, confirmedTvl, tot
 
 	for {
 		btcInfoEventBytes := <-tm.BtcInfoEventChan
-		err := tm.QueueConsumer.BtcInfoQueue.DeleteMessage(btcInfoEventBytes.Receipt)
-		require.NoError(t, err)
-		err = json.Unmarshal([]byte(btcInfoEventBytes.Body), &btcInfoEvent)
+		err := json.Unmarshal([]byte(btcInfoEventBytes.Body), &btcInfoEvent)
 		require.NoError(t, err)
 		if confirmedTvl != btcInfoEvent.ConfirmedTvl {
 			continue
