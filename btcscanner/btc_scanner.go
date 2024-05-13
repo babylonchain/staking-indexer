@@ -3,6 +3,7 @@ package btcscanner
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	notifier "github.com/lightningnetwork/lnd/chainntnfs"
 	"go.uber.org/atomic"
@@ -80,6 +81,12 @@ func (bs *BtcPoller) Start(startHeight uint64) error {
 		return fmt.Errorf("failed to bootstrap with height %d", startHeight)
 	}
 
+	if err := bs.waitUntilActivation(); err != nil {
+		return err
+	}
+
+	bs.logger.Info("starting the BTC scanner", zap.Uint64("start_height", startHeight))
+
 	blockEventNotifier, err := bs.btcNotifier.RegisterBlockEpochNtfn(nil)
 	if err != nil {
 		return fmt.Errorf("failed to register BTC notifier")
@@ -92,6 +99,27 @@ func (bs *BtcPoller) Start(startHeight uint64) error {
 	go bs.blockEventLoop(blockEventNotifier)
 
 	bs.logger.Info("the BTC scanner is started")
+
+	return nil
+}
+
+func (bs *BtcPoller) waitUntilActivation() error {
+	tipHeight, err := bs.btcClient.GetTipHeight()
+	if err != nil {
+		return fmt.Errorf("failed to get the current BTC tip height")
+	}
+	activationHeight := bs.paramsVersions.ParamsVersions[0].ActivationHeight
+
+	for {
+		if tipHeight >= activationHeight {
+			break
+		}
+
+		bs.logger.Info("waiting to reach the earliest activation height",
+			zap.Uint64("tip_height", tipHeight),
+			zap.Uint64("activation_height", activationHeight))
+		time.Sleep(1 * time.Second)
+	}
 
 	return nil
 }
