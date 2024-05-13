@@ -210,8 +210,8 @@ func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) err
 		return nil
 	}
 
-	unconfirmedEvent := queuecli.NewUnconfirmedInfoEvent(tipHeight, totalTvl)
-	if err := si.consumer.PushUnconfirmedInfoEvent(&unconfirmedEvent); err != nil {
+	btcInfoEvent := queuecli.NewBtcInfoEvent(tipHeight, confirmedTvl, uint64(unconfirmedTvl))
+	if err := si.consumer.PushBtcInfoEvent(&btcInfoEvent); err != nil {
 		return fmt.Errorf("failed to push the unconfirmed event: %w", err)
 	}
 
