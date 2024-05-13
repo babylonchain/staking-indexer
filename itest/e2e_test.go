@@ -200,6 +200,7 @@ func TestUnconfirmedTVL(t *testing.T) {
 	// confirm the staking tx
 	tm.BitcoindHandler.GenerateBlocks(int(k))
 	tm.WaitForNConfirmations(t, int(k))
+	tm.CheckNextStakingEvent(t, stakingTx.TxHash())
 	tm.CheckNextUnconfirmedEvent(t, uint64(stakingInfo.StakingOutput.Value), uint64(stakingInfo.StakingOutput.Value))
 
 	// build and send unbonding tx from the previous staking tx
@@ -223,7 +224,9 @@ func TestUnconfirmedTVL(t *testing.T) {
 
 	// confirm the unbonding tx
 	tm.BitcoindHandler.GenerateBlocks(int(k))
+	tm.WaitForNConfirmations(t, int(k))
 	tm.CheckNextUnconfirmedEvent(t, 0, 0)
+	tm.CheckNextUnbondingEvent(t, unbondingTx.TxHash())
 }
 
 // TestIndexerRestart tests following cases upon restart
