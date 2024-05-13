@@ -77,22 +77,21 @@ func (bs *BtcPoller) Start(startHeight uint64) error {
 	bs.logger.Info("starting the BTC scanner")
 
 	if err := bs.Bootstrap(startHeight); err != nil {
-		return err
+		return fmt.Errorf("failed to bootstrap with height %d", startHeight)
 	}
 
 	blockEventNotifier, err := bs.btcNotifier.RegisterBlockEpochNtfn(nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to register BTC notifier")
 	}
 
 	bs.logger.Info("BTC notifier registered")
 
-	bs.isStarted.Store(true)
-	bs.logger.Info("the BTC scanner is started")
-
 	// start handling new blocks
 	bs.wg.Add(1)
 	go bs.blockEventLoop(blockEventNotifier)
+
+	bs.logger.Info("the BTC scanner is started")
 
 	return nil
 }
@@ -165,12 +164,12 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 			return fmt.Errorf("cannot get the block at height %d: %w", i, err)
 		}
 
-		// the unconfirmed blocks must follow the canonical chain
+		// the unconfirmed blocks should follow the canonical chain
 		tipCache := bs.unconfirmedBlockCache.Tip()
 		if tipCache != nil {
 			tipHash := tipCache.BlockHash()
 			if !tipHash.IsEqual(&ib.Header.PrevBlock) {
-				return fmt.Errorf("invalid canonical chain")
+				return fmt.Errorf("the block is not connected to the cache tip")
 			}
 		}
 
@@ -178,7 +177,8 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 	}
 
 	bs.logger.Info("bootstrapping is finished",
-		zap.Uint64("tip_confirmed_height", tipConfirmedHeight))
+		zap.Uint64("tip_confirmed_height", tipConfirmedHeight),
+		zap.Uint64("tip_unconfirmed_height", tipHeight))
 
 	return nil
 }

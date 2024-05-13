@@ -42,7 +42,7 @@ func (b *BTCCache) Init(ibs []*types.IndexedBlock) error {
 	if sortedByHeight := sort.SliceIsSorted(ibs, func(i, j int) bool {
 		return ibs[i].Height < ibs[j].Height
 	}); !sortedByHeight {
-		return ErrorUnsortedBlocks
+		return ErrUnsortedBlocks
 	}
 
 	for _, ib := range ibs {
