@@ -196,21 +196,19 @@ func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) err
 		return fmt.Errorf("failed to get the confirmed TVL: %w", err)
 	}
 
-	totalTvl := confirmedTvl + uint64(unconfirmedTvl)
+	totalTvl := btcutil.Amount(confirmedTvl) + unconfirmedTvl
+	if totalTvl < 0 {
+		return fmt.Errorf("total tvl %d is negative", totalTvl)
+	}
 
 	si.logger.Info("successfully calculated unconfirmed TVL",
 		zap.Uint64("tip_height", tipHeight),
 		zap.Uint64("confirmed_height", lastConfirmedHeight),
 		zap.Uint64("confirmed_tvl", confirmedTvl),
-		zap.Uint64("unconfirmed_tvl", uint64(unconfirmedTvl)),
-		zap.Uint64("total_tvl", totalTvl))
+		zap.Int64("unconfirmed_tvl", int64(unconfirmedTvl)),
+		zap.Int64("total_tvl", int64(totalTvl)))
 
-	// don't need to push event if the calculation is 0
-	if unconfirmedTvl == 0 {
-		return nil
-	}
-
-	btcInfoEvent := queuecli.NewBtcInfoEvent(tipHeight, confirmedTvl, uint64(unconfirmedTvl))
+	btcInfoEvent := queuecli.NewBtcInfoEvent(tipHeight, confirmedTvl, uint64(totalTvl))
 	if err := si.consumer.PushBtcInfoEvent(&btcInfoEvent); err != nil {
 		return fmt.Errorf("failed to push the unconfirmed event: %w", err)
 	}
@@ -260,7 +258,8 @@ func (si *StakingIndexer) CalculateUnconfirmedTvl(unconfirmedBlocks []*types.Ind
 
 				si.logger.Info("found an unconfirmed staking tx",
 					zap.String("tx_hash", msgTx.TxHash().String()),
-					zap.Uint64("value", stakingValue))
+					zap.Uint64("value", stakingValue),
+					zap.Int32("height", b.Height))
 
 				continue
 			}
