@@ -36,7 +36,7 @@ func GenerateTestStakingData(
 	require.NoError(t, err)
 
 	stakingAmount := btcutil.Amount(r.Int63n(int64(params.MaxStakingAmount-params.MinStakingAmount)) + int64(params.MinStakingAmount) + 1)
-	stakingTime := uint16(r.Int31n(int32(params.MaxStakingTime-params.MinStakingTime)) + int32(params.MinStakingTime) + 1)
+	stakingTime := uint16(r.Int31n(int32(params.MaxStakingTime-params.MinStakingTime)) + int32(params.MinStakingTime))
 
 	return &TestStakingData{
 		StakerKey:           stakerPrivKey.PubKey(),
