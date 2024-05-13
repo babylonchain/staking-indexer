@@ -58,8 +58,7 @@ type TestScenario struct {
 // randomly distributed across blocks. A tx has a given chance (stakingChance/100)
 // to be a staking tx while the rest to be an unbonding tx, n is the number of
 // staking txs and unbonding txs
-func NewTestScenario(r *rand.Rand, t *testing.T, stakingChance int, numEvents int) *TestScenario {
-	versionedParams := datagen.GenerateGlobalParamsVersions(r, t)
+func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *types.ParamsVersions, stakingChance int, numEvents int, checkOverflow bool) *TestScenario {
 	startHeight := r.Int31n(1000) + 1 + int32(versionedParams.ParamsVersions[0].ActivationHeight)
 	lastEventHeight := startHeight
 	stakingEvents := make([]*StakingEvent, 0)
@@ -84,7 +83,7 @@ func NewTestScenario(r *rand.Rand, t *testing.T, stakingChance int, numEvents in
 		// no active staking events created, otherwise, to be an unbonding event
 		if r.Intn(100) < stakingChance || !hasActiveStakingEvent(stakingEvents) {
 			stakingEvent := buildStakingEvent(r, t, height, p)
-			if stakingEvent.StakingTxData.StakingAmount+tvl > p.StakingCap {
+			if checkOverflow && stakingEvent.StakingTxData.StakingAmount+tvl > p.StakingCap {
 				stakingEvent.IsOverflow = true
 			} else {
 				tvl += stakingEvent.StakingTxData.StakingAmount
@@ -197,9 +196,8 @@ func FuzzBlockHandler(f *testing.F) {
 
 		confirmedBlockChan := make(chan *types.IndexedBlock)
 		n := r.Intn(200) + 1
-		testScenario := NewTestScenario(r, t, 80, n)
-		sysParamsVersions := testScenario.VersionedParams
-		cfg.BaseHeight = sysParamsVersions.ParamsVersions[0].ActivationHeight
+		sysParamsVersions := datagen.GenerateGlobalParamsVersions(r, t)
+		testScenario := NewTestScenario(r, t, sysParamsVersions, 80, n, true)
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
@@ -269,6 +267,12 @@ func FuzzBlockHandler(f *testing.F) {
 			require.Equal(t, unbondingEv.StakingTxHash, storedTx.StakingTxHash)
 			require.Equal(t, unbondingEv.UnbondingTx.Hash().String(), storedTx.Tx.TxHash().String())
 		}
+
+		// calculate unconfirmed tvl
+		testUnconfirmedScenario := NewTestScenario(r, t, sysParamsVersions, 80, n, false)
+		unconfirmedTvl, err := stakingIndexer.CalculateUnconfirmedTvl(testUnconfirmedScenario.Blocks)
+		require.NoError(t, err)
+		require.Equal(t, testUnconfirmedScenario.Tvl, unconfirmedTvl)
 	})
 }
 
@@ -284,17 +288,17 @@ func FuzzGetStartHeight(f *testing.F) {
 
 		confirmedBlockChan := make(chan *types.IndexedBlock)
 		sysParams := datagen.GenerateGlobalParamsVersions(r, t)
-		cfg.BaseHeight = sysParams.ParamsVersions[0].ActivationHeight
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
 		mockBtcScanner := NewMockedBtcScanner(t, confirmedBlockChan)
+		mockBtcScanner.EXPECT().CurrentTipHeight().Return(uint64(0)).AnyTimes()
 		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParams, mockBtcScanner)
 		require.NoError(t, err)
 
 		// 1. no blocks have been processed, the start height should be equal to the base height
 		initialHeight := stakingIndexer.GetStartHeight()
-		require.Equal(t, cfg.BaseHeight, initialHeight)
+		require.Equal(t, sysParams.ParamsVersions[0].ActivationHeight, initialHeight)
 		err = stakingIndexer.ValidateStartHeight(initialHeight)
 		require.NoError(t, err)
 

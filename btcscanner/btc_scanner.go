@@ -15,6 +15,8 @@ type BtcScanner interface {
 	Start(startHeight uint64) error
 	ConfirmedBlocksChan() chan *types.IndexedBlock
 	LastConfirmedHeight() uint64
+	GetRangeBlocks(fromHeight, targetHeight uint64) ([]*types.IndexedBlock, error)
+	CurrentTipHeight() uint64
 	Stop() error
 }
 
@@ -29,6 +31,8 @@ type BtcPoller struct {
 
 	// the last confirmed BTC height
 	lastConfirmedHeight uint64
+	// the current tip BTC height
+	currentTipHeight uint64
 
 	// communicate with the consumer
 	confirmedBlocksChan chan *types.IndexedBlock
@@ -97,6 +101,7 @@ func (bs *BtcPoller) bootstrap(blockEventNotifier *notifier.BlockEpochEvent) err
 	select {
 	case block := <-blockEventNotifier.Epochs:
 		tipHeight = uint64(block.Height)
+		bs.currentTipHeight = tipHeight
 		bs.logger.Info("initial BTC best block", zap.Uint64("height", tipHeight))
 	case <-bs.quit:
 		return fmt.Errorf("quit before finishing bootstrapping")
@@ -126,11 +131,12 @@ func (bs *BtcPoller) pollBlocksLoop(blockNotifier *notifier.BlockEpochEvent) {
 				return
 			}
 
-			newBlock := blockEpoch
+			tipHeight := uint64(blockEpoch.Height)
+			bs.currentTipHeight = tipHeight
 			bs.logger.Info("received a new best btc block",
-				zap.Int32("height", newBlock.Height))
+				zap.Uint64("height", tipHeight))
 
-			err := bs.pollConfirmedBlocks(uint64(newBlock.Height))
+			err := bs.pollConfirmedBlocks(tipHeight)
 			if err != nil {
 				bs.logger.Error("failed to poll confirmed blocks", zap.Error(err))
 				continue
@@ -182,6 +188,28 @@ func (bs *BtcPoller) sendConfirmedBlockToChan(block *types.IndexedBlock) {
 
 func (bs *BtcPoller) ConfirmedBlocksChan() chan *types.IndexedBlock {
 	return bs.confirmedBlocksChan
+}
+
+func (bs *BtcPoller) GetRangeBlocks(fromHeight, targetHeight uint64) ([]*types.IndexedBlock, error) {
+	if fromHeight > targetHeight {
+		return nil, fmt.Errorf("the from height %d should not be higher than the target height %d", fromHeight, targetHeight)
+	}
+
+	blocks := make([]*types.IndexedBlock, 0, targetHeight-fromHeight+1)
+	for h := fromHeight; h <= targetHeight; h++ {
+		b, err := bs.btcClient.GetBlockByHeight(h)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get block at height %d: %w", h, err)
+		}
+
+		blocks = append(blocks, b)
+	}
+
+	return blocks, nil
+}
+
+func (bs *BtcPoller) CurrentTipHeight() uint64 {
+	return bs.currentTipHeight
 }
 
 func (bs *BtcPoller) LastConfirmedHeight() uint64 {

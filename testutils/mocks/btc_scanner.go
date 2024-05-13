@@ -48,6 +48,35 @@ func (mr *MockBtcScannerMockRecorder) ConfirmedBlocksChan() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfirmedBlocksChan", reflect.TypeOf((*MockBtcScanner)(nil).ConfirmedBlocksChan))
 }
 
+// CurrentTipHeight mocks base method.
+func (m *MockBtcScanner) CurrentTipHeight() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CurrentTipHeight")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// CurrentTipHeight indicates an expected call of CurrentTipHeight.
+func (mr *MockBtcScannerMockRecorder) CurrentTipHeight() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentTipHeight", reflect.TypeOf((*MockBtcScanner)(nil).CurrentTipHeight))
+}
+
+// GetRangeBlocks mocks base method.
+func (m *MockBtcScanner) GetRangeBlocks(fromHeight, targetHeight uint64) ([]*types.IndexedBlock, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRangeBlocks", fromHeight, targetHeight)
+	ret0, _ := ret[0].([]*types.IndexedBlock)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRangeBlocks indicates an expected call of GetRangeBlocks.
+func (mr *MockBtcScannerMockRecorder) GetRangeBlocks(fromHeight, targetHeight interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRangeBlocks", reflect.TypeOf((*MockBtcScanner)(nil).GetRangeBlocks), fromHeight, targetHeight)
+}
+
 // LastConfirmedHeight mocks base method.
 func (m *MockBtcScanner) LastConfirmedHeight() uint64 {
 	m.ctrl.T.Helper()
