@@ -34,23 +34,23 @@ import (
 )
 
 type TestManager struct {
-	Config               *config.Config
-	Db                   kvdb.Backend
-	Si                   *indexer.StakingIndexer
-	BS                   *btcscanner.BtcPoller
-	WalletPrivKey        *btcec.PrivateKey
-	serverStopper        *signal.Interceptor
-	wg                   *sync.WaitGroup
-	BitcoindHandler      *BitcoindTestHandler
-	WalletClient         *rpcclient.Client
-	MinerAddr            btcutil.Address
-	DirPath              string
-	QueueConsumer        *queuemngr.QueueManager
-	StakingEventChan     <-chan queuecli.QueueMessage
-	UnbondingEventChan   <-chan queuecli.QueueMessage
-	WithdrawEventChan    <-chan queuecli.QueueMessage
-	UnconfirmedEventChan <-chan queuecli.QueueMessage
-	VersionedParams      *types.ParamsVersions
+	Config             *config.Config
+	Db                 kvdb.Backend
+	Si                 *indexer.StakingIndexer
+	BS                 *btcscanner.BtcPoller
+	WalletPrivKey      *btcec.PrivateKey
+	serverStopper      *signal.Interceptor
+	wg                 *sync.WaitGroup
+	BitcoindHandler    *BitcoindTestHandler
+	WalletClient       *rpcclient.Client
+	MinerAddr          btcutil.Address
+	DirPath            string
+	QueueConsumer      *queuemngr.QueueManager
+	StakingEventChan   <-chan queuecli.QueueMessage
+	UnbondingEventChan <-chan queuecli.QueueMessage
+	WithdrawEventChan  <-chan queuecli.QueueMessage
+	BtcInfoEventChan   <-chan queuecli.QueueMessage
+	VersionedParams    *types.ParamsVersions
 }
 
 // bitcoin params used for testing
@@ -120,7 +120,7 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 	require.NoError(t, err)
 	withdrawEventChan, err := queueConsumer.WithdrawQueue.ReceiveMessages()
 	require.NoError(t, err)
-	unconfirmedEventChan, err := queueConsumer.UnconfirmedInfoQueue.ReceiveMessages()
+	unconfirmedEventChan, err := queueConsumer.BtcInfoQueue.ReceiveMessages()
 	require.NoError(t, err)
 
 	db, err := cfg.DatabaseConfig.GetDbBackend()
@@ -152,22 +152,22 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 	time.Sleep(3 * time.Second)
 
 	return &TestManager{
-		Config:               cfg,
-		Si:                   si,
-		BS:                   scanner,
-		serverStopper:        &interceptor,
-		wg:                   &wg,
-		BitcoindHandler:      h,
-		WalletClient:         rpcclient,
-		WalletPrivKey:        walletPrivKey.PrivKey,
-		MinerAddr:            minerAddress,
-		DirPath:              dirPath,
-		QueueConsumer:        queueConsumer,
-		StakingEventChan:     stakingEventChan,
-		UnbondingEventChan:   unbondingEventChan,
-		WithdrawEventChan:    withdrawEventChan,
-		UnconfirmedEventChan: unconfirmedEventChan,
-		VersionedParams:      versionedParams,
+		Config:             cfg,
+		Si:                 si,
+		BS:                 scanner,
+		serverStopper:      &interceptor,
+		wg:                 &wg,
+		BitcoindHandler:    h,
+		WalletClient:       rpcclient,
+		WalletPrivKey:      walletPrivKey.PrivKey,
+		MinerAddr:          minerAddress,
+		DirPath:            dirPath,
+		QueueConsumer:      queueConsumer,
+		StakingEventChan:   stakingEventChan,
+		UnbondingEventChan: unbondingEventChan,
+		WithdrawEventChan:  withdrawEventChan,
+		BtcInfoEventChan:   unconfirmedEventChan,
+		VersionedParams:    versionedParams,
 	}
 }
 
@@ -309,13 +309,14 @@ func (tm *TestManager) CheckNextWithdrawEvent(t *testing.T, stakingTxHash chainh
 }
 
 func (tm *TestManager) CheckNextUnconfirmedEvent(t *testing.T, tvl uint64) {
-	unconfirmedEventBytes := <-tm.UnconfirmedEventChan
-	var unconfirmedEvent queuecli.UnconfirmedInfoEvent
-	err := json.Unmarshal([]byte(unconfirmedEventBytes.Body), &unconfirmedEvent)
+	btcInfoEventBytes := <-tm.BtcInfoEventChan
+	var btcInfoEvent queuecli.BtcInfoEvent
+	err := json.Unmarshal([]byte(btcInfoEventBytes.Body), &btcInfoEvent)
 	require.NoError(t, err)
-	require.Equal(t, int(tvl), int(unconfirmedEvent.ActiveTvl))
+	require.Equal(t, int(tvl), int(btcInfoEvent.UnconfirmedTvl))
+	require.Equal(t, 0, int(btcInfoEvent.ConfirmedTvl))
 
-	err = tm.QueueConsumer.UnconfirmedInfoQueue.DeleteMessage(unconfirmedEventBytes.Receipt)
+	err = tm.QueueConsumer.BtcInfoQueue.DeleteMessage(btcInfoEventBytes.Receipt)
 	require.NoError(t, err)
 }
 
