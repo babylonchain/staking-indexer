@@ -11,22 +11,24 @@ Staking protocol and serves as the ground truth for the Bitcoin Staking system.
 ## Features
 
 1. Polling BTC blocks data from a specified height in an ongoing manner. The 
-  poller ensures that all the output blocks have at least `N` confirmations 
-  where `N` is a configurable value, which should be large enough so that 
-  the chance of the output blocks being forked is enormously low, e.g., 
-  greater than or equal to `6` in Bitcoin mainnet.
-2. Extracting transaction data for staking, unbonding, and withdrawal. These
-  transactions are verified and compared against the system parameters
-  to identify whether they are active, inactive due to staking cap overflow, or
-  invalid. The details of the protocol for verifying and activating
-  transactions can be found [here](./doc/staking.md).
-3. Storing the extracted transaction data in a database. The database schema 
-  can be found [here](./doc/db_schema.md).
-4. Pushing staking, unbonding, and withdrawal events to the message queues.
-  A reference implementation based on [rabbitmq](https://www.rabbitmq.com/) is 
-  provided.
-  The definition of each type of events can be found [here](./doc/events.md).
-5. Monitoring the status of the service through [Prometheus metrics](./doc/metrics.md).
+   poller ensures that all the output blocks have at least `N` confirmations 
+   where `N` is a configurable value, which should be large enough so that 
+   the chance of the output blocks being forked is enormously low, e.g., 
+   greater than or equal to `6` in Bitcoin mainnet.
+2. Extracting transaction data for staking, unbonding, and withdrawal. These 
+   transactions are verified and compared against the system parameters to 
+   identify whether they are active, inactive due to staking cap overflow, 
+   or invalid. The details of the protocol for verifying and activating 
+   transactions can be found [here](./doc/staking.md).
+3. Calculating confirmed and unconfirmed TVL (total value locked) based on
+   observed transactions.
+4. Storing the extracted transaction data in a database. The database schema 
+   can be found [here](./doc/db_schema.md).
+5. Pushing staking, unbonding, withdrawal events, and TVL calculation 
+   results to the message queues. 
+   A reference implementation based on [rabbitmq](https://www.rabbitmq.com/) 
+   is provided. The definition of each type of events can be found [here](./doc/events.md).
+6. Monitoring the status of the service through [Prometheus metrics](./doc/metrics.md).
 
 ## Usage
 
