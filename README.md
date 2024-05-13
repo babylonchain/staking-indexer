@@ -10,32 +10,32 @@ Staking protocol and serves as the ground truth for the Bitcoin Staking system.
 
 ## Features
 
-* Polling BTC blocks data from a specified height in an ongoing manner. The 
+1. Polling BTC blocks data from a specified height in an ongoing manner. The 
   poller ensures that all the output blocks have at least `N` confirmations 
   where `N` is a configurable value, which should be large enough so that 
   the chance of the output blocks being forked is enormously low, e.g., 
   greater than or equal to `6` in Bitcoin mainnet.
-* Extracting transaction data for staking, unbonding, and withdrawal. These
+2. Extracting transaction data for staking, unbonding, and withdrawal. These
   transactions are verified and compared against the system parameters
   to identify whether they are active, inactive due to staking cap overflow, or
   invalid. The details of the protocol for verifying and activating
   transactions can be found [here](./doc/staking.md).
-* Storing the extracted transaction data in a database. The database schema 
+3. Storing the extracted transaction data in a database. The database schema 
   can be found [here](./doc/db_schema.md).
-* Pushing staking, unbonding, and withdrawal events to the message queues.
+4. Pushing staking, unbonding, and withdrawal events to the message queues.
   A reference implementation based on [rabbitmq](https://www.rabbitmq.com/) is 
   provided.
   The definition of each type of events can be found [here](./doc/events.md).
-* Monitoring the status of the service through [Prometheus metrics](./doc/metrics.md).
+5. Monitoring the status of the service through [Prometheus metrics](./doc/metrics.md).
 
 ## Usage
 
-### Setup bitcoind node
+### 1. Setup bitcoind node
 
 The staking indexer relies on `bitcoind` as backend. Follow this [guide](./doc/bitcoind_setup.md)
 to set up a `bitcoind` node.
 
-### Install
+### 2. Install
 
 Clone the repository to your local machine from Github:
 
@@ -50,7 +50,7 @@ cd staking-indexer # cd into the project directory
 make install
 ```
 
-### Configuration
+### 3. Configuration
 
 To initiate the program with default config file, run:
 
@@ -68,9 +68,17 @@ default home directories for different operating systems are:
 Use the `--home` flag to specify the home directory and use the `--force` to 
 overwrite the existing config file.
 
-### Run the Staking Indexer
+### 4. Run the Staking Indexer
 
-To start the staking indexer from a specific height, run:
+To run the staking indexer, we need to prepare a `global-params.json` file
+which defines all the global params that are used across the BTC staking
+system. The indexer needs it to parse staking transaction data.
+The definition of global params can be found [here](./doc/staking.md#staking-parameters).
+An example of the global params can be found in [test-params.json](./itest/test-params.json).
+The program reads the file from the home directory by default. The user can
+specify the file path using the `--params-path` flag.
+
+To run the staking indexer from a specific height, run:
 
 ```bash
 sid start --start-height <start-height>
@@ -78,23 +86,14 @@ sid start --start-height <start-height>
 
 If the `--start-height` is not specified, the indexer will retrieve the 
 start height first from the database which saves the `last_processed_height`. 
-If the database is empty, the start height will be retrieved from the 
-`base-height` defined in the config file.
-The `base-height` is a height before which no staking transactions have been
-included in.
+If the database is empty, the start height will be retrieved from the earliest
+`activation_height` defined in the global parameters file.
+The earliest `activation_height` is a height before which no staking transactions
+have been included in.
 Note that if the database is empty, the indexer will strictly start from the
-`base-height`. If the database is not empty, the user can specify a height that
-is not higher than `last_processed_height + 1` via `--start-height`.
+earliest `activation_height`. If the database is not empty, the user can specify
+a height that is not higher than `last_processed_height + 1` via `--start-height`.
 This is to ensure that no staking data will be missed.
-
-To run the staking indexer, we need to prepare a `global-params.json` file 
-which defines all the global params that are used across the BTC staking 
-system. The indexer needs it to parse staking transaction data.
-The definition of global params can be found [here](./doc/staking.md#staking-parameters).
-An example of the global params can be found in [test-params.json](./itest/test-params.json).
-
-The program reads the file from the home directory by default. The user can 
-specify the file path using the `--params-path` flag.
 
 ### Tests
 
