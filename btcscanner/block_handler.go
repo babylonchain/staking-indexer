@@ -1,7 +1,6 @@
 package btcscanner
 
 import (
-	"errors"
 	"fmt"
 
 	notifier "github.com/lightningnetwork/lnd/chainntnfs"
@@ -9,7 +8,7 @@ import (
 )
 
 // blockEventLoop handles new blocks from the BTC client unpon new block event
-// Note: in case of rolback, the blockNotifier will emit information about new
+// Note: in case of rollback, the blockNotifier will emit information about new
 // best block for every new block after rollback
 func (bs *BtcPoller) blockEventLoop(blockNotifier *notifier.BlockEpochEvent) {
 	defer bs.wg.Done()
@@ -25,6 +24,7 @@ func (bs *BtcPoller) blockEventLoop(blockNotifier *notifier.BlockEpochEvent) {
 			}
 			bs.logger.Debug("received new best btc block",
 				zap.Int32("height", newBlock.Height))
+
 			err := bs.handleNewBlock(newBlock)
 			if err != nil {
 				bs.logger.Debug("failed to handle a new block, need bootstrapping",
@@ -52,7 +52,31 @@ func (bs *BtcPoller) blockEventLoop(blockNotifier *notifier.BlockEpochEvent) {
 // of the cache
 func (bs *BtcPoller) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
 	if !bs.isSynced.Load() {
-		return errors.New("the btc scanner is not synced")
+		return fmt.Errorf("the btc scanner is not synced")
+	}
+
+	// get cache tip and check whether this block is expected
+	cacheTip := bs.unconfirmedBlockCache.Tip()
+	if cacheTip == nil {
+		return fmt.Errorf("no unconfirmed blocks found")
+	}
+
+	if cacheTip.Height >= blockEpoch.Height {
+		bs.logger.Debug("skip handling a low block",
+			zap.Int32("block_height", blockEpoch.Height),
+			zap.Int32("unconfirmed_tip_height", cacheTip.Height))
+		return nil
+	}
+
+	if cacheTip.Height+1 < blockEpoch.Height {
+		return fmt.Errorf("missing blocks, expected block height: %d, got: %d",
+			cacheTip.Height+1, blockEpoch.Height)
+	}
+
+	// check whether the block connects to the cache tip
+	parentHash := blockEpoch.BlockHeader.PrevBlock
+	if parentHash != cacheTip.BlockHash() {
+		return fmt.Errorf("the block's parent hash does not match the cache tip")
 	}
 
 	// get the block content by height
@@ -65,20 +89,7 @@ func (bs *BtcPoller) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
 		return fmt.Errorf("re-org happened at height %d", blockEpoch.Height)
 	}
 
-	// get cache tip
-	cacheTip := bs.unconfirmedBlockCache.Tip()
-	if cacheTip == nil {
-		return fmt.Errorf("no unconfirmed blocks found")
-	}
-
-	parentHash := ib.Header.PrevBlock
-
-	// if the parent of the block is not the tip of the cache, then the cache is not up-to-date
-	if parentHash != cacheTip.BlockHash() {
-		return fmt.Errorf("the block's parent hash does not match the cache tip")
-	}
-
-	// otherwise, add the block to the cache
+	// add the block to the cache
 	bs.unconfirmedBlockCache.Add(ib)
 
 	params, err := bs.paramsVersions.GetParamsForBTCHeight(blockEpoch.Height)
@@ -87,7 +98,7 @@ func (bs *BtcPoller) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
 	}
 
 	// try to extract confirmed blocks
-	confirmedBlocks := bs.unconfirmedBlockCache.TrimConfirmedBlocks(int(params.ConfirmationDepth))
+	confirmedBlocks := bs.unconfirmedBlockCache.TrimConfirmedBlocks(int(params.ConfirmationDepth) - 1)
 	if confirmedBlocks == nil {
 		return nil
 	}
@@ -103,6 +114,7 @@ func (bs *BtcPoller) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
 		}
 	}
 
+	// send confirmed blocks to the consumer
 	bs.sendConfirmedBlocksToChan(confirmedBlocks)
 
 	return nil
