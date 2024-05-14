@@ -15,6 +15,8 @@ const (
 	defaultBitcoindBlockCacheSize = 20 * 1024 * 1024 // 20 MB
 	defaultBlockPollingInterval   = 30 * time.Second
 	defaultTxPollingInterval      = 30 * time.Second
+	defaultMaxRetryTimes          = 5
+	defaultRetryInterval          = 500 * time.Millisecond
 	// DefaultTxPollingJitter defines the default TxPollingIntervalJitter
 	// to be used for bitcoind backend.
 	DefaultTxPollingJitter = 0.5
@@ -29,6 +31,8 @@ type BTCConfig struct {
 	BlockPollingInterval time.Duration `long:"blockpollinginterval" description:"The interval that will be used to poll bitcoind for new blocks. Only used if rpcpolling is true."`
 	TxPollingInterval    time.Duration `long:"txpollinginterval" description:"The interval that will be used to poll bitcoind for new tx. Only used if rpcpolling is true."`
 	BlockCacheSize       uint64        `long:"block-cache-size" description:"Size of the Bitcoin blocks cache."`
+	MaxRetryTimes        uint          `long:"max-retry-times" description:"The max number of retries to an RPC call in case of failure."`
+	RetryInterval        time.Duration `long:"retry-interval" description:"The time interval between each retry."`
 }
 
 func DefaultBTCConfig() *BTCConfig {
@@ -39,6 +43,8 @@ func DefaultBTCConfig() *BTCConfig {
 		BlockPollingInterval: defaultBlockPollingInterval,
 		TxPollingInterval:    defaultTxPollingInterval,
 		BlockCacheSize:       defaultBitcoindBlockCacheSize,
+		MaxRetryTimes:        defaultMaxRetryTimes,
+		RetryInterval:        defaultRetryInterval,
 	}
 }
 
@@ -76,6 +82,14 @@ func (cfg *BTCConfig) Validate() error {
 
 	if cfg.BlockCacheSize <= 0 {
 		return fmt.Errorf("block cache size should be positive")
+	}
+
+	if cfg.MaxRetryTimes <= 0 {
+		return fmt.Errorf("max retry times should be positive")
+	}
+
+	if cfg.RetryInterval <= 0 {
+		return fmt.Errorf("retry interval should be positive")
 	}
 
 	return nil

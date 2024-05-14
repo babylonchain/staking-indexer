@@ -93,6 +93,7 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 
 	btcClient, err := btcclient.NewBTCClient(
 		cfg.BTCConfig,
+		logger,
 	)
 	require.NoError(t, err)
 
