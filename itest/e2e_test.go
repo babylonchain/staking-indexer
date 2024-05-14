@@ -120,7 +120,7 @@ func TestStakingLifeCycle(t *testing.T) {
 	)
 	require.NoError(t, err)
 	stakingTxHash := stakingTx.TxHash()
-	tm.SendTxWithNConfirmations(t, stakingTx, int(k+1))
+	tm.SendTxWithNConfirmations(t, stakingTx, int(k))
 
 	// check that the staking tx is already stored
 	tm.WaitForStakingTxStored(t, stakingTxHash)
@@ -150,7 +150,7 @@ func TestStakingLifeCycle(t *testing.T) {
 		testStakingData.StakingTime,
 		testStakingData.StakingAmount,
 	)
-	tm.SendTxWithNConfirmations(t, withdrawTx, int(k+1))
+	tm.SendTxWithNConfirmations(t, withdrawTx, int(k))
 
 	// check the withdraw event is received
 	tm.CheckNextWithdrawEvent(t, stakingTx.TxHash())
@@ -166,6 +166,10 @@ func TestUnconfirmedTVL(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// TODO: test with multiple system parameters
 	sysParams := tm.VersionedParams.ParamsVersions[0]
+	k := sysParams.ConfirmationDepth
+	tm.WaitForNConfirmations(t, int(k))
+
+	// build staking tx
 	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
 	testStakingData.StakingTime = 120
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
@@ -180,7 +184,8 @@ func TestUnconfirmedTVL(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// send the staking tx and mine blocks
+	// send the staking tx and mine 1 block to trigger
+	// unconfirmed calculation
 	require.NoError(t, err)
 	stakingTx, err := testutils.CreateTxFromOutputsAndSign(
 		tm.WalletClient,
@@ -189,9 +194,39 @@ func TestUnconfirmedTVL(t *testing.T) {
 		tm.MinerAddr,
 	)
 	require.NoError(t, err)
-	tm.SendTxWithNConfirmations(t, stakingTx, 2)
+	tm.SendTxWithNConfirmations(t, stakingTx, 1)
+	tm.CheckNextUnconfirmedEvent(t, 0, uint64(stakingInfo.StakingOutput.Value))
 
-	tm.CheckNextUnconfirmedEvent(t, uint64(stakingInfo.StakingOutput.Value))
+	// confirm the staking tx
+	tm.BitcoindHandler.GenerateBlocks(int(k))
+	tm.WaitForNConfirmations(t, int(k))
+	tm.CheckNextStakingEvent(t, stakingTx.TxHash())
+	tm.CheckNextUnconfirmedEvent(t, uint64(stakingInfo.StakingOutput.Value), uint64(stakingInfo.StakingOutput.Value))
+
+	// build and send unbonding tx from the previous staking tx
+	unbondingSpendInfo, err := stakingInfo.UnbondingPathSpendInfo()
+	require.NoError(t, err)
+	stakingTxHash := stakingTx.TxHash()
+	unbondingTx := buildUnbondingTx(
+		t,
+		sysParams,
+		tm.WalletPrivKey,
+		testStakingData.FinalityProviderKey,
+		testStakingData.StakingAmount,
+		&stakingTxHash,
+		1,
+		unbondingSpendInfo,
+		stakingTx,
+		getCovenantPrivKeys(t),
+	)
+	tm.SendTxWithNConfirmations(t, unbondingTx, 1)
+	tm.CheckNextUnconfirmedEvent(t, uint64(stakingInfo.StakingOutput.Value), 0)
+
+	// confirm the unbonding tx
+	tm.BitcoindHandler.GenerateBlocks(int(k))
+	tm.WaitForNConfirmations(t, int(k))
+	tm.CheckNextUnconfirmedEvent(t, 0, 0)
+	tm.CheckNextUnbondingEvent(t, unbondingTx.TxHash())
 }
 
 // TestIndexerRestart tests following cases upon restart
@@ -234,7 +269,7 @@ func TestIndexerRestart(t *testing.T) {
 	)
 	require.NoError(t, err)
 	stakingTxHash := stakingTx.TxHash()
-	tm.SendTxWithNConfirmations(t, stakingTx, int(k+1))
+	tm.SendTxWithNConfirmations(t, stakingTx, int(k))
 
 	// check that the staking tx is already stored
 	tm.WaitForStakingTxStored(t, stakingTxHash)
@@ -301,7 +336,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	)
 	require.NoError(t, err)
 	stakingTxHash := stakingTx.TxHash()
-	tm.SendTxWithNConfirmations(t, stakingTx, int(k+1))
+	tm.SendTxWithNConfirmations(t, stakingTx, int(k))
 
 	// check that the staking tx is already stored
 	tm.WaitForStakingTxStored(t, stakingTxHash)
@@ -327,7 +362,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 		stakingTx,
 		getCovenantPrivKeys(t),
 	)
-	tm.SendTxWithNConfirmations(t, unbondingTx, int(k+1))
+	tm.SendTxWithNConfirmations(t, unbondingTx, int(k))
 
 	// check the unbonding tx is already stored
 	tm.WaitForUnbondingTxStored(t, unbondingTx.TxHash())
@@ -364,7 +399,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 		sysParams.UnbondingTime,
 		testStakingData.StakingAmount,
 	)
-	tm.SendTxWithNConfirmations(t, withdrawTx, int(k+1))
+	tm.SendTxWithNConfirmations(t, withdrawTx, int(k))
 
 	// wait until the indexer identifies the withdraw tx
 	tm.WaitForNConfirmations(t, int(k))

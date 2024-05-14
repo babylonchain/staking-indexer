@@ -182,7 +182,7 @@ func (bs *BtcPoller) pollConfirmedBlocks(tipHeight uint64) error {
 	}
 	k := uint64(p.ConfirmationDepth)
 
-	if bs.lastConfirmedHeight+k >= tipHeight {
+	if bs.lastConfirmedHeight+k >= tipHeight+1 {
 		bs.logger.Info("no confirmed blocks to poll",
 			zap.Uint64("last_confirmed_height", bs.lastConfirmedHeight),
 			zap.Uint64("current_tip_height", tipHeight))
@@ -191,8 +191,8 @@ func (bs *BtcPoller) pollConfirmedBlocks(tipHeight uint64) error {
 	}
 
 	// start to poll confirmed blocks from the last confirmed height + 1
-	// until tipHeight - k
-	for i := bs.lastConfirmedHeight + 1; i+k <= tipHeight; i++ {
+	// until tipHeight - k + 1
+	for i := bs.lastConfirmedHeight + 1; i+k <= tipHeight+1; i++ {
 		block, err := bs.btcClient.GetBlockByHeight(i)
 		if err != nil {
 			return fmt.Errorf("failed to get block at height %d: %w", i, err)
