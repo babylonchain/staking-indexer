@@ -29,6 +29,7 @@ func FuzzPollConfirmedBlocks(f *testing.F) {
 		chainIndexedBlocks := datagen.GetRandomIndexedBlocks(r, numBlocks)
 		startHeight := chainIndexedBlocks[0].Height
 		bestHeight := chainIndexedBlocks[len(chainIndexedBlocks)-1].Height
+		bestBlockHash := chainIndexedBlocks[len(chainIndexedBlocks)-1].BlockHash()
 
 		ctl := gomock.NewController(t)
 		mockBtcClient := mocks.NewMockClient(ctl)
@@ -40,7 +41,7 @@ func FuzzPollConfirmedBlocks(f *testing.F) {
 		}
 
 		epochChan := make(chan *chainntnfs.BlockEpoch, 1)
-		bestEpoch := &chainntnfs.BlockEpoch{Height: bestHeight}
+		bestEpoch := &chainntnfs.BlockEpoch{Height: bestHeight, Hash: &bestBlockHash}
 		epochChan <- bestEpoch
 		mockBtcNotifier := &mock.ChainNotifier{
 			EpochChan: epochChan,
