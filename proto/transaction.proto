@@ -12,17 +12,17 @@ message StakingTransaction {
 
     // inclusion_height is the height the tx included
     // on BTC
-    uint64 inclusion_height = 5;
+    uint64 inclusion_height = 3;
 
     // staking info
-    bytes staker_pk = 6;
-    bytes finality_provider_pk = 8;
-    uint32 staking_time = 7;
+    bytes staker_pk = 4;
+    bytes finality_provider_pk = 5;
+    uint32 staking_time = 6;
 
     // Indicate if the staking tx would exceed the staking cap.
-    bool is_overflow = 9;
+    bool is_overflow = 7;
     // The staking amount
-    uint64 staking_value = 10;
+    uint64 staking_value = 8;
 }
 
 message UnbondingTransaction {

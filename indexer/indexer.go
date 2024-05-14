@@ -325,7 +325,7 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 				msgTx, stakingData, uint64(b.Height), b.Header.Timestamp, params,
 			); err != nil {
 				if errors.Is(err, ErrInvalidStakingTx) {
-					invalidStakingTxsCounter.Inc()
+					invalidTransactionsCounter.WithLabelValues("staking transaction").Inc()
 					si.logger.Error("found an invalid staking tx",
 						zap.String("tx_hash", msgTx.TxHash().String()),
 						zap.Error(err),
@@ -360,7 +360,7 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 			isUnbonding, err := si.IsValidUnbondingTx(msgTx, stakingTx, paramsFromStakingTxHeight)
 			if err != nil {
 				if errors.Is(err, ErrInvalidUnbondingTx) {
-					invalidUnbondingTxsCounter.Inc()
+					invalidTransactionsCounter.WithLabelValues("unbonding transactions").Inc()
 					si.logger.Error("found an invalid unbonding tx",
 						zap.String("tx_hash", msgTx.TxHash().String()),
 						zap.Error(err),
