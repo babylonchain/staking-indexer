@@ -83,7 +83,7 @@ func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *types.ParamsVe
 		// no active staking events created, otherwise, to be an unbonding event
 		if r.Intn(100) < stakingChance || !hasActiveStakingEvent(stakingEvents) {
 			stakingEvent := buildStakingEvent(r, t, height, p)
-			if checkOverflow && stakingEvent.StakingTxData.StakingAmount+tvl > p.StakingCap {
+			if checkOverflow && tvl > p.StakingCap {
 				stakingEvent.IsOverflow = true
 			} else {
 				tvl += stakingEvent.StakingTxData.StakingAmount

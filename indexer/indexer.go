@@ -574,8 +574,8 @@ func (si *StakingIndexer) ProcessStakingTx(
 
 	// check whether the staking tx already exists in db
 	// if so, get the isOverflow from the data in db
-	// otherwise, check it against the staking cap along with
-	// the current tvl
+	// otherwise, check it if the current tvl already reaches
+	// the cap
 	txHash := tx.TxHash()
 	storedStakingTx, err := si.is.GetStakingTransaction(&txHash)
 	if err != nil {
@@ -590,7 +590,7 @@ func (si *StakingIndexer) ProcessStakingTx(
 		}
 
 		// check if the staking tvl is overflow with this staking tx
-		stakingOverflow, err := si.isOverflow(uint64(params.StakingCap), uint64(stakingData.StakingOutput.Value))
+		stakingOverflow, err := si.isOverflow(uint64(params.StakingCap))
 		if err != nil {
 			return fmt.Errorf("failed to check the overflow of staking tx: %w", err)
 		}
@@ -847,13 +847,13 @@ func (si *StakingIndexer) validateStakingTx(params *types.GlobalParams, stakingD
 	return nil
 }
 
-func (si *StakingIndexer) isOverflow(cap uint64, stakingValue uint64) (bool, error) {
+func (si *StakingIndexer) isOverflow(cap uint64) (bool, error) {
 	confirmedTvl, err := si.is.GetConfirmedTvl()
 	if err != nil {
 		return false, fmt.Errorf("failed to get the confirmed TVL: %w", err)
 	}
 
-	return confirmedTvl+stakingValue > cap, nil
+	return confirmedTvl > cap, nil
 }
 
 func (si *StakingIndexer) GetConfirmedTvl() (uint64, error) {
