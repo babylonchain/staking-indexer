@@ -1,6 +1,7 @@
 package btcscanner
 
 import (
+	"fmt"
 	"sort"
 	"sync"
 
@@ -45,26 +46,29 @@ func (b *BTCCache) Init(ibs []*types.IndexedBlock) error {
 	}
 
 	for _, ib := range ibs {
-		b.add(ib)
+		if err := b.add(ib); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 // Add adds a new block to the cache. Thread-safe.
-func (b *BTCCache) Add(ib *types.IndexedBlock) {
+func (b *BTCCache) Add(ib *types.IndexedBlock) error {
 	b.Lock()
 	defer b.Unlock()
 
-	b.add(ib)
+	return b.add(ib)
 }
 
 // Thread-unsafe version of Add
-func (b *BTCCache) add(ib *types.IndexedBlock) {
-	if b.size() > b.maxEntries {
-		panic(ErrTooManyEntries)
+func (b *BTCCache) add(ib *types.IndexedBlock) error {
+	l := b.size()
+	if l > b.maxEntries {
+		return fmt.Errorf("%w: current size is %d, max entries is %d", ErrTooManyEntries, l, b.maxEntries)
 	}
-	if b.size() == b.maxEntries {
+	if l == b.maxEntries {
 		// dereference the 0-th block to ensure it will be garbage-collected
 		// see https://stackoverflow.com/questions/55045402/memory-leak-in-golang-slice
 		b.blocks[0] = nil
@@ -72,6 +76,8 @@ func (b *BTCCache) add(ib *types.IndexedBlock) {
 	}
 
 	b.blocks = append(b.blocks, ib)
+
+	return nil
 }
 
 func (b *BTCCache) First() *types.IndexedBlock {

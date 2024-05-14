@@ -207,7 +207,9 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 			}
 		}
 
-		bs.unconfirmedBlockCache.Add(ib)
+		if err := bs.unconfirmedBlockCache.Add(ib); err != nil {
+			return fmt.Errorf("failed to add the block %d to cache: %w", ib.Height, err)
+		}
 	}
 
 	bs.logger.Info("bootstrapping is finished",

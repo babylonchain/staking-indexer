@@ -90,7 +90,9 @@ func (bs *BtcPoller) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
 	}
 
 	// add the block to the cache
-	bs.unconfirmedBlockCache.Add(ib)
+	if err := bs.unconfirmedBlockCache.Add(ib); err != nil {
+		return fmt.Errorf("failed to add the block %d to cache: %w", ib.Height, err)
+	}
 
 	params, err := bs.paramsVersions.GetParamsForBTCHeight(blockEpoch.Height)
 	if err != nil {

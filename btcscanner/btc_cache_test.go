@@ -83,7 +83,8 @@ func FuzzBtcCache(f *testing.F) {
 		cacheBlocksBeforeAddition := cache.GetAllBlocks()
 		blocksToAdd := datagen.GetRandomIndexedBlocksFromHeight(r, addCount, cache.Tip().Height, cache.Tip().BlockHash())
 		for _, ib := range blocksToAdd {
-			cache.Add(ib)
+			err := cache.Add(ib)
+			require.NoError(t, err)
 		}
 		require.Equal(t, prevCacheHeight+int32(addCount), cache.Tip().Height)
 		require.Equal(t, blocksToAdd[addCount-1], cache.Tip())
