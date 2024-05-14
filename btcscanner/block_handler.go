@@ -103,9 +103,7 @@ func (bs *BtcPoller) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
 		return nil
 	}
 
-	if bs.confirmedTipBlock == nil {
-		bs.confirmedTipBlock = confirmedBlocks[0]
-	} else {
+	if bs.confirmedTipBlock != nil {
 		confirmedTipHash := bs.confirmedTipBlock.BlockHash()
 		if !confirmedTipHash.IsEqual(&confirmedBlocks[0].Header.PrevBlock) {
 			// this indicates either programmatic error or the confirmation
