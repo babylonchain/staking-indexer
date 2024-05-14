@@ -127,8 +127,9 @@ func (bs *BtcPoller) waitUntilActivation() error {
 // Bootstrap syncs with BTC by getting the confirmed blocks and the caching the unconfirmed blocks
 func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 	var (
-		confirmedBlock *types.IndexedBlock
-		err            error
+		tipConfirmedHeight uint64
+		confirmedBlock     *types.IndexedBlock
+		err                error
 	)
 
 	if bs.isSynced.Load() {
@@ -152,7 +153,12 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 		return fmt.Errorf("cannot get the global parameters for height %d", tipHeight)
 	}
 
-	tipConfirmedHeight := tipHeight - uint64(params.ConfirmationDepth)
+	if tipHeight < uint64(params.ConfirmationDepth) {
+		tipConfirmedHeight = 0
+	} else {
+		tipConfirmedHeight = tipHeight - uint64(params.ConfirmationDepth) + 1
+	}
+
 	// process confirmed blocks
 	for i := startHeight; i <= tipConfirmedHeight; i++ {
 		// TODO should retry here
@@ -175,7 +181,7 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 		bs.sendConfirmedBlocksToChan([]*types.IndexedBlock{confirmedBlock})
 	}
 
-	if bs.confirmedTipBlock == nil {
+	if bs.confirmedTipBlock == nil && tipConfirmedHeight != 0 {
 		// TODO should retry here
 		ib, err := bs.btcClient.GetBlockByHeight(tipConfirmedHeight)
 		if err != nil {

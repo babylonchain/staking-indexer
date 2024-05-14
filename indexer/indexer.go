@@ -181,29 +181,28 @@ func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) err
 		return nil
 	}
 
-	unconfirmedTvl, err := si.CalculateUnconfirmedTvl(unconfirmedBlocks)
+	tvlInUnconfirmedBlocks, err := si.CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks)
 	if err != nil {
 		return fmt.Errorf("failed to calculate unconfirmed tvl: %w", err)
 	}
+
 	confirmedTvl, err := si.GetConfirmedTvl()
 	if err != nil {
 		return fmt.Errorf("failed to get the confirmed TVL: %w", err)
 	}
 
-	totalTvl := confirmedTvl + uint64(unconfirmedTvl)
+	unconfirmedTvl := btcutil.Amount(confirmedTvl) + tvlInUnconfirmedBlocks
+	if unconfirmedTvl < 0 {
+		return fmt.Errorf("total tvl %d is negative", unconfirmedTvl)
+	}
 
 	unconfirmedTipHeight := uint64(unconfirmedBlocks[len(unconfirmedBlocks)-1].Height)
 	si.logger.Info("successfully calculated unconfirmed TVL",
 		zap.Uint64("tip_height", unconfirmedTipHeight),
 		zap.Uint64("confirmed_height", lastConfirmedHeight),
 		zap.Uint64("confirmed_tvl", confirmedTvl),
-		zap.Uint64("unconfirmed_tvl", uint64(unconfirmedTvl)),
-		zap.Uint64("total_tvl", totalTvl))
-
-	// don't need to push event if the calculation is 0
-	if unconfirmedTvl == 0 {
-		return nil
-	}
+		zap.Int64("tvl_in_unconfirmed_blocks", int64(tvlInUnconfirmedBlocks)),
+		zap.Int64("unconfirmed_tvl", int64(unconfirmedTvl)))
 
 	btcInfoEvent := queuecli.NewBtcInfoEvent(unconfirmedTipHeight, confirmedTvl, uint64(unconfirmedTvl))
 	if err := si.consumer.PushBtcInfoEvent(&btcInfoEvent); err != nil {
@@ -211,12 +210,12 @@ func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) err
 	}
 
 	// record metrics
-	lastCalculatedTvl.Set(float64(totalTvl))
+	lastCalculatedTvl.Set(float64(unconfirmedTvl))
 
 	return nil
 }
 
-func (si *StakingIndexer) CalculateUnconfirmedTvl(unconfirmedBlocks []*types.IndexedBlock) (btcutil.Amount, error) {
+func (si *StakingIndexer) CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks []*types.IndexedBlock) (btcutil.Amount, error) {
 	tvl := btcutil.Amount(0)
 	unconfirmedStakingTxs := make(map[chainhash.Hash]*indexerstore.StoredStakingTransaction)
 	for _, b := range unconfirmedBlocks {
@@ -255,7 +254,8 @@ func (si *StakingIndexer) CalculateUnconfirmedTvl(unconfirmedBlocks []*types.Ind
 
 				si.logger.Info("found an unconfirmed staking tx",
 					zap.String("tx_hash", msgTx.TxHash().String()),
-					zap.Uint64("value", stakingValue))
+					zap.Uint64("value", stakingValue),
+					zap.Int32("height", b.Height))
 
 				continue
 			}

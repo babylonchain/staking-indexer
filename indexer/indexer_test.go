@@ -270,7 +270,7 @@ func FuzzBlockHandler(f *testing.F) {
 
 		// calculate unconfirmed tvl
 		testUnconfirmedScenario := NewTestScenario(r, t, sysParamsVersions, 80, n, false)
-		unconfirmedTvl, err := stakingIndexer.CalculateUnconfirmedTvl(testUnconfirmedScenario.Blocks)
+		unconfirmedTvl, err := stakingIndexer.CalculateTvlInUnconfirmedBlocks(testUnconfirmedScenario.Blocks)
 		require.NoError(t, err)
 		require.Equal(t, testUnconfirmedScenario.Tvl, unconfirmedTvl)
 	})

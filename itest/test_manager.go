@@ -244,7 +244,7 @@ func (tm *TestManager) WaitForNConfirmations(t *testing.T, n int) {
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		confirmedTip := tm.BS.LastConfirmedHeight()
-		return confirmedTip == uint64(currentHeight)-uint64(n)
+		return confirmedTip == uint64(currentHeight)-uint64(n)+1
 	}, eventuallyWaitTimeOut, eventuallyPollTime)
 }
 
@@ -308,16 +308,23 @@ func (tm *TestManager) CheckNextWithdrawEvent(t *testing.T, stakingTxHash chainh
 	require.NoError(t, err)
 }
 
-func (tm *TestManager) CheckNextUnconfirmedEvent(t *testing.T, tvl uint64) {
-	btcInfoEventBytes := <-tm.BtcInfoEventChan
+func (tm *TestManager) CheckNextUnconfirmedEvent(t *testing.T, confirmedTvl, totalTvl uint64) {
 	var btcInfoEvent queuecli.BtcInfoEvent
-	err := json.Unmarshal([]byte(btcInfoEventBytes.Body), &btcInfoEvent)
-	require.NoError(t, err)
-	require.Equal(t, int(tvl), int(btcInfoEvent.UnconfirmedTvl))
-	require.Equal(t, 0, int(btcInfoEvent.ConfirmedTvl))
 
-	err = tm.QueueConsumer.BtcInfoQueue.DeleteMessage(btcInfoEventBytes.Receipt)
-	require.NoError(t, err)
+	for {
+		btcInfoEventBytes := <-tm.BtcInfoEventChan
+		err := tm.QueueConsumer.BtcInfoQueue.DeleteMessage(btcInfoEventBytes.Receipt)
+		require.NoError(t, err)
+		err = json.Unmarshal([]byte(btcInfoEventBytes.Body), &btcInfoEvent)
+		require.NoError(t, err)
+		if confirmedTvl != btcInfoEvent.ConfirmedTvl {
+			continue
+		}
+		if totalTvl != btcInfoEvent.UnconfirmedTvl {
+			continue
+		}
+		return
+	}
 }
 
 func (tm *TestManager) WaitForStakingTxStored(t *testing.T, txHash chainhash.Hash) {
