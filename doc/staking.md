@@ -119,10 +119,9 @@ The above checks verify that the staking transaction is a valid formatted
 staking transaction based on the parameters. To further identify whether the
 transaction should be an active one or it goes over the staking cap, we perform
 the following check:
-- `sum(State.ActiveStakingTransactions[].StakeAmount) +
-  StakingTransaction.StakingAmount <= v_n.StakingCap`
+- `sum(State.ActiveStakingTransactions[].StakeAmount) <= v_n.StakingCap`
 
-If the transaction satisfied the above check, it is added to the active staking
+If the transaction satisfies the above check, it will be added to the active staking
 transactions list. Otherwise, it is classified as overflow.
 
 #### Timelock Expiration
