@@ -28,6 +28,8 @@ Staking protocol and serves as the ground truth for the Bitcoin Staking system.
    results to the message queues. 
    A reference implementation based on [rabbitmq](https://www.rabbitmq.com/) 
    is provided. The definition of each type of events can be found [here](./doc/events.md).
+   Our [API service](https://github.com/babylonchain/staking-api-service)
+   exhibits how these events are utilized and presented.
 6. Monitoring the status of the service through [Prometheus metrics](./doc/metrics.md).
 
 ## Usage
