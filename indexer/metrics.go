@@ -90,10 +90,13 @@ var (
 		},
 	)
 
-	invalidStakingTxsCounter = promauto.NewCounter(
+	invalidTransactionsCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "si_invalid_staking_txs_counter",
+			Name: "si_invalid_txs_counter",
 			Help: "Total number of invalid transactions",
+		},
+		[]string{
+			"tx_type",
 		},
 	)
 
@@ -122,13 +125,6 @@ var (
 		prometheus.CounterOpts{
 			Name: "si_failed_processing_withdraw_txs_from_unbonding_counter",
 			Help: "Total number of failures when processing valid withdrawal transactions from unbonding",
-		},
-	)
-
-	invalidUnbondingTxsCounter = promauto.NewCounter(
-		prometheus.CounterOpts{
-			Name: "si_invalid_unbonding_txs_counter",
-			Help: "Total number of invalid transactions",
 		},
 	)
 )
