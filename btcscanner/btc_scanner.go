@@ -16,7 +16,7 @@ type BtcScanner interface {
 	Start(startHeight uint64) error
 	ConfirmedBlocksChan() chan *types.IndexedBlock
 	LastConfirmedHeight() uint64
-	GetUnconfirmedBlocks() []*types.IndexedBlock
+	GetUnconfirmedBlocks() ([]*types.IndexedBlock, error)
 	IsSynced() bool
 	Stop() error
 }
@@ -224,8 +224,16 @@ func (bs *BtcPoller) sendConfirmedBlocksToChan(blocks []*types.IndexedBlock) {
 	}
 }
 
-func (bs *BtcPoller) GetUnconfirmedBlocks() []*types.IndexedBlock {
-	return bs.unconfirmedBlockCache.GetAllBlocks()
+func (bs *BtcPoller) GetUnconfirmedBlocks() ([]*types.IndexedBlock, error) {
+	tipBlock := bs.unconfirmedBlockCache.Tip()
+	params, err := bs.paramsVersions.GetParamsForBTCHeight(tipBlock.Height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get params for height %d: %w", tipBlock.Height, err)
+	}
+
+	lastBlocks := bs.unconfirmedBlockCache.GetLastBlocks(int(params.ConfirmationDepth) - 1)
+
+	return lastBlocks, nil
 }
 
 func (bs *BtcPoller) ConfirmedBlocksChan() chan *types.IndexedBlock {

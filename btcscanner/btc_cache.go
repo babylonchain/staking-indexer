@@ -1,7 +1,6 @@
 package btcscanner
 
 import (
-	"fmt"
 	"sort"
 	"sync"
 
@@ -97,21 +96,6 @@ func (b *BTCCache) Tip() *types.IndexedBlock {
 	return b.blocks[len(b.blocks)-1]
 }
 
-// RemoveLast deletes the last block in cache
-func (b *BTCCache) RemoveLast() error {
-	b.Lock()
-	defer b.Unlock()
-
-	if b.size() == 0 {
-		return ErrEmptyCache
-	}
-
-	// dereference the last block to ensure it will be garbage-collected
-	b.blocks[len(b.blocks)-1] = nil
-	b.blocks = b.blocks[:len(b.blocks)-1]
-	return nil
-}
-
 // RemoveAll deletes all the blocks in cache
 func (b *BTCCache) RemoveAll() {
 	b.Lock()
@@ -133,34 +117,35 @@ func (b *BTCCache) size() uint64 {
 	return uint64(len(b.blocks))
 }
 
-// GetLastBlocks returns list of blocks between the given stopHeight and the tip of the chain in cache
-func (b *BTCCache) GetLastBlocks(stopHeight uint64) ([]*types.IndexedBlock, error) {
-	b.RLock()
-	defer b.RUnlock()
-
-	firstHeight := b.blocks[0].Height
-	lastHeight := b.blocks[len(b.blocks)-1].Height
-	if int32(stopHeight) < firstHeight || lastHeight < int32(stopHeight) {
-		return []*types.IndexedBlock{}, fmt.Errorf("the given stopHeight %d is out of range [%d, %d] of BTC cache", stopHeight, firstHeight, lastHeight)
-	}
-
-	var j int
-	for i := len(b.blocks) - 1; i >= 0; i-- {
-		if b.blocks[i].Height == int32(stopHeight) {
-			j = i
-			break
-		}
-	}
-
-	return b.blocks[j:], nil
-}
-
-// GetAllBlocks returns list of all blocks in cache
 func (b *BTCCache) GetAllBlocks() []*types.IndexedBlock {
 	b.RLock()
 	defer b.RUnlock()
 
-	return b.blocks
+	l := len(b.blocks)
+	res := make([]*types.IndexedBlock, l)
+	copy(res, b.blocks)
+
+	return res
+}
+
+// GetLastBlocks returns the last k blocks
+func (b *BTCCache) GetLastBlocks(k int) []*types.IndexedBlock {
+	b.RLock()
+	defer b.RUnlock()
+
+	var res []*types.IndexedBlock
+	l := len(b.blocks)
+	if l <= k {
+		blocksCopy := make([]*types.IndexedBlock, l)
+		copy(blocksCopy, b.blocks)
+		res = blocksCopy
+	} else {
+		blocksCopy := make([]*types.IndexedBlock, k)
+		copy(blocksCopy, b.blocks[l-k:])
+		res = blocksCopy
+	}
+
+	return res
 }
 
 // TrimConfirmedBlocks keeps the last <=k blocks in the cache and returns the rest in the same order
@@ -179,64 +164,4 @@ func (b *BTCCache) TrimConfirmedBlocks(k int) []*types.IndexedBlock {
 	b.blocks = b.blocks[l-k:]
 
 	return res
-}
-
-// FindBlock uses binary search to find the block with the given height in cache
-func (b *BTCCache) FindBlock(blockHeight uint64) *types.IndexedBlock {
-	b.RLock()
-	defer b.RUnlock()
-
-	firstHeight := b.blocks[0].Height
-	lastHeight := b.blocks[len(b.blocks)-1].Height
-	if int32(blockHeight) < firstHeight || lastHeight < int32(blockHeight) {
-		return nil
-	}
-
-	leftBound := uint64(0)
-	rightBound := b.size() - 1
-
-	for leftBound <= rightBound {
-		midPoint := leftBound + (rightBound-leftBound)/2
-
-		if b.blocks[midPoint].Height == int32(blockHeight) {
-			return b.blocks[midPoint]
-		}
-
-		if b.blocks[midPoint].Height > int32(blockHeight) {
-			rightBound = midPoint - 1
-		} else {
-			leftBound = midPoint + 1
-		}
-	}
-
-	return nil
-}
-
-func (b *BTCCache) Resize(maxEntries uint64) error {
-	b.Lock()
-	defer b.Unlock()
-
-	if maxEntries == 0 {
-		return ErrInvalidMaxEntries
-	}
-	b.maxEntries = maxEntries
-	return nil
-}
-
-// Trim trims BTCCache to only keep the latest `maxEntries` blocks, and set `maxEntries` to be the cache size
-func (b *BTCCache) Trim() {
-	b.Lock()
-	defer b.Unlock()
-
-	// cache size is smaller than maxEntries, can't trim
-	if b.size() < b.maxEntries {
-		return
-	}
-
-	// dereference b.blocks[:len(b.blocks)-int(b.maxEntries)] to ensure they will be garbage-collected
-	for i := range b.blocks[:len(b.blocks)-int(b.maxEntries)] {
-		b.blocks[i] = nil
-	}
-
-	b.blocks = b.blocks[len(b.blocks)-int(b.maxEntries):]
 }

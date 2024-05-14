@@ -176,7 +176,10 @@ func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) err
 			si.btcScanner.LastConfirmedHeight(), lastConfirmedHeight)
 	}
 
-	unconfirmedBlocks := si.btcScanner.GetUnconfirmedBlocks()
+	unconfirmedBlocks, err := si.btcScanner.GetUnconfirmedBlocks()
+	if err != nil {
+		return fmt.Errorf("failed to get unconfirmed blocks with last confirmed height %d: %w", lastConfirmedHeight, err)
+	}
 	if len(unconfirmedBlocks) == 0 {
 		return nil
 	}

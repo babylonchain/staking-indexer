@@ -12,10 +12,6 @@ import (
 )
 
 // FuzzBtcCache fuzzes the BtcCache type
-// 1. Generates BtcCache with random number of blocks.
-// 2. Randomly add or remove blocks.
-// 3. Find a random block.
-// 4. Remove random blocks.
 func FuzzBtcCache(f *testing.F) {
 	bbndatagen.AddRandomSeedsToFuzzer(f, 100)
 
@@ -65,13 +61,21 @@ func FuzzBtcCache(f *testing.F) {
 
 		require.Equal(t, numBlocks, cache.Size())
 
-		// Find a random block in the cache
-		randIdx := bbndatagen.RandomInt(r, int(numBlocks))
-		randIb := ibs[randIdx]
-		randIbHeight := uint64(randIb.Height)
-		foundIb := cache.FindBlock(randIbHeight)
-		require.NotNil(t, foundIb)
-		require.Equal(t, foundIb, randIb)
+		k := r.Intn(int(maxEntries)) + 1
+		lastBlocks := cache.GetLastBlocks(k)
+		l := cache.Size()
+		cacheAllBlocks := cache.GetAllBlocks()
+		if uint64(k) <= l {
+			require.Equal(t, k, len(lastBlocks))
+			for i, b := range cacheAllBlocks[int(l)-k:] {
+				require.Equal(t, b, lastBlocks[i])
+			}
+		} else {
+			require.Equal(t, int(l), len(lastBlocks))
+			for i, b := range cacheAllBlocks {
+				require.Equal(t, b, lastBlocks[i])
+			}
+		}
 
 		// Add random blocks to the cache
 		addCount := bbndatagen.RandomIntOtherThan(r, 0, 1000)
@@ -115,17 +119,5 @@ func FuzzBtcCache(f *testing.F) {
 			oldBlocksInCache := cacheBlocksAfterAddition[:len(cacheBlocksAfterAddition)-int(addCount)]
 			require.Equal(t, cacheBlocksBeforeAddition[len(cacheBlocksBeforeAddition)-(len(cacheBlocksAfterAddition)-int(addCount)):], oldBlocksInCache)
 		}
-
-		// Remove random number of blocks from the cache
-		prevSize := cache.Size()
-		deleteCount := bbndatagen.RandomInt(r, int(prevSize))
-		cacheBlocksBeforeDeletion := cache.GetAllBlocks()
-		for i := 0; i < int(deleteCount); i++ {
-			err = cache.RemoveLast()
-			require.NoError(t, err)
-		}
-		cacheBlocksAfterDeletion := cache.GetAllBlocks()
-		require.Equal(t, prevSize-deleteCount, cache.Size())
-		require.Equal(t, cacheBlocksBeforeDeletion[:len(cacheBlocksBeforeDeletion)-int(deleteCount)], cacheBlocksAfterDeletion)
 	})
 }

@@ -49,11 +49,12 @@ func (mr *MockBtcScannerMockRecorder) ConfirmedBlocksChan() *gomock.Call {
 }
 
 // GetUnconfirmedBlocks mocks base method.
-func (m *MockBtcScanner) GetUnconfirmedBlocks() []*types.IndexedBlock {
+func (m *MockBtcScanner) GetUnconfirmedBlocks() ([]*types.IndexedBlock, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetUnconfirmedBlocks")
 	ret0, _ := ret[0].([]*types.IndexedBlock)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetUnconfirmedBlocks indicates an expected call of GetUnconfirmedBlocks.
