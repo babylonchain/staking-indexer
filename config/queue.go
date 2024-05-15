@@ -14,6 +14,7 @@ const (
 	defaultQueueProcessingTimeout   = 5 * time.Second
 	defaultQueueMsgMaxRetryAttempts = 10
 	defaultReQueueDelayTime         = 5 * time.Second
+	defaultQueueType                = clicfg.QuorumQueueType
 )
 
 type QueueConfig struct {
@@ -23,6 +24,7 @@ type QueueConfig struct {
 	ProcessingTimeout   time.Duration `long:"processingtimeout" description:"the process timeout of the queue"`
 	MsgMaxRetryAttempts int32         `long:"msgmaxretryattempts" description:"the maximum number of times a message will be retried"`
 	ReQueueDelayTime    time.Duration `long:"requeuedelaytime" description:"the time a message will be hold in delay queue before sent to main queue again"`
+	QueueType           string        `long:"queuetype" description:"the rabbitmq queue type, either classic or quorum"`
 }
 
 func (cfg *QueueConfig) Validate() error {
@@ -51,18 +53,32 @@ func (cfg *QueueConfig) Validate() error {
 		It should be greater than 0, the unit is seconds`)
 	}
 
+	switch queueType := cfg.QueueType; queueType {
+	case clicfg.ClassicQueueType:
+	case clicfg.QuorumQueueType:
+	default:
+		return fmt.Errorf("invalid queue type %s", queueType)
+	}
+
 	return nil
 }
 
-func (cfg *QueueConfig) ToQueueClientConfig() *clicfg.QueueConfig {
-	return &clicfg.QueueConfig{
+func (cfg *QueueConfig) ToQueueClientConfig() (*clicfg.QueueConfig, error) {
+	queueCfg := &clicfg.QueueConfig{
 		QueueUser:              cfg.User,
 		QueuePassword:          cfg.Password,
 		Url:                    cfg.Url,
 		QueueProcessingTimeout: cfg.ProcessingTimeout,
 		MsgMaxRetryAttempts:    cfg.MsgMaxRetryAttempts,
 		ReQueueDelayTime:       cfg.ReQueueDelayTime,
+		QueueType:              cfg.QueueType,
 	}
+
+	if err := queueCfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	return queueCfg, nil
 }
 
 func DefaultQueueConfig() *QueueConfig {
@@ -73,5 +89,6 @@ func DefaultQueueConfig() *QueueConfig {
 		ProcessingTimeout:   defaultQueueProcessingTimeout,
 		MsgMaxRetryAttempts: defaultQueueMsgMaxRetryAttempts,
 		ReQueueDelayTime:    defaultReQueueDelayTime,
+		QueueType:           defaultQueueType,
 	}
 }

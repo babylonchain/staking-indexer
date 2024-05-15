@@ -100,7 +100,11 @@ func start(ctx *cli.Context) error {
 	}
 
 	// create event consumer
-	queueConsumer, err := queuemngr.NewQueueManager(cfg.QueueConfig.ToQueueClientConfig(), logger)
+	validQueueCfg, err := cfg.QueueConfig.ToQueueClientConfig()
+	if err != nil {
+		return fmt.Errorf("invalid queue config: %w", err)
+	}
+	queueConsumer, err := queuemngr.NewQueueManager(validQueueCfg, logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize event consumer: %w", err)
 	}
