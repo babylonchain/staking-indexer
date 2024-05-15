@@ -228,6 +228,9 @@ func (bs *BtcPoller) sendConfirmedBlocksToChan(blocks []*types.IndexedBlock) {
 
 func (bs *BtcPoller) GetUnconfirmedBlocks() ([]*types.IndexedBlock, error) {
 	tipBlock := bs.unconfirmedBlockCache.Tip()
+	if tipBlock == nil {
+		return nil, nil
+	}
 	params, err := bs.paramsVersions.GetParamsForBTCHeight(tipBlock.Height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get params for height %d: %w", tipBlock.Height, err)
