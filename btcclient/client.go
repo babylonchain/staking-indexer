@@ -33,22 +33,44 @@ func NewBTCClient(cfg *config.BTCConfig, logger *zap.Logger) (*BTCClient, error)
 	}, nil
 }
 
+type BlockCountResponse struct {
+	count int64
+}
+
 func (c *BTCClient) GetTipHeight() (uint64, error) {
-	tipHeight, err := c.getBlockCountWithRetry()
-	if err != nil {
-		return 0, err
+	callForBlockCount := func() (*BlockCountResponse, error) {
+		count, err := c.client.GetBlockCount()
+		if err != nil {
+			return nil, err
+		}
+
+		return &BlockCountResponse{count: count}, nil
 	}
 
-	return uint64(tipHeight), nil
+	blockCount, err := clientCallWithRetry(callForBlockCount, c.logger, c.cfg)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get block count: %w", err)
+	}
+
+	return uint64(blockCount.count), nil
 }
 
 func (c *BTCClient) GetBlockByHeight(height uint64) (*types.IndexedBlock, error) {
-	blockHash, err := c.getBlockHashWithRetry(int64(height))
+	callForBlockHash := func() (*chainhash.Hash, error) {
+		return c.client.GetBlockHash(int64(height))
+	}
+
+	blockHash, err := clientCallWithRetry(callForBlockHash, c.logger, c.cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block by height %d: %w", height, err)
 	}
 
-	block, err := c.getBlockWithRetry(blockHash)
+	callForBlock := func() (*wire.MsgBlock, error) {
+		return c.client.GetBlock(blockHash)
+	}
+
+	block, err := clientCallWithRetry(callForBlock, c.logger, c.cfg)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block by hash %s: %w", blockHash.String(), err)
 	}
@@ -58,73 +80,21 @@ func (c *BTCClient) GetBlockByHeight(height uint64) (*types.IndexedBlock, error)
 	return types.NewIndexedBlock(int32(height), &block.Header, btcTxs), nil
 }
 
-func (c *BTCClient) getBlockCountWithRetry() (int64, error) {
-	var (
-		blockCount int64
-		err        error
-	)
-
-	if err := retry.Do(func() error {
-		blockCount, err = c.client.GetBlockCount()
-		return err
-	}, retry.Attempts(c.cfg.MaxRetryTimes), retry.Delay(c.cfg.RetryInterval), retry.LastErrorOnly(true),
+func clientCallWithRetry[T any](
+	call retry.RetryableFuncWithData[*T], logger *zap.Logger, cfg *config.BTCConfig,
+) (*T, error) {
+	result, err := retry.DoWithData(call, retry.Attempts(cfg.MaxRetryTimes), retry.Delay(cfg.RetryInterval), retry.LastErrorOnly(true),
 		retry.OnRetry(func(n uint, err error) {
-			c.logger.Debug(
-				"failed to query the block count",
+			logger.Debug(
+				"failed to call the RPC client",
 				zap.Uint("attempt", n+1),
-				zap.Uint("max_attempts", c.cfg.MaxRetryTimes),
+				zap.Uint("max_attempts", cfg.MaxRetryTimes),
 				zap.Error(err),
 			)
-		})); err != nil {
-		return 0, err
-	}
-	return blockCount, nil
-}
+		}))
 
-func (c *BTCClient) getBlockHashWithRetry(height int64) (*chainhash.Hash, error) {
-	var (
-		blockHash *chainhash.Hash
-		err       error
-	)
-
-	if err := retry.Do(func() error {
-		blockHash, err = c.client.GetBlockHash(height)
-		return err
-	}, retry.Attempts(c.cfg.MaxRetryTimes), retry.Delay(c.cfg.RetryInterval), retry.LastErrorOnly(true),
-		retry.OnRetry(func(n uint, err error) {
-			c.logger.Debug(
-				"failed to query the block hash",
-				zap.Int64("height", height),
-				zap.Uint("attempt", n+1),
-				zap.Uint("max_attempts", c.cfg.MaxRetryTimes),
-				zap.Error(err),
-			)
-		})); err != nil {
+	if err != nil {
 		return nil, err
 	}
-	return blockHash, nil
-}
-
-func (c *BTCClient) getBlockWithRetry(blockHash *chainhash.Hash) (*wire.MsgBlock, error) {
-	var (
-		block *wire.MsgBlock
-		err   error
-	)
-
-	if err := retry.Do(func() error {
-		block, err = c.client.GetBlock(blockHash)
-		return err
-	}, retry.Attempts(c.cfg.MaxRetryTimes), retry.Delay(c.cfg.RetryInterval), retry.LastErrorOnly(true),
-		retry.OnRetry(func(n uint, err error) {
-			c.logger.Debug(
-				"failed to query the block",
-				zap.String("hash", blockHash.String()),
-				zap.Uint("attempt", n+1),
-				zap.Uint("max_attempts", c.cfg.MaxRetryTimes),
-				zap.Error(err),
-			)
-		})); err != nil {
-		return nil, err
-	}
-	return block, nil
+	return result, nil
 }
