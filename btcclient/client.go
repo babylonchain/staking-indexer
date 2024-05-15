@@ -117,7 +117,7 @@ func (c *BTCClient) getBlockWithRetry(blockHash *chainhash.Hash) (*wire.MsgBlock
 	}, retry.Attempts(c.cfg.MaxRetryTimes), retry.Delay(c.cfg.RetryInterval), retry.LastErrorOnly(true),
 		retry.OnRetry(func(n uint, err error) {
 			c.logger.Debug(
-				"failed to query the block hash",
+				"failed to query the block",
 				zap.String("hash", blockHash.String()),
 				zap.Uint("attempt", n+1),
 				zap.Uint("max_attempts", c.cfg.MaxRetryTimes),
