@@ -16,8 +16,6 @@ jobs:
       - run:
           name: Print Go environment
           command: "go env"
-      - go/load-cache:
-          key: go-mod-v6-{{ checksum "go.sum" }}
       - go/mod-download
       - run:
           name: Install Dependencies
