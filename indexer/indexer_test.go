@@ -83,7 +83,7 @@ func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *types.ParamsVe
 		// no active staking events created, otherwise, to be an unbonding event
 		if r.Intn(100) < stakingChance || !hasActiveStakingEvent(stakingEvents) {
 			stakingEvent := buildStakingEvent(r, t, height, p)
-			if checkOverflow && stakingEvent.StakingTxData.StakingAmount+tvl > p.StakingCap {
+			if checkOverflow && tvl > p.StakingCap {
 				stakingEvent.IsOverflow = true
 			} else {
 				tvl += stakingEvent.StakingTxData.StakingAmount
@@ -390,8 +390,6 @@ func FuzzVerifyUnbondingTx(f *testing.F) {
 		stakingData := datagen.GenerateTestStakingData(t, r, params)
 		_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, params, stakingData)
 		// For a valid tx, its btc height is always larger than the activation height
-		// TODO: Test with different heights across different versions of params
-		// https://github.com/babylonchain/staking-indexer/issues/52
 		mockedHeight := uint64(params.ActivationHeight) + 1
 		err = stakingIndexer.ProcessStakingTx(
 			stakingTx.MsgTx(),
@@ -468,10 +466,10 @@ func FuzzTestOverflow(f *testing.F) {
 
 			// Let's break if the staking tx is overflow
 			if storedStakingTx.IsOverflow {
-				require.True(t, tvl+uint64(stakingData.StakingAmount) > uint64(params.StakingCap))
+				require.True(t, tvl > uint64(params.StakingCap))
 				break
 			}
-			require.True(t, tvl+uint64(stakingData.StakingAmount) <= uint64(params.StakingCap))
+			require.True(t, tvl <= uint64(params.StakingCap))
 		}
 
 		// Unbond some of the tx so that new staking tx can be processed
@@ -480,7 +478,7 @@ func FuzzTestOverflow(f *testing.F) {
 			// Let's break if the tvl is below max staking value
 			tvl, err := stakingIndexer.GetConfirmedTvl()
 			require.NoError(t, err)
-			if tvl < uint64(params.StakingCap)-uint64(params.MaxStakingAmount) {
+			if tvl < uint64(params.StakingCap) {
 				break
 			}
 		}
@@ -496,10 +494,10 @@ func FuzzTestOverflow(f *testing.F) {
 				StakingData: stakingData,
 			})
 			if storedStakingTx.IsOverflow {
-				require.True(t, tvl+uint64(stakingData.StakingAmount) > uint64(params.StakingCap))
+				require.True(t, tvl > uint64(params.StakingCap))
 				break
 			}
-			require.True(t, tvl+uint64(stakingData.StakingAmount) <= uint64(params.StakingCap))
+			require.True(t, tvl <= uint64(params.StakingCap))
 		}
 
 		// Now, let's test the overflow with the second params
@@ -533,10 +531,10 @@ func FuzzTestOverflow(f *testing.F) {
 
 			// Let's break if the staking tx is overflow
 			if storedStakingTx.IsOverflow {
-				require.True(t, tvl+uint64(stakingData.StakingAmount) > uint64(secondParam.StakingCap))
+				require.True(t, tvl > uint64(secondParam.StakingCap))
 				break
 			}
-			require.True(t, tvl+uint64(stakingData.StakingAmount) <= uint64(secondParam.StakingCap))
+			require.True(t, tvl <= uint64(secondParam.StakingCap))
 		}
 	})
 }
