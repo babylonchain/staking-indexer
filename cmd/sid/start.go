@@ -67,6 +67,7 @@ func start(ctx *cli.Context) error {
 	// create BTC client and connect to BTC server
 	btcClient, err := btcclient.NewBTCClient(
 		cfg.BTCConfig,
+		logger,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize the BTC client: %w", err)

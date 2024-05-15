@@ -3,8 +3,11 @@ package btcclient
 import (
 	"fmt"
 
+	"github.com/avast/retry-go/v4"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
+	"github.com/btcsuite/btcd/wire"
+	"go.uber.org/zap"
 
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/types"
@@ -13,46 +16,85 @@ import (
 
 type BTCClient struct {
 	client *rpcclient.Client
+	logger *zap.Logger
+	cfg    *config.BTCConfig
 }
 
-func NewBTCClient(cfg *config.BTCConfig) (*BTCClient, error) {
+func NewBTCClient(cfg *config.BTCConfig, logger *zap.Logger) (*BTCClient, error) {
 	c, err := rpcclient.New(cfg.ToConnConfig(), nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return &BTCClient{client: c}, nil
+	return &BTCClient{
+		client: c,
+		logger: logger,
+		cfg:    cfg,
+	}, nil
+}
+
+type BlockCountResponse struct {
+	count int64
 }
 
 func (c *BTCClient) GetTipHeight() (uint64, error) {
-	tipHeight, err := c.client.GetBlockCount()
-	if err != nil {
-		return 0, err
+	callForBlockCount := func() (*BlockCountResponse, error) {
+		count, err := c.client.GetBlockCount()
+		if err != nil {
+			return nil, err
+		}
+
+		return &BlockCountResponse{count: count}, nil
 	}
 
-	return uint64(tipHeight), nil
+	blockCount, err := clientCallWithRetry(callForBlockCount, c.logger, c.cfg)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get block count: %w", err)
+	}
+
+	return uint64(blockCount.count), nil
 }
 
 func (c *BTCClient) GetBlockByHeight(height uint64) (*types.IndexedBlock, error) {
-	blockHash, err := c.client.GetBlockHash(int64(height))
+	callForBlockHash := func() (*chainhash.Hash, error) {
+		return c.client.GetBlockHash(int64(height))
+	}
+
+	blockHash, err := clientCallWithRetry(callForBlockHash, c.logger, c.cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block by height %d: %w", height, err)
 	}
 
-	return c.GetBlockByHash(blockHash)
-}
-
-func (c *BTCClient) GetBlockByHash(blockHash *chainhash.Hash) (*types.IndexedBlock, error) {
-	blockInfo, err := c.client.GetBlockVerbose(blockHash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get block verbose by hash %s: %w", blockHash.String(), err)
+	callForBlock := func() (*wire.MsgBlock, error) {
+		return c.client.GetBlock(blockHash)
 	}
 
-	block, err := c.client.GetBlock(blockHash)
+	block, err := clientCallWithRetry(callForBlock, c.logger, c.cfg)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block by hash %s: %w", blockHash.String(), err)
 	}
 
 	btcTxs := utils.GetWrappedTxs(block)
-	return types.NewIndexedBlock(int32(blockInfo.Height), &block.Header, btcTxs), nil
+
+	return types.NewIndexedBlock(int32(height), &block.Header, btcTxs), nil
+}
+
+func clientCallWithRetry[T any](
+	call retry.RetryableFuncWithData[*T], logger *zap.Logger, cfg *config.BTCConfig,
+) (*T, error) {
+	result, err := retry.DoWithData(call, retry.Attempts(cfg.MaxRetryTimes), retry.Delay(cfg.RetryInterval), retry.LastErrorOnly(true),
+		retry.OnRetry(func(n uint, err error) {
+			logger.Debug(
+				"failed to call the RPC client",
+				zap.Uint("attempt", n+1),
+				zap.Uint("max_attempts", cfg.MaxRetryTimes),
+				zap.Error(err),
+			)
+		}))
+
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
