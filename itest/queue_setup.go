@@ -29,7 +29,10 @@ func setupTestQueueConsumer(t *testing.T, cfg *config.QueueConfig) (*queuemngr.Q
 	}
 
 	// Start the actual queue processing in our codebase
-	queues, err := queuemngr.NewQueueManager(cfg.ToQueueClientConfig(), zap.NewNop())
+
+	validQueueCfg, err := cfg.ToQueueClientConfig()
+	require.NoError(t, err)
+	queues, err := queuemngr.NewQueueManager(validQueueCfg, zap.NewNop())
 	require.NoError(t, err)
 
 	return queues, nil
