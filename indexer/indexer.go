@@ -159,11 +159,11 @@ func (si *StakingIndexer) blocksEventLoop() {
 // to the current tip height. This method will not make any change to the system
 // state.
 // If the btc scanner is synced, it follows the steps below:
-// 1. download unconfirmed blocks
-// 2. get the current confirmed tvl
-// 3. iterate all txs of each unconfirmed block to identify staking and unbonding transactions,
+// 1. get unconfirmed blocks from the cache
+// 2. iterate all txs of each unconfirmed block to identify staking and unbonding transactions,
 // and calculate total unconfirmed tvl
-// 4. push unconfirmed info event
+// 3. get the current confirmed tvl
+// 4. push unconfirmed info event to the queue
 // 5. record metrics
 func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) error {
 	if !si.btcScanner.IsSynced() {
@@ -236,9 +236,19 @@ func (si *StakingIndexer) CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks []*t
 				// this is a new staking tx, validate it against staking requirement
 				if err := si.validateStakingTx(params, stakingData); err != nil {
 					if errors.Is(err, ErrInvalidStakingTx) {
+						invalidTransactionsCounter.WithLabelValues("staking transaction").Inc()
+						si.logger.Error("found an invalid staking tx",
+							zap.String("tx_hash", msgTx.TxHash().String()),
+							zap.Int32("height", b.Height),
+							zap.Bool("is_confirmed", false),
+							zap.Error(err),
+						)
 						continue
 					} else {
-						return 0, fmt.Errorf("failed to validate staking tx: %w", err)
+						// record metrics
+						failedProcessingStakingTxsCounter.Inc()
+
+						return 0, fmt.Errorf("failed to validate unconfirmed staking tx: %w", err)
 					}
 				}
 
@@ -281,12 +291,20 @@ func (si *StakingIndexer) CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks []*t
 				isUnbonding, err := si.IsValidUnbondingTx(msgTx, stakingTx, paramsFromStakingTxHeight)
 				if err != nil {
 					if errors.Is(err, ErrInvalidUnbondingTx) {
-						si.logger.Warn("found an invalid unbonding tx",
-							zap.String("tx_hash", msgTx.TxHash().String()))
+						invalidTransactionsCounter.WithLabelValues("unbonding transactions").Inc()
+						si.logger.Error("found an invalid unbonding tx",
+							zap.String("tx_hash", msgTx.TxHash().String()),
+							zap.Int32("height", b.Height),
+							zap.Bool("is_confirmed", false),
+							zap.Error(err),
+						)
+
 						continue
-					} else {
-						return 0, fmt.Errorf("failed to validate unbonding tx: %w", err)
 					}
+
+					// record metrics
+					failedVerifyingUnbondingTxsCounter.Inc()
+					return 0, fmt.Errorf("failed to validate unconfirmed unbonding tx: %w", err)
 				}
 				if isUnbonding {
 					si.logger.Info("found an unconfirmed unbonding tx",
@@ -299,6 +317,10 @@ func (si *StakingIndexer) CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks []*t
 						tvl -= btcutil.Amount(stakingTx.StakingValue)
 					}
 				} else {
+					// TODO 1. Identify withdraw txs
+					// TODO 2. Decide whether to subtract tvl here
+					invalidTransactionsCounter.WithLabelValues("unconfirmed unknown").Inc()
+
 					si.logger.Warn("found a tx that spends the staking tx but not an unbonding tx",
 						zap.String("tx_hash", msgTx.TxHash().String()),
 						zap.String("staking_tx_hash", stakingTx.Tx.TxHash().String()))
@@ -331,6 +353,8 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 					invalidTransactionsCounter.WithLabelValues("staking transaction").Inc()
 					si.logger.Error("found an invalid staking tx",
 						zap.String("tx_hash", msgTx.TxHash().String()),
+						zap.Int32("height", b.Height),
+						zap.Bool("is_confirmed", true),
 						zap.Error(err),
 					)
 					// We will continue to the next tx as the staking tx is invalid
@@ -340,7 +364,7 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 					// record metrics
 					failedProcessingStakingTxsCounter.Inc()
 
-					return err
+					return fmt.Errorf("failed to process the staking tx: %w", err)
 				}
 			}
 
@@ -366,6 +390,8 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 					invalidTransactionsCounter.WithLabelValues("unbonding transactions").Inc()
 					si.logger.Error("found an invalid unbonding tx",
 						zap.String("tx_hash", msgTx.TxHash().String()),
+						zap.Int32("height", b.Height),
+						zap.Bool("is_confirmed", true),
 						zap.Error(err),
 					)
 
