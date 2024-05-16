@@ -16,9 +16,11 @@ deployment:
               name: staking-indexer
           - configMap:
               name: phase1-global-config
-    - name: staking-indexer
+    - name: staking-indexer-data
       persistentVolumeClaim:
         claimName: staking-indexer
+    - name: staking-indexer-home
+      emptyDir: {}
   volumeMounts:
     - name: staking-indexer-configs
       mountPath: /home/staking-indexer/.sid/global-params.json
@@ -26,8 +28,10 @@ deployment:
     - name: staking-indexer-configs
       mountPath: /home/staking-indexer/.sid/sid.conf
       subPath: sid.conf
-    - name: staking-indexer
+    - name: staking-indexer-data
       mountPath: /home/staking-indexer/.sid/data
+    - name: staking-indexer-home
+      mountPath: /home/staking-indexer/.sid
   command: |
     sid start
   # TODO: Enable nodeSelector once nodegroups are provisioned
