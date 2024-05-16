@@ -197,53 +197,53 @@ workflows:
       - push_docker:
           requires:
             - build_docker
-              #filters:
-              #  tags:
-              #    only: /.*/
-              #  branches:
-              #    only:
-              #      - main
-              #      - dev
+          filters:
+            tags:
+              only: /.*/
+            branches:
+              only:
+                - main
+                - dev
       - deploy_staging:
           requires:
             - push_docker
-              #- build_lint_test
-              #filters:
-              #  branches:
-              #    only:
-              #      - main
-              #      - dev
+            - build_lint_test
+          filters:
+            branches:
+              only:
+                - main
+                - dev
       - require_approval_deploy:
           type: approval
           requires:
             - deploy_staging
-              #filters:
-              #  branches:
-              #    only:
-              #      - main
-              #      - dev
+          filters:
+            branches:
+              only:
+                - main
+                - dev
       - deploy_testnet:
           requires:
             - require_approval_deploy
-              #filters:
-              #  branches:
-              #    only:
-              #      - main
-              #      - dev
+          filters:
+            branches:
+              only:
+                - main
+                - dev
       - require_approval_rollback:
           type: approval
           requires:
             - deploy_testnet
-              #filters:
-              #  branches:
-              #    only:
-              #      - main
-              #      - dev
+          filters:
+            branches:
+              only:
+                - main
+                - dev
       - rollback_testnet:
           requires:
             - require_approval_rollback
-              #filters:
-              #  branches:
-              #    only:
-              #      - main
-              #      - dev
+          filters:
+            branches:
+              only:
+                - main
+                - dev
