@@ -34,9 +34,8 @@ deployment:
       mountPath: /home/staking-indexer/.sid
   command: |
     sid start
-  # TODO: Enable nodeSelector once nodegroups are provisioned
-  # nodeSelector:
-  #   workload: "btc"
+  nodeSelector:
+    workload: "btc"
   annotations:
     prometheus.io/path: /metrics
     prometheus.io/port: "2112"
