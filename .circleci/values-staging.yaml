@@ -45,6 +45,7 @@ deployment:
     configmap.reloader.stakater.com/reload: "staking-indexer, phase1-global-config"
   securityContext:
     fsGroup: 1138
+  strategy: Recreate
 service:
   enabled: true
   type: NodePort
