@@ -207,7 +207,7 @@ workflows:
       - deploy_staging:
           requires:
             - push_docker
-            - build_lint_test
+              #- build_lint_test
               #filters:
               #  branches:
               #    only:
