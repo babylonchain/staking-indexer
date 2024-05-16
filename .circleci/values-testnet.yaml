@@ -82,7 +82,7 @@ configFiles:
 
     [btcconfig]
     ; The daemon's rpc listening address
-    RPCHost = bitcoind.bitcoind-signet:38332/wallet/signet
+    RPCHost = bitcoind.bitcoind-signet:38332
 
     ; Username for RPC connections
     RPCUser = BTC_USER
