@@ -130,6 +130,9 @@ configFiles:
     ; the time a message will be hold in delay queue before being sent to main queue again
     ReQueueDelayTime = 300s
 
+    ; the rabbitmq queue type, either classic or quorum
+    QueueType = quorum
+
     [metricsconfig]
     ; IP of the Prometheus server
     Host = 0.0.0.0
