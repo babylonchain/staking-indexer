@@ -21,7 +21,11 @@ deployment:
         claimName: staking-indexer
   volumeMounts:
     - name: staking-indexer-configs
-      mountPath: /home/staking-indexer/.sid
+      mountPath: /home/staking-indexer/.sid/global-params.json
+      subPath: global-params.json
+    - name: staking-indexer-configs
+      mountPath: /home/staking-indexer/.sid/sid.conf
+      subPath: sid.conf
     - name: staking-indexer
       mountPath: /home/staking-indexer/.sid/data
   command: |
