@@ -1,0 +1,138 @@
+namespace: staking-indexer
+name: staking-indexer
+deployment:
+  image: 490721144737.dkr.ecr.us-east-1.amazonaws.com/staking-indexer
+  version: REPLACEME
+  replicas: 1
+  ports:
+    - protocol: TCP
+      containerPort: 2112
+      name: prom
+  volumes:
+    - name: staking-indexer-configs
+      projected:
+        sources:
+          - configMap:
+              name: staking-indexer
+          - configMap:
+              name: phase1-global-config
+    - name: staking-indexer
+      persistentVolumeClaim:
+        claimName: staking-indexer
+  volumeMounts:
+    - name: staking-indexer-configs
+      mountPath: /home/staking-indexer/.sid
+    - name: staking-indexer
+      mountPath: /home/staking-indexer/.sid/data
+  command: |
+    sid start
+  # TODO: Enable nodeSelector once nodegroups are provisioned
+  # nodeSelector:
+  #   workload: "staging"
+  annotations:
+    prometheus.io/path: /metrics
+    prometheus.io/port: "2112"
+    prometheus.io/scheme: http
+    prometheus.io/scrape: "true"
+    configmap.reloader.stakater.com/reload: "staking-indexer, phase1-global-config"
+  securityContext:
+    fsGroup: 1138
+service:
+  enabled: true
+  type: NodePort
+  ports:
+    - protocol: TCP
+      port: 2112
+      targetPort: prom
+      name: prom
+persistence:
+  enabled: true
+  storageClassName: "ebs-sc"
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+ingress:
+  enabled: false
+purgeCloudflareCache:
+  enabled: false
+configFiles:
+  sid.conf: |
+    [Application Options]
+    ; Logging level for all subsystems {trace, debug, info, warn, error, fatal}
+    LogLevel = debug
+
+    ; Bitcoin network to run on {mainnet, regtest, testnet, signet}
+    BitcoinNetwork = signet
+
+    [btcconfig]
+    ; The daemon's rpc listening address
+    RPCHost = bitcoind.bitcoind-signet:38332/wallet/signet
+
+    ; Username for RPC connections
+    RPCUser = BTC_USER
+
+    ; Password for RPC connections
+    RPCPass = BTC_PASSWORD
+
+    ; The maximum number of peers staker will choose from the backend node to retrieve pruned blocks from. This only applies to pruned nodes.
+    PrunedNodeMaxPeers = 0
+
+    ; The interval that will be used to poll bitcoind for new blocks. Only used if rpcpolling is true.
+    BlockPollingInterval = 10s
+
+    ; The interval that will be used to poll bitcoind for new tx. Only used if rpcpolling is true.
+    TxPollingInterval = 10s
+
+    ; size of the Bitcoin blocks cache
+    BlockCacheSize = 20971520
+
+    MaxRetryTimes = 5
+
+    RetryInterval = 0.5s
+
+    [dbconfig]
+    ; The directory path in which the database file should be stored.
+    DBPath = /home/staking-indexer/.sid/data
+
+    ; The name of the database file.
+    DBFileName = bbolt.db
+
+    ; Prevents the database from syncing its freelist to disk, resulting in improved performance at the expense of increased startup time.
+    NoFreelistSync = true
+
+    ; Specifies if a Bolt based database backend should be automatically compacted on startup (if the minimum age of the database file is reached). This will require additional disk space for the compacted copy of the database but will result in an overall lower database size after the compaction.
+    AutoCompact = false
+
+    ; Specifies the minimum time that must have passed since a bolt database file was last compacted for the compaction to be considered again.
+    AutoCompactMinAge = 168h0m0s
+
+    ; Specifies the timeout value to use when opening the wallet database.
+    DBTimeout = 1m0s
+
+    [queueconfig]
+    ; the user name of the queue
+    User = RABBITMQ_USER
+
+    ; the password of the queue
+    Password = RABBITMQ_PASSWORD
+
+    ; the url of the queue
+    Url = rabbitmq-headless.rabbitmq:5672
+
+    ; the process timeout of the queue
+    ProcessingTimeout = 5s
+    
+    ; the maximum number of times a message will be retried
+    MsgMaxRetryAttempts = 10
+
+    ; the time a message will be hold in delay queue before being sent to main queue again
+    ReQueueDelayTime = 300s
+
+    [metricsconfig]
+    ; IP of the Prometheus server
+    Host = 0.0.0.0
+
+    ; Port of the Prometheus server
+    Port = 2112

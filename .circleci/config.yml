@@ -3,6 +3,8 @@ version: 2.1
 orbs:
   go: circleci/go@1.9.0
   aws-ecr: circleci/aws-ecr@8.2.1
+  kubernetes: circleci/kubernetes@1.3.1
+  helm: circleci/helm@2.0.1
 
 jobs:
   build_lint_test:
@@ -85,6 +87,105 @@ jobs:
           repo: "staking-indexer"
           tag: "$CIRCLE_SHA1,$CIRCLE_TAG"
 
+  deploy_staging:
+    machine:
+      image: ubuntu-2204:2024.01.1
+      resource_class: large
+    steps:
+      - checkout
+      - aws-ecr/ecr-login:
+          aws-access-key-id: AWS_ACCESS_KEY_ID
+          aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+          region: "$AWS_REGION"
+      - kubernetes/install-kubeconfig:
+          kubeconfig: TESTNET_KUBECONFIG
+      - helm/install-helm-client
+      - run:
+          name: Fetch and replace config placeholders from CircleCi env vars
+          command: |
+            HELM_VALUES=/home/circleci/project/.circleci/values-staging.yaml
+            sed -i "s/RABBITMQ_USER/$RABBITMQ_USER_STAGING/g" $HELM_VALUES
+            sed -i "s/RABBITMQ_PASSWORD/$RABBITMQ_PASSWORD_STAGING/g" $HELM_VALUES
+            sed -i "s/BTC_USER/$BTC_USER/g" $HELM_VALUES
+            sed -i "s/BTC_PASSWORD/$BTC_PASSWORD/g" $HELM_VALUES
+      - run:
+          name: Perform a dry run of the new release
+          command: |
+            helm upgrade --install --debug --dry-run \
+              -n $DEPLOY_STAGING_NAMESPACE \
+              --values /home/circleci/project/.circleci/values-staging.yaml \
+              --version $HELM_CHART_VERSION \
+              --set deployment.version=$CIRCLE_SHA1 \
+              staking-indexer $HELM_CHART_REPO
+      - run:
+          name: Release new service version in an atomic way
+          command: |
+            helm upgrade --install --debug --atomic --wait \
+              -n $DEPLOY_STAGING_NAMESPACE --create-namespace \
+              --values /home/circleci/project/.circleci/values-staging.yaml \
+              --version $HELM_CHART_VERSION \
+              --set deployment.version=$CIRCLE_SHA1 \
+              staking-indexer $HELM_CHART_REPO
+
+  deploy_testnet:
+    machine:
+      image: ubuntu-2204:2024.01.1
+      resource_class: large
+    steps:
+      - checkout
+      - aws-ecr/ecr-login:
+          aws-access-key-id: AWS_ACCESS_KEY_ID
+          aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+          region: "$AWS_REGION"
+      - kubernetes/install-kubeconfig:
+          kubeconfig: TESTNET_KUBECONFIG
+      - helm/install-helm-client
+      - run:
+          name: Fetch and replace config placeholders from CircleCi env vars
+          command: |
+            HELM_VALUES=/home/circleci/project/.circleci/values-testnet.yaml
+            sed -i "s/RABBITMQ_USER/$RABBITMQ_USER/g" $HELM_VALUES
+            sed -i "s/RABBITMQ_PASSWORD/$RABBITMQ_PASSWORD/g" $HELM_VALUES
+            sed -i "s/BTC_USER/$BTC_USER/g" $HELM_VALUES
+            sed -i "s/BTC_PASSWORD/$BTC_PASSWORD/g" $HELM_VALUES
+      - run:
+          name: Perform a dry run of the new release
+          command: |
+            helm upgrade --install --debug --dry-run \
+              -n $DEPLOY_TESTNET_NAMESPACE \
+              --values /home/circleci/project/.circleci/values-testnet.yaml \
+              --version $HELM_CHART_VERSION \
+              --set deployment.version=$CIRCLE_SHA1 \
+              staking-indexer $HELM_CHART_REPO
+      - run:
+          name: Release new service version in an atomic way
+          command: |
+            helm upgrade --install --debug --atomic --wait \
+              -n $DEPLOY_TESTNET_NAMESPACE --create-namespace \
+              --values /home/circleci/project/.circleci/values-testnet.yaml \
+              --version $HELM_CHART_VERSION \
+              --set deployment.version=$CIRCLE_SHA1 \
+              staking-indexer $HELM_CHART_REPO
+
+  rollback_testnet:
+    machine:
+      image: ubuntu-2204:2024.01.1
+      resource_class: large
+    steps:
+      - checkout
+      - aws-ecr/ecr-login:
+          aws-access-key-id: AWS_ACCESS_KEY_ID
+          aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+          region: "$AWS_REGION"
+      - kubernetes/install-kubeconfig:
+          kubeconfig: TESTNET_KUBECONFIG
+      - helm/install-helm-client
+      - run:
+          name: Rollback Helm Chart to previous release
+          command: |
+            helm rollback --cleanup-on-fail --force --recreate-pods --wait \
+              --debug -n $DEPLOY_TESTNET_NAMESPACE staking-indexer
+
 workflows:
   CI:
     jobs:
@@ -99,7 +200,50 @@ workflows:
           filters:
             tags:
               only: /.*/
-            branches:
-              only:
-                - main
-                - dev
+                #branches:
+                #  only:
+                #    - main
+                #    - dev
+      - deploy_staging:
+          requires:
+            - push_docker
+            - build_lint_test
+              #filters:
+              #  branches:
+              #    only:
+              #      - main
+              #      - dev
+      - require_approval_deploy:
+          type: approval
+          requires:
+            - deploy_staging
+              #filters:
+              #  branches:
+              #    only:
+              #      - main
+              #      - dev
+      - deploy_testnet:
+          requires:
+            - require_approval_deploy
+              #filters:
+              #  branches:
+              #    only:
+              #      - main
+              #      - dev
+      - require_approval_rollback:
+          type: approval
+          requires:
+            - deploy_testnet
+              #filters:
+              #  branches:
+              #    only:
+              #      - main
+              #      - dev
+      - rollback_testnet:
+          requires:
+            - require_approval_rollback
+              #filters:
+              #  branches:
+              #    only:
+              #      - main
+              #      - dev
