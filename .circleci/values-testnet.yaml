@@ -62,10 +62,16 @@ persistence:
   resources:
     requests:
       storage: 10Gi
-ingress:
-  enabled: false
-purgeCloudflareCache:
-  enabled: false
+snapshotting:
+  enabled: true
+  snapshotClass: "ebs-vsc"
+  schedules:
+    - scheduleName: daily
+      cron: "0 12 * * *"
+      retentionMaxCount: 3
+    - scheduleName: weekly
+      cron: "0 0 * * 2"
+      retentionMaxCount: 3
 configFiles:
   sid.conf: |
     [Application Options]

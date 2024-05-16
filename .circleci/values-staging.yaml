@@ -62,10 +62,6 @@ persistence:
   resources:
     requests:
       storage: 10Gi
-ingress:
-  enabled: false
-purgeCloudflareCache:
-  enabled: false
 configFiles:
   sid.conf: |
     [Application Options]
