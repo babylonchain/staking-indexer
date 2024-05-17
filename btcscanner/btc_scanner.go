@@ -220,8 +220,8 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 }
 
 func (bs *BtcPoller) sendConfirmedBlocksToChan(blocks []*types.IndexedBlock) {
-	bs.confirmedTipBlock = blocks[len(blocks)-1]
 	for i := 0; i < len(blocks); i++ {
+		bs.confirmedTipBlock = blocks[i]
 		bs.confirmedBlocksChan <- blocks[i]
 	}
 }
