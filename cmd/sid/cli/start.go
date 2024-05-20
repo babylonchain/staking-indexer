@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"fmt"
@@ -24,7 +24,7 @@ const (
 	paramsPathFlag  = "params-path"
 )
 
-var startCommand = cli.Command{
+var StartCommand = cli.Command{
 	Name:        "start",
 	Usage:       "Start the staking-indexer server",
 	Description: "Start the staking-indexer server.",
