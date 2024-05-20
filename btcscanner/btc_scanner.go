@@ -75,17 +75,15 @@ func (bs *BtcPoller) Start(startHeight uint64) error {
 		return fmt.Errorf("the BTC scanner is already started")
 	}
 
-	bs.logger.Info("starting the BTC scanner")
-
-	if err := bs.Bootstrap(startHeight); err != nil {
-		return fmt.Errorf("failed to bootstrap with height %d", startHeight)
-	}
-
 	if err := bs.waitUntilActivation(); err != nil {
 		return err
 	}
 
 	bs.logger.Info("starting the BTC scanner", zap.Uint64("start_height", startHeight))
+
+	if err := bs.Bootstrap(startHeight); err != nil {
+		return fmt.Errorf("failed to bootstrap with height %d: %w", startHeight, err)
+	}
 
 	blockEventNotifier, err := bs.btcNotifier.RegisterBlockEpochNtfn(nil)
 	if err != nil {
