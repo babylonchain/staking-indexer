@@ -476,8 +476,9 @@ func buildWithdrawTx(
 	lockTime uint16,
 	lockedAmount btcutil.Amount,
 ) *wire.MsgTx {
-
+	
 	destAddress, err := btcutil.NewAddressPubKey(stakerPrivKey.PubKey().SerializeCompressed(), regtestParams)
+
 	require.NoError(t, err)
 	destAddressScript, err := txscript.PayToAddrScript(destAddress)
 	require.NoError(t, err)
