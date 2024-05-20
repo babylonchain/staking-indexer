@@ -14,6 +14,7 @@ import (
 	"github.com/babylonchain/staking-indexer/log"
 	"github.com/babylonchain/staking-indexer/utils"
 	"github.com/urfave/cli"
+	"go.uber.org/zap"
 
 	sdkmath "cosmossdk.io/math"
 )
@@ -101,15 +102,16 @@ func btcHeaders(ctx *cli.Context) error {
 	}
 
 	outputFilePath := ctx.String(outputFileFlag)
-	file, err := os.OpenFile(outputFilePath, os.O_CREATE, os.ModePerm)
-	if err != nil {
-		return fmt.Errorf("failed to open output file %s: %w", outputFilePath, err)
+	if err := os.WriteFile(outputFilePath, bz, 0644); err != nil {
+		return fmt.Errorf("failed to write to output %s file %s: %w", bz, outputFilePath, err)
 	}
-	defer file.Close()
 
-	if _, err := file.Write(bz); err != nil {
-		return fmt.Errorf("failed to write to output file %s: %w", outputFilePath, err)
-	}
+	logger.Info(
+		"Successfully wrote btc headers to file",
+		zap.Uint64("fromBlock", fromBlock),
+		zap.Uint64("toBlock", toBlock),
+		zap.String("outputFile", outputFilePath),
+	)
 	return nil
 }
 
@@ -118,7 +120,7 @@ func BtcHeaderInfo(btcClient *btcclient.BTCClient, fromBlk, toBlk uint64) ([]*bb
 	btcHeaders := make([]*bbnbtclightclienttypes.BTCHeaderInfo, 0, toBlk-fromBlk)
 	var currenWork = sdkmath.ZeroUint()
 
-	for blkHeight := fromBlk; blkHeight < toBlk; blkHeight++ {
+	for blkHeight := fromBlk; blkHeight <= toBlk; blkHeight++ {
 		idxBlock, err := btcClient.GetBlockByHeight(blkHeight)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get block height %d from BTC client: %w", blkHeight, err)

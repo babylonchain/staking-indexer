@@ -23,7 +23,7 @@ func TestBtcHeaders(t *testing.T) {
 	// from zero height
 	infos, err := cli.BtcHeaderInfo(btcClient, 0, uint64(initBlocksQnt))
 	require.NoError(t, err)
-	require.Equal(t, len(infos), initBlocksQnt)
+	require.Equal(t, len(infos), initBlocksQnt+1)
 
 	// should be valid on genesis, start from zero height.
 	genState.BtcHeaders = infos
@@ -39,7 +39,7 @@ func TestBtcHeaders(t *testing.T) {
 
 	infos, err = cli.BtcHeaderInfo(btcClient, uint64(fromBlockHeight), uint64(toBlockHeight))
 	require.NoError(t, err)
-	require.Equal(t, len(infos), int(toBlockHeight-fromBlockHeight))
+	require.Equal(t, len(infos), int(toBlockHeight-fromBlockHeight)+1)
 
 	// try to check if it is valid on genesis, should fail is not retarget block.
 	genState.BtcHeaders = infos
@@ -48,7 +48,7 @@ func TestBtcHeaders(t *testing.T) {
 	// from retarget block
 	infos, err = cli.BtcHeaderInfo(btcClient, uint64(blocksPerRetarget), uint64(totalBlks))
 	require.NoError(t, err)
-	require.Equal(t, len(infos), int(totalBlks-blocksPerRetarget))
+	require.Equal(t, len(infos), int(totalBlks-blocksPerRetarget)+1)
 
 	// check if it is valid on genesis
 	genState.BtcHeaders = infos
