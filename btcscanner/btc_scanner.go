@@ -78,7 +78,7 @@ func (bs *BtcPoller) Start(startHeight uint64) error {
 	bs.logger.Info("starting the BTC scanner")
 
 	if err := bs.Bootstrap(startHeight); err != nil {
-		return fmt.Errorf("failed to bootstrap with height %d", startHeight)
+		return fmt.Errorf("failed to bootstrap with height %d: %w", startHeight, err)
 	}
 
 	if err := bs.waitUntilActivation(); err != nil {
