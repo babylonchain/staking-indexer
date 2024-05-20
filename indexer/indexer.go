@@ -879,7 +879,7 @@ func (si *StakingIndexer) isOverflow(cap uint64) (bool, error) {
 		return false, fmt.Errorf("failed to get the confirmed TVL: %w", err)
 	}
 
-	return confirmedTvl > cap, nil
+	return confirmedTvl >= cap, nil
 }
 
 func (si *StakingIndexer) GetConfirmedTvl() (uint64, error) {
