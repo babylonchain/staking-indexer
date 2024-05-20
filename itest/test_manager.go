@@ -59,14 +59,14 @@ var (
 	eventuallyWaitTimeOut = 1 * time.Minute
 	eventuallyPollTime    = 500 * time.Millisecond
 	testParamsPath        = "test-params.json"
-	passphrase            = "pass"
-	walletName            = "test-wallet"
+	Passphrase            = "pass"
+	WalletName            = "test-wallet"
 )
 
 func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	h := NewBitcoindHandler(t)
 	h.Start()
-	_ = h.CreateWallet(walletName, passphrase)
+	_ = h.CreateWallet(WalletName, Passphrase)
 	resp := h.GenerateBlocks(n)
 
 	minerAddressDecoded, err := btcutil.DecodeAddress(resp.Address, regtestParams)
@@ -80,13 +80,13 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 }
 
 func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress btcutil.Address, dirPath string, startHeight uint64) *TestManager {
-	cfg := defaultStakingIndexerConfig(dirPath)
+	cfg := DefaultStakingIndexerConfig(dirPath)
 	logger, err := log.NewRootLoggerWithFile(config.LogFile(dirPath), "debug")
 	require.NoError(t, err)
 
 	rpcclient, err := rpcclient.New(cfg.BTCConfig.ToConnConfig(), nil)
 	require.NoError(t, err)
-	err = rpcclient.WalletPassphrase(passphrase, 200)
+	err = rpcclient.WalletPassphrase(Passphrase, 200)
 	require.NoError(t, err)
 	walletPrivKey, err := rpcclient.DumpPrivKey(minerAddress)
 	require.NoError(t, err)
@@ -188,7 +188,7 @@ func ReStartFromHeight(t *testing.T, tm *TestManager, height uint64) *TestManage
 	return restartedTm
 }
 
-func defaultStakingIndexerConfig(homePath string) *config.Config {
+func DefaultStakingIndexerConfig(homePath string) *config.Config {
 	defaultConfig := config.DefaultConfigWithHome(homePath)
 
 	// both wallet and node are bicoind
