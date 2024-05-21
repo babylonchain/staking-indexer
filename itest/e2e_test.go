@@ -29,7 +29,7 @@ import (
 
 func TestBTCScanner(t *testing.T) {
 	n := 100
-	tm := StartManagerWithNBlocks(t, n)
+	tm := StartManagerWithNBlocks(t, n, uint64(n))
 	defer tm.Stop()
 
 	count, err := tm.BitcoindHandler.GetBlockCount()
@@ -37,7 +37,6 @@ func TestBTCScanner(t *testing.T) {
 	require.Equal(t, n, count)
 
 	k := int(tm.VersionedParams.ParamsVersions[0].ConfirmationDepth)
-	tm.WaitForNConfirmations(t, k)
 
 	_ = tm.BitcoindHandler.GenerateBlocks(10)
 
@@ -87,8 +86,8 @@ func TestQueueConsumer(t *testing.T) {
 // 5. the withdraw tx is identified by the indexer and consumed by the queue
 func TestStakingLifeCycle(t *testing.T) {
 	// ensure we have UTXOs
-	n := 110
-	tm := StartManagerWithNBlocks(t, n)
+	n := 101
+	tm := StartManagerWithNBlocks(t, n, 100)
 	defer tm.Stop()
 
 	// generate valid staking tx data
@@ -97,7 +96,6 @@ func TestStakingLifeCycle(t *testing.T) {
 	sysParams := tm.VersionedParams.ParamsVersions[0]
 	k := uint64(sysParams.ConfirmationDepth)
 	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
-	testStakingData.StakingTime = 120
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
 		sysParams.Tag,
 		tm.WalletPrivKey.PubKey(),
@@ -158,20 +156,20 @@ func TestStakingLifeCycle(t *testing.T) {
 
 func TestUnconfirmedTVL(t *testing.T) {
 	// ensure we have UTXOs
-	n := 110
-	tm := StartManagerWithNBlocks(t, n)
+	n := 101
+	tm := StartManagerWithNBlocks(t, n, 100)
 	defer tm.Stop()
+
+	tm.CheckNextUnconfirmedEvent(t, 0, 0)
 
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// TODO: test with multiple system parameters
 	sysParams := tm.VersionedParams.ParamsVersions[0]
 	k := sysParams.ConfirmationDepth
-	tm.WaitForNConfirmations(t, int(k))
 
 	// build staking tx
 	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
-	testStakingData.StakingTime = 120
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
 		sysParams.Tag,
 		tm.WalletPrivKey.PubKey(),
@@ -236,8 +234,8 @@ func TestUnconfirmedTVL(t *testing.T) {
 //     We expect the staking event not to be replayed
 func TestIndexerRestart(t *testing.T) {
 	// ensure we have UTXOs
-	n := 110
-	tm := StartManagerWithNBlocks(t, n)
+	n := 101
+	tm := StartManagerWithNBlocks(t, n, 100)
 	defer tm.Stop()
 
 	// generate valid staking tx data
@@ -246,7 +244,6 @@ func TestIndexerRestart(t *testing.T) {
 	sysParams := tm.VersionedParams.ParamsVersions[0]
 	k := sysParams.ConfirmationDepth
 	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
-	testStakingData.StakingTime = 120
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
 		sysParams.Tag,
 		tm.WalletPrivKey.PubKey(),
@@ -288,9 +285,6 @@ func TestIndexerRestart(t *testing.T) {
 	restartedTm2 := ReStartFromHeight(t, restartedTm, restartedTm.Si.GetStartHeight())
 	defer restartedTm2.Stop()
 
-	// wait until catch up
-	restartedTm2.WaitForNConfirmations(t, int(k))
-
 	// no staking event should be replayed as
 	// the indexer starts from a higher height
 	restartedTm2.CheckNoStakingEvent(t)
@@ -305,8 +299,8 @@ func TestIndexerRestart(t *testing.T) {
 // 6. the withdraw tx is identified by the indexer
 func TestStakingUnbondingLifeCycle(t *testing.T) {
 	// ensure we have UTXOs
-	n := 110
-	tm := StartManagerWithNBlocks(t, n)
+	n := 101
+	tm := StartManagerWithNBlocks(t, n, 100)
 	defer tm.Stop()
 
 	// generate valid staking tx data
@@ -478,6 +472,7 @@ func buildWithdrawTx(
 ) *wire.MsgTx {
 
 	destAddress, err := btcutil.NewAddressPubKey(stakerPrivKey.PubKey().SerializeCompressed(), regtestParams)
+
 	require.NoError(t, err)
 	destAddressScript, err := txscript.PayToAddrScript(destAddress)
 	require.NoError(t, err)
@@ -536,7 +531,7 @@ func getTestStakingData(
 	require.NoError(t, err)
 
 	stakingAmount := btcutil.Amount(100000)
-	stakingTime := uint16(10000)
+	stakingTime := uint16(100)
 
 	return &datagen.TestStakingData{
 		StakerKey:           stakerPrivKey.PubKey(),

@@ -63,7 +63,7 @@ var (
 	walletName            = "test-wallet"
 )
 
-func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
+func StartManagerWithNBlocks(t *testing.T, n int, startHeight uint64) *TestManager {
 	h := NewBitcoindHandler(t)
 	h.Start()
 	_ = h.CreateWallet(walletName, passphrase)
@@ -76,7 +76,7 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	err = os.MkdirAll(dirPath, 0755)
 	require.NoError(t, err)
 
-	return StartWithBitcoinHandler(t, h, minerAddressDecoded, dirPath, 1)
+	return StartWithBitcoinHandler(t, h, minerAddressDecoded, dirPath, startHeight)
 }
 
 func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress btcutil.Address, dirPath string, startHeight uint64) *TestManager {

@@ -7,7 +7,6 @@ import (
 
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
 	"github.com/golang/mock/gomock"
-	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/lntest/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -17,19 +16,18 @@ import (
 	"github.com/babylonchain/staking-indexer/testutils/mocks"
 )
 
-func FuzzPollConfirmedBlocks(f *testing.F) {
-	bbndatagen.AddRandomSeedsToFuzzer(f, 10)
+func FuzzPoller(f *testing.F) {
+	bbndatagen.AddRandomSeedsToFuzzer(f, 100)
 
 	f.Fuzz(func(t *testing.T, seed int64) {
 		r := rand.New(rand.NewSource(seed))
 		versionedParams := datagen.GenerateGlobalParamsVersions(r, t)
 		k := uint64(versionedParams.ParamsVersions[0].ConfirmationDepth)
+		startHeight := versionedParams.ParamsVersions[0].ActivationHeight
 		// Generate a random number of blocks
 		numBlocks := bbndatagen.RandomIntOtherThan(r, 0, 50) + k // make sure we have at least k+1 entry
-		chainIndexedBlocks := datagen.GetRandomIndexedBlocks(r, numBlocks)
-		startHeight := chainIndexedBlocks[0].Height
+		chainIndexedBlocks := datagen.GetRandomIndexedBlocks(r, startHeight, numBlocks)
 		bestHeight := chainIndexedBlocks[len(chainIndexedBlocks)-1].Height
-		bestBlockHash := chainIndexedBlocks[len(chainIndexedBlocks)-1].BlockHash()
 
 		ctl := gomock.NewController(t)
 		mockBtcClient := mocks.NewMockClient(ctl)
@@ -40,28 +38,23 @@ func FuzzPollConfirmedBlocks(f *testing.F) {
 				Return(chainIndexedBlocks[i], nil).AnyTimes()
 		}
 
-		epochChan := make(chan *chainntnfs.BlockEpoch, 1)
-		bestEpoch := &chainntnfs.BlockEpoch{Height: bestHeight, Hash: &bestBlockHash}
-		epochChan <- bestEpoch
-		mockBtcNotifier := &mock.ChainNotifier{
-			EpochChan: epochChan,
-			SpendChan: make(chan *chainntnfs.SpendDetail),
-			ConfChan:  make(chan *chainntnfs.TxConfirmation),
-		}
-
-		btcScanner, err := btcscanner.NewBTCScanner(versionedParams, zap.NewNop(), mockBtcClient, mockBtcNotifier)
+		btcScanner, err := btcscanner.NewBTCScanner(versionedParams, zap.NewNop(), mockBtcClient, &mock.ChainNotifier{})
 		require.NoError(t, err)
 
 		var wg sync.WaitGroup
+
+		// receive confirmed blocks
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for i := 0; i < len(confirmedBlocks); i++ {
-				b := <-btcScanner.ConfirmedBlocksChan()
+			updateInfo := <-btcScanner.ChainUpdateInfoChan()
+			for i, b := range updateInfo.ConfirmedBlocks {
 				require.Equal(t, confirmedBlocks[i].BlockHash(), b.BlockHash())
 			}
+			require.Equal(t, bestHeight, updateInfo.TipUnconfirmedBlock.Height)
 		}()
-		err = btcScanner.Start(uint64(startHeight))
+
+		err = btcScanner.Start(startHeight)
 		require.NoError(t, err)
 		defer func() {
 			err := btcScanner.Stop()
@@ -69,6 +62,5 @@ func FuzzPollConfirmedBlocks(f *testing.F) {
 		}()
 
 		wg.Wait()
-		require.Equal(t, uint64(confirmedBlocks[len(confirmedBlocks)-1].Height), btcScanner.LastConfirmedHeight())
 	})
 }
