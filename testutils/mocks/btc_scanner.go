@@ -7,6 +7,7 @@ package mocks
 import (
 	reflect "reflect"
 
+	btcscanner "github.com/babylonchain/staking-indexer/btcscanner"
 	types "github.com/babylonchain/staking-indexer/types"
 	gomock "github.com/golang/mock/gomock"
 )
@@ -34,18 +35,18 @@ func (m *MockBtcScanner) EXPECT() *MockBtcScannerMockRecorder {
 	return m.recorder
 }
 
-// ConfirmedBlocksChan mocks base method.
-func (m *MockBtcScanner) ConfirmedBlocksChan() chan *types.IndexedBlock {
+// ChainUpdateInfoChan mocks base method.
+func (m *MockBtcScanner) ChainUpdateInfoChan() <-chan *btcscanner.ChainUpdateInfo {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConfirmedBlocksChan")
-	ret0, _ := ret[0].(chan *types.IndexedBlock)
+	ret := m.ctrl.Call(m, "ChainUpdateInfoChan")
+	ret0, _ := ret[0].(<-chan *btcscanner.ChainUpdateInfo)
 	return ret0
 }
 
-// ConfirmedBlocksChan indicates an expected call of ConfirmedBlocksChan.
-func (mr *MockBtcScannerMockRecorder) ConfirmedBlocksChan() *gomock.Call {
+// ChainUpdateInfoChan indicates an expected call of ChainUpdateInfoChan.
+func (mr *MockBtcScannerMockRecorder) ChainUpdateInfoChan() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfirmedBlocksChan", reflect.TypeOf((*MockBtcScanner)(nil).ConfirmedBlocksChan))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChainUpdateInfoChan", reflect.TypeOf((*MockBtcScanner)(nil).ChainUpdateInfoChan))
 }
 
 // GetUnconfirmedBlocks mocks base method.

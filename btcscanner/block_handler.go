@@ -5,18 +5,44 @@ import (
 
 	notifier "github.com/lightningnetwork/lnd/chainntnfs"
 	"go.uber.org/zap"
+
+	"github.com/babylonchain/staking-indexer/types"
 )
 
 // blockEventLoop handles new blocks from the BTC client unpon new block event
 // Note: in case of rollback, the blockNotifier will emit information about new
 // best block for every new block after rollback
-func (bs *BtcPoller) blockEventLoop(blockNotifier *notifier.BlockEpochEvent) {
+func (bs *BtcPoller) blockEventLoop() {
 	defer bs.wg.Done()
-	defer blockNotifier.Cancel()
+
+	var (
+		blockEventNotifier *notifier.BlockEpochEvent
+		err                error
+	)
+	// register the notifier with the best known tip
+	bestKnownBlock := bs.unconfirmedBlockCache.Tip()
+	if bestKnownBlock != nil {
+		bestKnownBlockHash := bestKnownBlock.BlockHash()
+		bestKnownBlockEpoch := &notifier.BlockEpoch{
+			Hash:        &bestKnownBlockHash,
+			Height:      bestKnownBlock.Height,
+			BlockHeader: bestKnownBlock.Header,
+		}
+		blockEventNotifier, err = bs.btcNotifier.RegisterBlockEpochNtfn(bestKnownBlockEpoch)
+	} else {
+		blockEventNotifier, err = bs.btcNotifier.RegisterBlockEpochNtfn(nil)
+	}
+
+	defer blockEventNotifier.Cancel()
+	if err != nil {
+		panic(fmt.Errorf("failed to register BTC notifier"))
+	}
+
+	bs.logger.Info("BTC notifier registered")
 
 	for {
 		select {
-		case blockEpoch, ok := <-blockNotifier.Epochs:
+		case blockEpoch, ok := <-blockEventNotifier.Epochs:
 			newBlock := blockEpoch
 			if !ok {
 				bs.logger.Error("Block event channel is closed")
@@ -82,7 +108,6 @@ func (bs *BtcPoller) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
 	// get the block content by height
 	ib, err := bs.btcClient.GetBlockByHeight(uint64(blockEpoch.Height))
 	if err != nil {
-		// TODO add retry
 		return fmt.Errorf("failed to get block at height %d: %w", blockEpoch.Height, err)
 	}
 	if ib.BlockHash().String() != blockEpoch.Hash.String() {
@@ -101,21 +126,32 @@ func (bs *BtcPoller) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
 
 	// try to extract confirmed blocks
 	confirmedBlocks := bs.unconfirmedBlockCache.TrimConfirmedBlocks(int(params.ConfirmationDepth) - 1)
-	if confirmedBlocks == nil {
-		return nil
-	}
 
-	if bs.confirmedTipBlock != nil {
-		confirmedTipHash := bs.confirmedTipBlock.BlockHash()
-		if !confirmedTipHash.IsEqual(&confirmedBlocks[0].Header.PrevBlock) {
-			// this indicates either programmatic error or the confirmation
-			// depth is not large enough to cover re-orgs
-			panic(fmt.Errorf("invalid canonical chain"))
-		}
-	}
-
-	// send confirmed blocks to the consumer
-	bs.sendConfirmedBlocksToChan(confirmedBlocks)
+	bs.commitChainUpdate(confirmedBlocks)
 
 	return nil
+}
+
+func (bs *BtcPoller) commitChainUpdate(confirmedBlocks []*types.IndexedBlock) {
+	if len(confirmedBlocks) != 0 {
+		if bs.confirmedTipBlock != nil {
+			confirmedTipHash := bs.confirmedTipBlock.BlockHash()
+			if !confirmedTipHash.IsEqual(&confirmedBlocks[0].Header.PrevBlock) {
+				// this indicates either programmatic error or the confirmation
+				// depth is not large enough to cover re-orgs
+				panic(fmt.Errorf("invalid canonical chain"))
+			}
+		}
+		bs.confirmedTipBlock = confirmedBlocks[len(confirmedBlocks)-1]
+	}
+
+	chainUpdateInfo := &ChainUpdateInfo{
+		ConfirmedBlocks:     confirmedBlocks,
+		TipUnconfirmedBlock: bs.unconfirmedBlockCache.Tip(),
+	}
+
+	select {
+	case bs.chainUpdateInfoChan <- chainUpdateInfo:
+	case <-bs.quit:
+	}
 }
