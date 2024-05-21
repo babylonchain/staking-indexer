@@ -21,7 +21,7 @@ func TestBtcHeaders(t *testing.T) {
 	btcd, btcClient := StartBtcClientAndBtcHandler(t, initBlocksQnt)
 
 	// from zero height
-	infos, err := cli.BtcHeaderInfo(btcClient, 0, uint64(initBlocksQnt))
+	infos, err := cli.BtcHeaderInfoList(btcClient, 0, uint64(initBlocksQnt))
 	require.NoError(t, err)
 	require.Equal(t, len(infos), initBlocksQnt+1)
 
@@ -37,7 +37,7 @@ func TestBtcHeaders(t *testing.T) {
 	fromBlockHeight := blocksPerRetarget - 1
 	toBlockHeight := totalBlks - 2
 
-	infos, err = cli.BtcHeaderInfo(btcClient, uint64(fromBlockHeight), uint64(toBlockHeight))
+	infos, err = cli.BtcHeaderInfoList(btcClient, uint64(fromBlockHeight), uint64(toBlockHeight))
 	require.NoError(t, err)
 	require.Equal(t, len(infos), int(toBlockHeight-fromBlockHeight)+1)
 
@@ -46,7 +46,7 @@ func TestBtcHeaders(t *testing.T) {
 	require.EqualError(t, genState.Validate(), "genesis block must be a difficulty adjustment block")
 
 	// from retarget block
-	infos, err = cli.BtcHeaderInfo(btcClient, uint64(blocksPerRetarget), uint64(totalBlks))
+	infos, err = cli.BtcHeaderInfoList(btcClient, uint64(blocksPerRetarget), uint64(totalBlks))
 	require.NoError(t, err)
 	require.Equal(t, len(infos), int(totalBlks-blocksPerRetarget)+1)
 

@@ -20,13 +20,14 @@ import (
 )
 
 const (
-	outputFileFlag = "outputfile-path"
+	outputFileFlag        = "output"
+	defaultOutputFileName = "output-btc-headers.json"
 )
 
 var BtcHeaderCommand = cli.Command{
 	Name:        "btc-headers",
-	Usage:       "btc-headers 10 15 --outputfile-path ~/myoutput/path/btc-headers.json",
-	Description: `Get BTC headers "from" and "to" a specific block height.`,
+	Usage:       fmt.Sprintf("btc-headers [from] [to] [--%s=path/to/btc-headers.json]", outputFileFlag),
+	Description: "Output a range of BTC headers into a JSON file.",
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  homeFlag,
@@ -36,7 +37,7 @@ var BtcHeaderCommand = cli.Command{
 		cli.StringFlag{
 			Name:  outputFileFlag,
 			Usage: "The path to the output file",
-			Value: filepath.Join(config.DefaultHomeDir, "output-btc-headers.json"),
+			Value: filepath.Join(config.DefaultHomeDir, defaultOutputFileName),
 		},
 	},
 	Action: btcHeaders,
@@ -45,7 +46,7 @@ var BtcHeaderCommand = cli.Command{
 func btcHeaders(ctx *cli.Context) error {
 	args := ctx.Args()
 	if len(args) != 2 {
-		return fmt.Errorf("not enough params, please specify 'from' and 'to' block")
+		return fmt.Errorf("not enough params, please specify [from] and [to]")
 	}
 
 	fromStr, toStr := args[0], args[1]
@@ -60,7 +61,7 @@ func btcHeaders(ctx *cli.Context) error {
 	}
 
 	if fromBlock > toBlock {
-		return fmt.Errorf("the from %d block should be less than to block %d", fromBlock, toBlock)
+		return fmt.Errorf("the [from] %d should not be greater than the [to] %d", fromBlock, toBlock)
 	}
 
 	homePath, err := filepath.Abs(ctx.String(homeFlag))
@@ -87,9 +88,9 @@ func btcHeaders(ctx *cli.Context) error {
 		return fmt.Errorf("failed to initialize the BTC client: %w", err)
 	}
 
-	btcHeaders, err := BtcHeaderInfo(btcClient, fromBlock, toBlock)
+	btcHeaders, err := BtcHeaderInfoList(btcClient, fromBlock, toBlock)
 	if err != nil {
-		return fmt.Errorf("failed to get BTC Header blocks: %w", err)
+		return fmt.Errorf("failed to get BTC headers: %w", err)
 	}
 
 	genState := bbnbtclightclienttypes.GenesisState{
@@ -103,7 +104,7 @@ func btcHeaders(ctx *cli.Context) error {
 
 	outputFilePath := ctx.String(outputFileFlag)
 	if err := os.WriteFile(outputFilePath, bz, 0644); err != nil {
-		return fmt.Errorf("failed to write to output %s file %s: %w", bz, outputFilePath, err)
+		return fmt.Errorf("failed to write to output file %s: %w", outputFilePath, err)
 	}
 
 	logger.Info(
@@ -115,8 +116,8 @@ func btcHeaders(ctx *cli.Context) error {
 	return nil
 }
 
-// BtcHeaderInfo queries the btc client for (fromBlk ~ toBlk) BTC blocks, converting to BTCHeaderInfo.
-func BtcHeaderInfo(btcClient *btcclient.BTCClient, fromBlk, toBlk uint64) ([]*bbnbtclightclienttypes.BTCHeaderInfo, error) {
+// BtcHeaderInfoList queries the btc client for (fromBlk ~ toBlk) BTC blocks, converting to BTCHeaderInfo.
+func BtcHeaderInfoList(btcClient *btcclient.BTCClient, fromBlk, toBlk uint64) ([]*bbnbtclightclienttypes.BTCHeaderInfo, error) {
 	btcHeaders := make([]*bbnbtclightclienttypes.BTCHeaderInfo, 0, toBlk-fromBlk)
 	var currenWork = sdkmath.ZeroUint()
 
