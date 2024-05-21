@@ -39,7 +39,7 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 	lastActivationHeight := int32(0)
 	lastCovKeys := make([]*btcec.PublicKey, numCovenants)
 	// confirmation depth is at least 2
-	confirmationDepth := uint16(r.Intn(10) + 2)
+	confirmationDepth := uint16(r.Intn(100) + 2)
 	copy(lastCovKeys, covPks)
 	for version := uint16(0); version <= numVersions; version++ {
 		// These parameters can freely change between versions

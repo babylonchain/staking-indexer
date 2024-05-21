@@ -136,26 +136,27 @@ func (si *StakingIndexer) blocksEventLoop() {
 
 	for {
 		select {
-		case block := <-si.btcScanner.ConfirmedBlocksChan():
-			b := block
-			si.logger.Info("received confirmed block",
-				zap.Int32("height", block.Height))
+		case update := <-si.btcScanner.ChainUpdateInfoChan():
+			confirmedBlocks := update.ConfirmedBlocks
+			for _, block := range confirmedBlocks {
+				si.logger.Info("received confirmed block",
+					zap.Int32("height", block.Height))
 
-			if err := si.HandleConfirmedBlock(b); err != nil {
-				// this indicates systematic failure
-				si.logger.Fatal("failed to handle block",
-					zap.Int32("height", block.Height),
-					zap.Error(err))
+				if err := si.HandleConfirmedBlock(block); err != nil {
+					// this indicates systematic failure
+					si.logger.Fatal("failed to handle block",
+						zap.Int32("height", block.Height),
+						zap.Error(err))
+				}
 			}
 
-		case block := <-si.btcScanner.TipUnconfirmedBlocksChan():
-			b := block
+			tipUnconfirmedBlock := update.TipUnconfirmedBlock
 			si.logger.Info("received tip unconfirmed block",
-				zap.Int32("height", block.Height))
+				zap.Int32("height", tipUnconfirmedBlock.Height))
 
-			if err := si.processUnconfirmedInfo(b); err != nil {
-				si.logger.Error("failed to process unconfirmed tip block",
-					zap.Int32("height", b.Height),
+			if err := si.processUnconfirmedInfo(tipUnconfirmedBlock); err != nil {
+				si.logger.Error("failed to process tip unconfirmed block",
+					zap.Int32("height", tipUnconfirmedBlock.Height),
 					zap.Error(err))
 			}
 

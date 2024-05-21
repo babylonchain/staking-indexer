@@ -5,6 +5,8 @@ import (
 
 	notifier "github.com/lightningnetwork/lnd/chainntnfs"
 	"go.uber.org/zap"
+
+	"github.com/babylonchain/staking-indexer/types"
 )
 
 // blockEventLoop handles new blocks from the BTC client unpon new block event
@@ -120,11 +122,31 @@ func (bs *BtcPoller) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
 	// try to extract confirmed blocks
 	confirmedBlocks := bs.unconfirmedBlockCache.TrimConfirmedBlocks(int(params.ConfirmationDepth) - 1)
 
-	// send confirmed blocks to the consumer
-	bs.sendConfirmedBlocksToChan(confirmedBlocks)
-
-	// send tip unconfirmed block to the consumer
-	bs.sendTipUnconfirmedBlockToChan()
+	bs.commitChainUpdate(confirmedBlocks)
 
 	return nil
+}
+
+func (bs *BtcPoller) commitChainUpdate(confirmedBlocks []*types.IndexedBlock) {
+	if len(confirmedBlocks) != 0 {
+		if bs.confirmedTipBlock != nil {
+			confirmedTipHash := bs.confirmedTipBlock.BlockHash()
+			if !confirmedTipHash.IsEqual(&confirmedBlocks[0].Header.PrevBlock) {
+				// this indicates either programmatic error or the confirmation
+				// depth is not large enough to cover re-orgs
+				panic(fmt.Errorf("invalid canonical chain"))
+			}
+		}
+		bs.confirmedTipBlock = confirmedBlocks[len(confirmedBlocks)-1]
+	}
+
+	chainUpdateInfo := &ChainUpdateInfo{
+		ConfirmedBlocks:     confirmedBlocks,
+		TipUnconfirmedBlock: bs.unconfirmedBlockCache.Tip(),
+	}
+
+	select {
+	case bs.chainUpdateInfoChan <- chainUpdateInfo:
+	case <-bs.quit:
+	}
 }

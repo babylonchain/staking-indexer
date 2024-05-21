@@ -12,16 +12,14 @@ import (
 	"github.com/babylonchain/staking-indexer/types"
 )
 
+var _ BtcScanner = (*BtcPoller)(nil)
+
 type BtcScanner interface {
 	Start(startHeight uint64) error
 
-	// ConfirmedBlocksChan receives every confirmed block will be
-	// sent to this channel
-	ConfirmedBlocksChan() <-chan *types.IndexedBlock
-
-	// TipUnconfirmedBlocksChan receives the tip unconfirmed block
-	// in the cache after bootstrapping or new block is received
-	TipUnconfirmedBlocksChan() <-chan *types.IndexedBlock
+	// ChainUpdateInfoChan receives the chain update info
+	// after bootstrapping or when new block is received
+	ChainUpdateInfoChan() <-chan *ChainUpdateInfo
 
 	LastConfirmedHeight() uint64
 
@@ -32,6 +30,11 @@ type BtcScanner interface {
 	IsSynced() bool
 
 	Stop() error
+}
+
+type ChainUpdateInfo struct {
+	ConfirmedBlocks     []*types.IndexedBlock
+	TipUnconfirmedBlock *types.IndexedBlock
 }
 
 type BtcPoller struct {
@@ -49,10 +52,8 @@ type BtcPoller struct {
 	// cache of a sequence of unconfirmed blocks
 	unconfirmedBlockCache *BTCCache
 
-	// receives confirmed blocks
-	confirmedBlocksChan chan *types.IndexedBlock
-	// receives the tip block in the unconfirmed cache
-	tipUnconfirmedBlocksChan chan *types.IndexedBlock
+	// receives chain update info
+	chainUpdateInfoChan chan *ChainUpdateInfo
 
 	wg        sync.WaitGroup
 	isStarted *atomic.Bool
@@ -72,16 +73,15 @@ func NewBTCScanner(
 	}
 
 	return &BtcPoller{
-		logger:                   logger.With(zap.String("module", "btcscanner")),
-		btcClient:                btcClient,
-		btcNotifier:              btcNotifier,
-		paramsVersions:           paramsVersions,
-		confirmedBlocksChan:      make(chan *types.IndexedBlock),
-		tipUnconfirmedBlocksChan: make(chan *types.IndexedBlock),
-		unconfirmedBlockCache:    unconfirmedBlockCache,
-		isSynced:                 atomic.NewBool(false),
-		isStarted:                atomic.NewBool(false),
-		quit:                     make(chan struct{}),
+		logger:                logger.With(zap.String("module", "btcscanner")),
+		btcClient:             btcClient,
+		btcNotifier:           btcNotifier,
+		paramsVersions:        paramsVersions,
+		chainUpdateInfoChan:   make(chan *ChainUpdateInfo),
+		unconfirmedBlockCache: unconfirmedBlockCache,
+		isSynced:              atomic.NewBool(false),
+		isStarted:             atomic.NewBool(false),
+		quit:                  make(chan struct{}),
 	}, nil
 }
 
@@ -182,50 +182,12 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 		confirmedBlocks = append(confirmedBlocks, tempConfirmedBlocks...)
 	}
 
-	// send confirmed blocks to the consumer
-	bs.sendConfirmedBlocksToChan(confirmedBlocks)
-
-	// send tip unconfirmed block to the consumer
-	bs.sendTipUnconfirmedBlockToChan()
-
-	tipConfirmedHeight := int32(0)
-	if bs.confirmedTipBlock != nil {
-		tipConfirmedHeight = bs.confirmedTipBlock.Height
-	}
+	bs.commitChainUpdate(confirmedBlocks)
 
 	bs.logger.Info("bootstrapping is finished",
-		zap.Int32("tip_confirmed_height", tipConfirmedHeight),
 		zap.Uint64("tip_unconfirmed_height", tipHeight))
 
 	return nil
-}
-
-func (bs *BtcPoller) sendConfirmedBlocksToChan(blocks []*types.IndexedBlock) {
-	for i, b := range blocks {
-		if bs.confirmedTipBlock != nil {
-			confirmedTipHash := bs.confirmedTipBlock.BlockHash()
-			if !confirmedTipHash.IsEqual(&b.Header.PrevBlock) {
-				// this indicates either programmatic error or the confirmation
-				// depth is not large enough to cover re-orgs
-				panic(fmt.Errorf("invalid canonical chain"))
-			}
-		}
-		bs.confirmedTipBlock = blocks[i]
-		select {
-		case bs.confirmedBlocksChan <- blocks[i]:
-		case <-bs.quit:
-		}
-	}
-}
-
-func (bs *BtcPoller) sendTipUnconfirmedBlockToChan() {
-	tipUnconfirmedBlock := bs.unconfirmedBlockCache.Tip()
-	if tipUnconfirmedBlock != nil {
-		select {
-		case bs.tipUnconfirmedBlocksChan <- tipUnconfirmedBlock:
-		case <-bs.quit:
-		}
-	}
 }
 
 func (bs *BtcPoller) GetUnconfirmedBlocks() ([]*types.IndexedBlock, error) {
@@ -243,12 +205,8 @@ func (bs *BtcPoller) GetUnconfirmedBlocks() ([]*types.IndexedBlock, error) {
 	return lastBlocks, nil
 }
 
-func (bs *BtcPoller) ConfirmedBlocksChan() <-chan *types.IndexedBlock {
-	return bs.confirmedBlocksChan
-}
-
-func (bs *BtcPoller) TipUnconfirmedBlocksChan() <-chan *types.IndexedBlock {
-	return bs.tipUnconfirmedBlocksChan
+func (bs *BtcPoller) ChainUpdateInfoChan() <-chan *ChainUpdateInfo {
+	return bs.chainUpdateInfoChan
 }
 
 func (bs *BtcPoller) LastConfirmedHeight() uint64 {

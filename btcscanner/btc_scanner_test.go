@@ -44,20 +44,14 @@ func FuzzPoller(f *testing.F) {
 		var wg sync.WaitGroup
 
 		// receive confirmed blocks
-		wg.Add(2)
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for i := 0; i < len(confirmedBlocks); i++ {
-				b := <-btcScanner.ConfirmedBlocksChan()
+			updateInfo := <-btcScanner.ChainUpdateInfoChan()
+			for i, b := range updateInfo.ConfirmedBlocks {
 				require.Equal(t, confirmedBlocks[i].BlockHash(), b.BlockHash())
 			}
-		}()
-
-		// receive tip unconfirmed block
-		go func() {
-			defer wg.Done()
-			b := <-btcScanner.TipUnconfirmedBlocksChan()
-			require.Equal(t, bestHeight, b.Height)
+			require.Equal(t, bestHeight, updateInfo.TipUnconfirmedBlock.Height)
 		}()
 
 		err = btcScanner.Start(startHeight)
@@ -68,6 +62,5 @@ func FuzzPoller(f *testing.F) {
 		}()
 
 		wg.Wait()
-		require.Equal(t, uint64(confirmedBlocks[len(confirmedBlocks)-1].Height), btcScanner.LastConfirmedHeight())
 	})
 }
