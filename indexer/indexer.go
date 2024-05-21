@@ -151,6 +151,11 @@ func (si *StakingIndexer) blocksEventLoop() {
 			}
 
 			tipUnconfirmedBlock := update.TipUnconfirmedBlock
+			if tipUnconfirmedBlock == nil {
+				si.logger.Debug("received empty tip unconfirmed block")
+				continue
+			}
+
 			si.logger.Info("received tip unconfirmed block",
 				zap.Int32("height", tipUnconfirmedBlock.Height))
 
