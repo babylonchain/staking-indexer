@@ -1,6 +1,7 @@
 package btcscanner_test
 
 import (
+	"math"
 	"math/rand"
 	"testing"
 
@@ -47,7 +48,8 @@ func FuzzBtcCache(f *testing.F) {
 			invalidNumBlocks = true
 		}
 
-		ibs := datagen.GetRandomIndexedBlocks(r, numBlocks)
+		startHeight := r.Int31n(math.MaxInt32 - int32(numBlocks))
+		ibs := datagen.GetRandomIndexedBlocks(r, uint64(startHeight), numBlocks)
 
 		// Add all indexed blocks to the cache
 		err = cache.Init(ibs)

@@ -158,6 +158,7 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 		return fmt.Errorf("cannot get the global parameters for height %d", tipHeight)
 	}
 
+	var confirmedBlocks []*types.IndexedBlock
 	for i := startHeight; i <= tipHeight; i++ {
 		ib, err := bs.btcClient.GetBlockByHeight(i)
 		if err != nil {
@@ -176,10 +177,10 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 		if err := bs.unconfirmedBlockCache.Add(ib); err != nil {
 			return fmt.Errorf("failed to add the block %d to cache: %w", ib.Height, err)
 		}
-	}
 
-	// try to extract confirmed blocks
-	confirmedBlocks := bs.unconfirmedBlockCache.TrimConfirmedBlocks(int(params.ConfirmationDepth) - 1)
+		tempConfirmedBlocks := bs.unconfirmedBlockCache.TrimConfirmedBlocks(int(params.ConfirmationDepth) - 1)
+		confirmedBlocks = append(confirmedBlocks, tempConfirmedBlocks...)
+	}
 
 	// send confirmed blocks to the consumer
 	bs.sendConfirmedBlocksToChan(confirmedBlocks)
@@ -210,14 +211,20 @@ func (bs *BtcPoller) sendConfirmedBlocksToChan(blocks []*types.IndexedBlock) {
 			}
 		}
 		bs.confirmedTipBlock = blocks[i]
-		bs.confirmedBlocksChan <- blocks[i]
+		select {
+		case bs.confirmedBlocksChan <- blocks[i]:
+		case <-bs.quit:
+		}
 	}
 }
 
 func (bs *BtcPoller) sendTipUnconfirmedBlockToChan() {
 	tipUnconfirmedBlock := bs.unconfirmedBlockCache.Tip()
 	if tipUnconfirmedBlock != nil {
-		bs.tipUnconfirmedBlocksChan <- tipUnconfirmedBlock
+		select {
+		case bs.tipUnconfirmedBlocksChan <- tipUnconfirmedBlock:
+		case <-bs.quit:
+		}
 	}
 }
 
@@ -261,8 +268,6 @@ func (bs *BtcPoller) Stop() error {
 	}
 
 	close(bs.quit)
-	close(bs.tipUnconfirmedBlocksChan)
-	close(bs.confirmedBlocksChan)
 	bs.wg.Wait()
 
 	bs.logger.Info("the BTC scanner is successfully stopped")

@@ -13,12 +13,11 @@ import (
 func (bs *BtcPoller) blockEventLoop() {
 	defer bs.wg.Done()
 
+	// register the notifier with the best known tip
 	bestKnownBlock := bs.unconfirmedBlockCache.Tip()
 	bestKnownBlockEpoch := new(notifier.BlockEpoch)
-
 	if bestKnownBlock != nil {
 		bestKnownBlockHash := bestKnownBlock.BlockHash()
-
 		bestKnownBlockEpoch = &notifier.BlockEpoch{
 			Hash:        &bestKnownBlockHash,
 			Height:      bestKnownBlock.Height,
@@ -102,7 +101,6 @@ func (bs *BtcPoller) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
 	// get the block content by height
 	ib, err := bs.btcClient.GetBlockByHeight(uint64(blockEpoch.Height))
 	if err != nil {
-		// TODO add retry
 		return fmt.Errorf("failed to get block at height %d: %w", blockEpoch.Height, err)
 	}
 	if ib.BlockHash().String() != blockEpoch.Hash.String() {
