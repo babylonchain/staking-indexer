@@ -17,11 +17,11 @@ type BtcScanner interface {
 
 	// ConfirmedBlocksChan receives every confirmed block will be
 	// sent to this channel
-	ConfirmedBlocksChan() chan *types.IndexedBlock
+	ConfirmedBlocksChan() <-chan *types.IndexedBlock
 
 	// TipUnconfirmedBlocksChan receives the tip unconfirmed block
 	// in the cache after bootstrapping or new block is received
-	TipUnconfirmedBlocksChan() chan *types.IndexedBlock
+	TipUnconfirmedBlocksChan() <-chan *types.IndexedBlock
 
 	LastConfirmedHeight() uint64
 
@@ -139,7 +139,7 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 	}
 	defer bs.isSynced.Store(true)
 
-	bs.logger.Info("the bootstrapping starts", zap.Uint64("start height", startHeight))
+	bs.logger.Info("the bootstrapping starts", zap.Uint64("start_height", startHeight))
 
 	// clear all the blocks in the cache to avoid forks
 	bs.unconfirmedBlockCache.RemoveAll()
@@ -243,11 +243,11 @@ func (bs *BtcPoller) GetUnconfirmedBlocks() ([]*types.IndexedBlock, error) {
 	return lastBlocks, nil
 }
 
-func (bs *BtcPoller) ConfirmedBlocksChan() chan *types.IndexedBlock {
+func (bs *BtcPoller) ConfirmedBlocksChan() <-chan *types.IndexedBlock {
 	return bs.confirmedBlocksChan
 }
 
-func (bs *BtcPoller) TipUnconfirmedBlocksChan() chan *types.IndexedBlock {
+func (bs *BtcPoller) TipUnconfirmedBlocksChan() <-chan *types.IndexedBlock {
 	return bs.tipUnconfirmedBlocksChan
 }
 

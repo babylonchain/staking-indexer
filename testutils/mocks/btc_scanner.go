@@ -35,10 +35,10 @@ func (m *MockBtcScanner) EXPECT() *MockBtcScannerMockRecorder {
 }
 
 // ConfirmedBlocksChan mocks base method.
-func (m *MockBtcScanner) ConfirmedBlocksChan() chan *types.IndexedBlock {
+func (m *MockBtcScanner) ConfirmedBlocksChan() <-chan *types.IndexedBlock {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ConfirmedBlocksChan")
-	ret0, _ := ret[0].(chan *types.IndexedBlock)
+	ret0, _ := ret[0].(<-chan *types.IndexedBlock)
 	return ret0
 }
 
@@ -120,10 +120,10 @@ func (mr *MockBtcScannerMockRecorder) Stop() *gomock.Call {
 }
 
 // TipUnconfirmedBlocksChan mocks base method.
-func (m *MockBtcScanner) TipUnconfirmedBlocksChan() chan *types.IndexedBlock {
+func (m *MockBtcScanner) TipUnconfirmedBlocksChan() <-chan *types.IndexedBlock {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "TipUnconfirmedBlocksChan")
-	ret0, _ := ret[0].(chan *types.IndexedBlock)
+	ret0, _ := ret[0].(<-chan *types.IndexedBlock)
 	return ret0
 }
 
