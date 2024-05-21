@@ -21,6 +21,7 @@ import (
 	"github.com/lightningnetwork/lnd/kvdb"
 	"github.com/lightningnetwork/lnd/signal"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
 	"github.com/babylonchain/staking-indexer/btcclient"
 	"github.com/babylonchain/staking-indexer/btcscanner"
@@ -77,6 +78,24 @@ func StartManagerWithNBlocks(t *testing.T, n int) *TestManager {
 	require.NoError(t, err)
 
 	return StartWithBitcoinHandler(t, h, minerAddressDecoded, dirPath, 1)
+}
+
+func StartBtcClientAndBtcHandler(t *testing.T, generateNBlocks int) (*BitcoindTestHandler, *btcclient.BTCClient) {
+	btcd := NewBitcoindHandler(t)
+	btcd.Start()
+	_ = btcd.CreateWallet(WalletName, Passphrase)
+
+	resp := btcd.GenerateBlocks(generateNBlocks)
+	require.Equal(t, len(resp.Blocks), generateNBlocks)
+
+	cfg := DefaultStakingIndexerConfig(t.TempDir())
+	btcClient, err := btcclient.NewBTCClient(
+		cfg.BTCConfig,
+		zap.NewNop(),
+	)
+	require.NoError(t, err)
+
+	return btcd, btcClient
 }
 
 func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress btcutil.Address, dirPath string, startHeight uint64) *TestManager {

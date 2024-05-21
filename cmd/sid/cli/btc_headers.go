@@ -10,6 +10,7 @@ import (
 	babylontypes "github.com/babylonchain/babylon/types"
 	bbnbtclightclienttypes "github.com/babylonchain/babylon/x/btclightclient/types"
 	"github.com/babylonchain/staking-indexer/btcclient"
+	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/log"
 	"github.com/babylonchain/staking-indexer/utils"
@@ -117,7 +118,7 @@ func btcHeaders(ctx *cli.Context) error {
 }
 
 // BtcHeaderInfoList queries the btc client for (fromBlk ~ toBlk) BTC blocks, converting to BTCHeaderInfo.
-func BtcHeaderInfoList(btcClient *btcclient.BTCClient, fromBlk, toBlk uint64) ([]*bbnbtclightclienttypes.BTCHeaderInfo, error) {
+func BtcHeaderInfoList(btcClient btcscanner.Client, fromBlk, toBlk uint64) ([]*bbnbtclightclienttypes.BTCHeaderInfo, error) {
 	btcHeaders := make([]*bbnbtclightclienttypes.BTCHeaderInfo, 0, toBlk-fromBlk+1)
 	var currenWork = sdkmath.ZeroUint()
 

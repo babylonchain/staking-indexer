@@ -4,71 +4,39 @@ import (
 	"math/rand"
 	"testing"
 
-	bbnbtclightclienttypes "github.com/babylonchain/babylon/x/btclightclient/types"
-	"github.com/babylonchain/staking-indexer/btcclient"
+	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
+
 	"github.com/babylonchain/staking-indexer/cmd/sid/cli"
-	e2etest "github.com/babylonchain/staking-indexer/itest"
+	"github.com/babylonchain/staking-indexer/testutils/datagen"
+	"github.com/babylonchain/staking-indexer/testutils/mocks"
+
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
-func TestBtcHeaders(t *testing.T) {
-	r := rand.New(rand.NewSource(10))
-	blocksPerRetarget := 2016
-	genState := bbnbtclightclienttypes.DefaultGenesis()
+func FuzzBtcHeaders(f *testing.F) {
+	bbndatagen.AddRandomSeedsToFuzzer(f, 10)
 
-	initBlocksQnt := r.Intn(15) + blocksPerRetarget
-	btcd, btcClient := StartBtcClientAndBtcHandler(t, initBlocksQnt)
+	f.Fuzz(func(t *testing.T, seed int64) {
+		r := rand.New(rand.NewSource(seed))
+		// Generate a random number of blocks
+		numBlocks := bbndatagen.RandomInt(r, 50) + 30
 
-	// from zero height
-	infos, err := cli.BtcHeaderInfoList(btcClient, 0, uint64(initBlocksQnt))
-	require.NoError(t, err)
-	require.Equal(t, len(infos), initBlocksQnt+1)
+		chainIndexedBlocks := datagen.GetRandomIndexedBlocks(r, numBlocks)
+		startHeight := uint64(chainIndexedBlocks[0].Height)
+		endHeight := uint64(chainIndexedBlocks[len(chainIndexedBlocks)-1].Height)
 
-	// should be valid on genesis, start from zero height.
-	genState.BtcHeaders = infos
-	require.NoError(t, genState.Validate())
+		ctl := gomock.NewController(t)
+		mockBtcClient := mocks.NewMockClient(ctl)
 
-	generatedBlocksQnt := r.Intn(15) + 2
-	btcd.GenerateBlocks(generatedBlocksQnt)
-	totalBlks := initBlocksQnt + generatedBlocksQnt
+		for i := 0; i < int(numBlocks); i++ {
+			idxBlock := chainIndexedBlocks[i]
+			mockBtcClient.EXPECT().GetBlockByHeight(gomock.Eq(uint64(idxBlock.Height))).
+				Return(idxBlock, nil).AnyTimes()
+		}
 
-	// check from height with interval
-	fromBlockHeight := blocksPerRetarget - 1
-	toBlockHeight := totalBlks - 2
-
-	infos, err = cli.BtcHeaderInfoList(btcClient, uint64(fromBlockHeight), uint64(toBlockHeight))
-	require.NoError(t, err)
-	require.Equal(t, len(infos), int(toBlockHeight-fromBlockHeight)+1)
-
-	// try to check if it is valid on genesis, should fail is not retarget block.
-	genState.BtcHeaders = infos
-	require.EqualError(t, genState.Validate(), "genesis block must be a difficulty adjustment block")
-
-	// from retarget block
-	infos, err = cli.BtcHeaderInfoList(btcClient, uint64(blocksPerRetarget), uint64(totalBlks))
-	require.NoError(t, err)
-	require.Equal(t, len(infos), int(totalBlks-blocksPerRetarget)+1)
-
-	// check if it is valid on genesis
-	genState.BtcHeaders = infos
-	require.NoError(t, genState.Validate())
-}
-
-func StartBtcClientAndBtcHandler(t *testing.T, generateNBlocks int) (*e2etest.BitcoindTestHandler, *btcclient.BTCClient) {
-	btcd := e2etest.NewBitcoindHandler(t)
-	btcd.Start()
-	_ = btcd.CreateWallet(e2etest.WalletName, e2etest.Passphrase)
-
-	resp := btcd.GenerateBlocks(generateNBlocks)
-	require.Equal(t, len(resp.Blocks), generateNBlocks)
-
-	cfg := e2etest.DefaultStakingIndexerConfig(t.TempDir())
-	btcClient, err := btcclient.NewBTCClient(
-		cfg.BTCConfig,
-		zap.NewNop(),
-	)
-	require.NoError(t, err)
-
-	return btcd, btcClient
+		infos, err := cli.BtcHeaderInfoList(mockBtcClient, startHeight, endHeight)
+		require.NoError(t, err)
+		require.EqualValues(t, len(infos), numBlocks)
+	})
 }
