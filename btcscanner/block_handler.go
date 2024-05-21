@@ -15,19 +15,24 @@ import (
 func (bs *BtcPoller) blockEventLoop() {
 	defer bs.wg.Done()
 
+	var (
+		blockEventNotifier *notifier.BlockEpochEvent
+		err                error
+	)
 	// register the notifier with the best known tip
 	bestKnownBlock := bs.unconfirmedBlockCache.Tip()
-	bestKnownBlockEpoch := new(notifier.BlockEpoch)
 	if bestKnownBlock != nil {
 		bestKnownBlockHash := bestKnownBlock.BlockHash()
-		bestKnownBlockEpoch = &notifier.BlockEpoch{
+		bestKnownBlockEpoch := &notifier.BlockEpoch{
 			Hash:        &bestKnownBlockHash,
 			Height:      bestKnownBlock.Height,
 			BlockHeader: bestKnownBlock.Header,
 		}
+		blockEventNotifier, err = bs.btcNotifier.RegisterBlockEpochNtfn(bestKnownBlockEpoch)
+	} else {
+		blockEventNotifier, err = bs.btcNotifier.RegisterBlockEpochNtfn(nil)
 	}
 
-	blockEventNotifier, err := bs.btcNotifier.RegisterBlockEpochNtfn(bestKnownBlockEpoch)
 	defer blockEventNotifier.Cancel()
 	if err != nil {
 		panic(fmt.Errorf("failed to register BTC notifier"))
