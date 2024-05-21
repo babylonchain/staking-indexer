@@ -111,13 +111,14 @@ func (bs *BtcPoller) Start(startHeight uint64) error {
 }
 
 func (bs *BtcPoller) waitUntilActivation() error {
-	tipHeight, err := bs.btcClient.GetTipHeight()
-	if err != nil {
-		return fmt.Errorf("failed to get the current BTC tip height")
-	}
 	activationHeight := bs.paramsVersions.ParamsVersions[0].ActivationHeight
 
 	for {
+		tipHeight, err := bs.btcClient.GetTipHeight()
+		if err != nil {
+			return fmt.Errorf("failed to get the current BTC tip height")
+		}
+
 		if tipHeight >= activationHeight {
 			break
 		}
@@ -125,7 +126,7 @@ func (bs *BtcPoller) waitUntilActivation() error {
 		bs.logger.Info("waiting to reach the earliest activation height",
 			zap.Uint64("tip_height", tipHeight),
 			zap.Uint64("activation_height", activationHeight))
-		time.Sleep(1 * time.Second)
+		time.Sleep(10 * time.Second)
 	}
 
 	return nil
