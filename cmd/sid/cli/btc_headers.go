@@ -118,7 +118,7 @@ func btcHeaders(ctx *cli.Context) error {
 
 // BtcHeaderInfoList queries the btc client for (fromBlk ~ toBlk) BTC blocks, converting to BTCHeaderInfo.
 func BtcHeaderInfoList(btcClient *btcclient.BTCClient, fromBlk, toBlk uint64) ([]*bbnbtclightclienttypes.BTCHeaderInfo, error) {
-	btcHeaders := make([]*bbnbtclightclienttypes.BTCHeaderInfo, 0, toBlk-fromBlk)
+	btcHeaders := make([]*bbnbtclightclienttypes.BTCHeaderInfo, 0, toBlk-fromBlk+1)
 	var currenWork = sdkmath.ZeroUint()
 
 	for blkHeight := fromBlk; blkHeight <= toBlk; blkHeight++ {
