@@ -10,13 +10,33 @@ import (
 // blockEventLoop handles new blocks from the BTC client unpon new block event
 // Note: in case of rollback, the blockNotifier will emit information about new
 // best block for every new block after rollback
-func (bs *BtcPoller) blockEventLoop(blockNotifier *notifier.BlockEpochEvent) {
+func (bs *BtcPoller) blockEventLoop() {
 	defer bs.wg.Done()
-	defer blockNotifier.Cancel()
+
+	bestKnownBlock := bs.unconfirmedBlockCache.Tip()
+	bestKnownBlockEpoch := new(notifier.BlockEpoch)
+
+	if bestKnownBlock != nil {
+		bestKnownBlockHash := bestKnownBlock.BlockHash()
+
+		bestKnownBlockEpoch = &notifier.BlockEpoch{
+			Hash:        &bestKnownBlockHash,
+			Height:      bestKnownBlock.Height,
+			BlockHeader: bestKnownBlock.Header,
+		}
+	}
+
+	blockEventNotifier, err := bs.btcNotifier.RegisterBlockEpochNtfn(bestKnownBlockEpoch)
+	defer blockEventNotifier.Cancel()
+	if err != nil {
+		panic(fmt.Errorf("failed to register BTC notifier"))
+	}
+
+	bs.logger.Info("BTC notifier registered")
 
 	for {
 		select {
-		case blockEpoch, ok := <-blockNotifier.Epochs:
+		case blockEpoch, ok := <-blockEventNotifier.Epochs:
 			newBlock := blockEpoch
 			if !ok {
 				bs.logger.Error("Block event channel is closed")
@@ -102,24 +122,11 @@ func (bs *BtcPoller) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
 	// try to extract confirmed blocks
 	confirmedBlocks := bs.unconfirmedBlockCache.TrimConfirmedBlocks(int(params.ConfirmationDepth) - 1)
 
-	// send tip unconfirmed block to the consumer
-	bs.sendTipUnconfirmedBlockToChan()
-
-	if confirmedBlocks == nil {
-		return nil
-	}
-
-	if bs.confirmedTipBlock != nil {
-		confirmedTipHash := bs.confirmedTipBlock.BlockHash()
-		if !confirmedTipHash.IsEqual(&confirmedBlocks[0].Header.PrevBlock) {
-			// this indicates either programmatic error or the confirmation
-			// depth is not large enough to cover re-orgs
-			panic(fmt.Errorf("invalid canonical chain"))
-		}
-	}
-
 	// send confirmed blocks to the consumer
 	bs.sendConfirmedBlocksToChan(confirmedBlocks)
+
+	// send tip unconfirmed block to the consumer
+	bs.sendTipUnconfirmedBlockToChan()
 
 	return nil
 }

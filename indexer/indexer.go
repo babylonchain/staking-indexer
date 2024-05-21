@@ -97,14 +97,14 @@ func (si *StakingIndexer) Start(startHeight uint64) error {
 
 // ValidateStartHeight validates the given startHeight and returns an error
 // if the given startHeight is not in the range of
-// [base height, last processed height + 1]
+// [earliest activation height, last processed height + 1]
 // The point of this validation is to ensure the indexer
 // (1) does not handle irrelevant blocks (impossible to have staking tx)
 // (2) does not miss relevant blocks (possible to have staking tx)
 func (si *StakingIndexer) ValidateStartHeight(startHeight uint64) error {
 	baseHeight := si.paramsVersions.ParamsVersions[0].ActivationHeight
 	if startHeight < baseHeight {
-		return fmt.Errorf("the start height should not be lower than the base height %d", baseHeight)
+		return fmt.Errorf("the start height should not be lower than the earliest activation height %d", baseHeight)
 	}
 
 	lastProcessedHeight, err := si.is.GetLastProcessedHeight()
@@ -154,7 +154,9 @@ func (si *StakingIndexer) blocksEventLoop() {
 				zap.Int32("height", block.Height))
 
 			if err := si.processUnconfirmedInfo(b); err != nil {
-				si.logger.Error("failed to process unconfirmed tip block", zap.Error(err))
+				si.logger.Error("failed to process unconfirmed tip block",
+					zap.Int32("height", b.Height),
+					zap.Error(err))
 			}
 
 		case <-si.quit:

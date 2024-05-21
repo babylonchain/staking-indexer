@@ -101,16 +101,9 @@ func (bs *BtcPoller) Start(startHeight uint64) error {
 		return fmt.Errorf("failed to bootstrap with height %d: %w", startHeight, err)
 	}
 
-	blockEventNotifier, err := bs.btcNotifier.RegisterBlockEpochNtfn(nil)
-	if err != nil {
-		return fmt.Errorf("failed to register BTC notifier")
-	}
-
-	bs.logger.Info("BTC notifier registered")
-
 	// start handling new blocks
 	bs.wg.Add(1)
-	go bs.blockEventLoop(blockEventNotifier)
+	go bs.blockEventLoop()
 
 	bs.logger.Info("the BTC scanner is started")
 
@@ -140,12 +133,6 @@ func (bs *BtcPoller) waitUntilActivation() error {
 
 // Bootstrap syncs with BTC by getting the confirmed blocks and the caching the unconfirmed blocks
 func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
-	var (
-		tipConfirmedHeight uint64
-		confirmedBlock     *types.IndexedBlock
-		err                error
-	)
-
 	if bs.isSynced.Load() {
 		// the scanner is already synced
 		return nil
@@ -162,51 +149,16 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 		return fmt.Errorf("cannot get the best BTC block")
 	}
 
+	if startHeight > tipHeight {
+		return fmt.Errorf("the start height %d is higher than the current tip height %d", startHeight, tipHeight)
+	}
+
 	params, err := bs.paramsVersions.GetParamsForBTCHeight(int32(tipHeight))
 	if err != nil {
 		return fmt.Errorf("cannot get the global parameters for height %d", tipHeight)
 	}
 
-	if tipHeight < uint64(params.ConfirmationDepth) {
-		tipConfirmedHeight = 0
-	} else {
-		tipConfirmedHeight = tipHeight - uint64(params.ConfirmationDepth) + 1
-	}
-
-	// process confirmed blocks
-	for i := startHeight; i <= tipConfirmedHeight; i++ {
-		// TODO should retry here
-		ib, err := bs.btcClient.GetBlockByHeight(i)
-		if err != nil {
-			return fmt.Errorf("cannot get the block at height %d: %w", i, err)
-		}
-
-		// this is a confirmed block
-		confirmedBlock = ib
-
-		// if the scanner was bootstrapped before, the new confirmed canonical chain must connect to the previous one
-		if bs.confirmedTipBlock != nil {
-			confirmedTipHash := bs.confirmedTipBlock.BlockHash()
-			if !confirmedTipHash.IsEqual(&confirmedBlock.Header.PrevBlock) {
-				return fmt.Errorf("invalid canonical chain")
-			}
-		}
-
-		bs.sendConfirmedBlocksToChan([]*types.IndexedBlock{confirmedBlock})
-	}
-
-	if bs.confirmedTipBlock == nil && tipConfirmedHeight != 0 {
-		// TODO should retry here
-		ib, err := bs.btcClient.GetBlockByHeight(tipConfirmedHeight)
-		if err != nil {
-			return fmt.Errorf("cannot get the block at height %d: %w", tipConfirmedHeight, err)
-		}
-		bs.confirmedTipBlock = ib
-	}
-
-	// add unconfirmed blocks into the cache
-	for i := tipConfirmedHeight + 1; i <= tipHeight; i++ {
-		// TODO should retry here
+	for i := startHeight; i <= tipHeight; i++ {
 		ib, err := bs.btcClient.GetBlockByHeight(i)
 		if err != nil {
 			return fmt.Errorf("cannot get the block at height %d: %w", i, err)
@@ -226,18 +178,37 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 		}
 	}
 
+	// try to extract confirmed blocks
+	confirmedBlocks := bs.unconfirmedBlockCache.TrimConfirmedBlocks(int(params.ConfirmationDepth) - 1)
+
+	// send confirmed blocks to the consumer
+	bs.sendConfirmedBlocksToChan(confirmedBlocks)
+
 	// send tip unconfirmed block to the consumer
 	bs.sendTipUnconfirmedBlockToChan()
 
+	tipConfirmedHeight := int32(0)
+	if bs.confirmedTipBlock != nil {
+		tipConfirmedHeight = bs.confirmedTipBlock.Height
+	}
+
 	bs.logger.Info("bootstrapping is finished",
-		zap.Uint64("tip_confirmed_height", tipConfirmedHeight),
+		zap.Int32("tip_confirmed_height", tipConfirmedHeight),
 		zap.Uint64("tip_unconfirmed_height", tipHeight))
 
 	return nil
 }
 
 func (bs *BtcPoller) sendConfirmedBlocksToChan(blocks []*types.IndexedBlock) {
-	for i := 0; i < len(blocks); i++ {
+	for i, b := range blocks {
+		if bs.confirmedTipBlock != nil {
+			confirmedTipHash := bs.confirmedTipBlock.BlockHash()
+			if !confirmedTipHash.IsEqual(&b.Header.PrevBlock) {
+				// this indicates either programmatic error or the confirmation
+				// depth is not large enough to cover re-orgs
+				panic(fmt.Errorf("invalid canonical chain"))
+			}
+		}
 		bs.confirmedTipBlock = blocks[i]
 		bs.confirmedBlocksChan <- blocks[i]
 	}
@@ -290,6 +261,8 @@ func (bs *BtcPoller) Stop() error {
 	}
 
 	close(bs.quit)
+	close(bs.tipUnconfirmedBlocksChan)
+	close(bs.confirmedBlocksChan)
 	bs.wg.Wait()
 
 	bs.logger.Info("the BTC scanner is successfully stopped")
