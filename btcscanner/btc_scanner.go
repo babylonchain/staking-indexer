@@ -14,10 +14,23 @@ import (
 
 type BtcScanner interface {
 	Start(startHeight uint64) error
+
+	// ConfirmedBlocksChan receives every confirmed block will be
+	// sent to this channel
 	ConfirmedBlocksChan() chan *types.IndexedBlock
+
+	// TipUnconfirmedBlocksChan receives the tip unconfirmed block
+	// in the cache after bootstrapping or new block is received
+	TipUnconfirmedBlocksChan() chan *types.IndexedBlock
+
 	LastConfirmedHeight() uint64
+
+	// GetUnconfirmedBlocks returns all the unconfirmed blocks in the
+	// cache
 	GetUnconfirmedBlocks() ([]*types.IndexedBlock, error)
+
 	IsSynced() bool
+
 	Stop() error
 }
 
@@ -36,8 +49,10 @@ type BtcPoller struct {
 	// cache of a sequence of unconfirmed blocks
 	unconfirmedBlockCache *BTCCache
 
-	// communicate with the consumer
+	// receives confirmed blocks
 	confirmedBlocksChan chan *types.IndexedBlock
+	// receives the tip block in the unconfirmed cache
+	tipUnconfirmedBlocksChan chan *types.IndexedBlock
 
 	wg        sync.WaitGroup
 	isStarted *atomic.Bool
@@ -57,15 +72,16 @@ func NewBTCScanner(
 	}
 
 	return &BtcPoller{
-		logger:                logger.With(zap.String("module", "btcscanner")),
-		btcClient:             btcClient,
-		btcNotifier:           btcNotifier,
-		paramsVersions:        paramsVersions,
-		confirmedBlocksChan:   make(chan *types.IndexedBlock),
-		unconfirmedBlockCache: unconfirmedBlockCache,
-		isSynced:              atomic.NewBool(false),
-		isStarted:             atomic.NewBool(false),
-		quit:                  make(chan struct{}),
+		logger:                   logger.With(zap.String("module", "btcscanner")),
+		btcClient:                btcClient,
+		btcNotifier:              btcNotifier,
+		paramsVersions:           paramsVersions,
+		confirmedBlocksChan:      make(chan *types.IndexedBlock),
+		tipUnconfirmedBlocksChan: make(chan *types.IndexedBlock),
+		unconfirmedBlockCache:    unconfirmedBlockCache,
+		isSynced:                 atomic.NewBool(false),
+		isStarted:                atomic.NewBool(false),
+		quit:                     make(chan struct{}),
 	}, nil
 }
 
@@ -210,6 +226,9 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 		}
 	}
 
+	// send tip unconfirmed block to the consumer
+	bs.sendTipUnconfirmedBlockToChan()
+
 	bs.logger.Info("bootstrapping is finished",
 		zap.Uint64("tip_confirmed_height", tipConfirmedHeight),
 		zap.Uint64("tip_unconfirmed_height", tipHeight))
@@ -221,6 +240,13 @@ func (bs *BtcPoller) sendConfirmedBlocksToChan(blocks []*types.IndexedBlock) {
 	for i := 0; i < len(blocks); i++ {
 		bs.confirmedTipBlock = blocks[i]
 		bs.confirmedBlocksChan <- blocks[i]
+	}
+}
+
+func (bs *BtcPoller) sendTipUnconfirmedBlockToChan() {
+	tipUnconfirmedBlock := bs.unconfirmedBlockCache.Tip()
+	if tipUnconfirmedBlock != nil {
+		bs.tipUnconfirmedBlocksChan <- tipUnconfirmedBlock
 	}
 }
 
@@ -241,6 +267,10 @@ func (bs *BtcPoller) GetUnconfirmedBlocks() ([]*types.IndexedBlock, error) {
 
 func (bs *BtcPoller) ConfirmedBlocksChan() chan *types.IndexedBlock {
 	return bs.confirmedBlocksChan
+}
+
+func (bs *BtcPoller) TipUnconfirmedBlocksChan() chan *types.IndexedBlock {
+	return bs.tipUnconfirmedBlocksChan
 }
 
 func (bs *BtcPoller) LastConfirmedHeight() uint64 {

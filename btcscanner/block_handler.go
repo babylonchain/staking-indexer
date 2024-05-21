@@ -101,6 +101,10 @@ func (bs *BtcPoller) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
 
 	// try to extract confirmed blocks
 	confirmedBlocks := bs.unconfirmedBlockCache.TrimConfirmedBlocks(int(params.ConfirmationDepth) - 1)
+
+	// send tip unconfirmed block to the consumer
+	bs.sendTipUnconfirmedBlockToChan()
+
 	if confirmedBlocks == nil {
 		return nil
 	}

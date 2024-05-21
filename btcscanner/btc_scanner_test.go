@@ -17,7 +17,7 @@ import (
 	"github.com/babylonchain/staking-indexer/testutils/mocks"
 )
 
-func FuzzPollConfirmedBlocks(f *testing.F) {
+func FuzzPoller(f *testing.F) {
 	bbndatagen.AddRandomSeedsToFuzzer(f, 10)
 
 	f.Fuzz(func(t *testing.T, seed int64) {
@@ -53,6 +53,8 @@ func FuzzPollConfirmedBlocks(f *testing.F) {
 		require.NoError(t, err)
 
 		var wg sync.WaitGroup
+
+		// receive confirmed blocks
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -61,6 +63,15 @@ func FuzzPollConfirmedBlocks(f *testing.F) {
 				require.Equal(t, confirmedBlocks[i].BlockHash(), b.BlockHash())
 			}
 		}()
+
+		// receive tip unconfirmed block
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			b := <-btcScanner.TipUnconfirmedBlocksChan()
+			require.Equal(t, bestHeight, b.Height)
+		}()
+
 		err = btcScanner.Start(uint64(startHeight))
 		require.NoError(t, err)
 		defer func() {

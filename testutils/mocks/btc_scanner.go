@@ -118,3 +118,17 @@ func (mr *MockBtcScannerMockRecorder) Stop() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockBtcScanner)(nil).Stop))
 }
+
+// TipUnconfirmedBlocksChan mocks base method.
+func (m *MockBtcScanner) TipUnconfirmedBlocksChan() chan *types.IndexedBlock {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TipUnconfirmedBlocksChan")
+	ret0, _ := ret[0].(chan *types.IndexedBlock)
+	return ret0
+}
+
+// TipUnconfirmedBlocksChan indicates an expected call of TipUnconfirmedBlocksChan.
+func (mr *MockBtcScannerMockRecorder) TipUnconfirmedBlocksChan() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TipUnconfirmedBlocksChan", reflect.TypeOf((*MockBtcScanner)(nil).TipUnconfirmedBlocksChan))
+}

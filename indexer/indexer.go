@@ -140,14 +140,23 @@ func (si *StakingIndexer) blocksEventLoop() {
 			b := block
 			si.logger.Info("received confirmed block",
 				zap.Int32("height", block.Height))
+
 			if err := si.HandleConfirmedBlock(b); err != nil {
 				// this indicates systematic failure
-				si.logger.Fatal("failed to handle block", zap.Error(err))
+				si.logger.Fatal("failed to handle block",
+					zap.Int32("height", block.Height),
+					zap.Error(err))
 			}
 
-			if err := si.processUnconfirmedInfo(uint64(b.Height)); err != nil {
-				si.logger.Error("failed to process unconfirmed info", zap.Error(err))
+		case block := <-si.btcScanner.TipUnconfirmedBlocksChan():
+			b := block
+			si.logger.Info("received tip unconfirmed block",
+				zap.Int32("height", block.Height))
+
+			if err := si.processUnconfirmedInfo(b); err != nil {
+				si.logger.Error("failed to process unconfirmed tip block", zap.Error(err))
 			}
+
 		case <-si.quit:
 			si.logger.Info("closing the confirmed blocks loop")
 			return
@@ -165,23 +174,25 @@ func (si *StakingIndexer) blocksEventLoop() {
 // 3. get the current confirmed tvl
 // 4. push unconfirmed info event to the queue
 // 5. record metrics
-func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) error {
+func (si *StakingIndexer) processUnconfirmedInfo(unconfirmedTipBlock *types.IndexedBlock) error {
 	if !si.btcScanner.IsSynced() {
 		si.logger.Debug("the btc scanner is still catching up, skip processing unconfirmed info")
 		return nil
 	}
 
-	if si.btcScanner.LastConfirmedHeight() != lastConfirmedHeight {
-		return fmt.Errorf("the last confirmed height does not match, btc scanner expected: %d, got: %d",
-			si.btcScanner.LastConfirmedHeight(), lastConfirmedHeight)
-	}
+	lastConfirmedHeight := si.btcScanner.LastConfirmedHeight()
 
 	unconfirmedBlocks, err := si.btcScanner.GetUnconfirmedBlocks()
 	if err != nil {
 		return fmt.Errorf("failed to get unconfirmed blocks with last confirmed height %d: %w", lastConfirmedHeight, err)
 	}
 	if len(unconfirmedBlocks) == 0 {
-		return nil
+		return fmt.Errorf("no unconfirmed blocks")
+	}
+	tipBlockCache := unconfirmedBlocks[len(unconfirmedBlocks)-1]
+	if tipBlockCache.Height != unconfirmedTipBlock.Height {
+		return fmt.Errorf("the tip block %d in the cache does not match the expected tip block %d",
+			tipBlockCache.Height, unconfirmedTipBlock.Height)
 	}
 
 	tvlInUnconfirmedBlocks, err := si.CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks)
@@ -199,15 +210,14 @@ func (si *StakingIndexer) processUnconfirmedInfo(lastConfirmedHeight uint64) err
 		return fmt.Errorf("total tvl %d is negative", unconfirmedTvl)
 	}
 
-	unconfirmedTipHeight := uint64(unconfirmedBlocks[len(unconfirmedBlocks)-1].Height)
 	si.logger.Info("successfully calculated unconfirmed TVL",
-		zap.Uint64("tip_height", unconfirmedTipHeight),
+		zap.Int32("tip_height", unconfirmedTipBlock.Height),
 		zap.Uint64("confirmed_height", lastConfirmedHeight),
 		zap.Uint64("confirmed_tvl", confirmedTvl),
 		zap.Int64("tvl_in_unconfirmed_blocks", int64(tvlInUnconfirmedBlocks)),
 		zap.Int64("unconfirmed_tvl", int64(unconfirmedTvl)))
 
-	btcInfoEvent := queuecli.NewBtcInfoEvent(unconfirmedTipHeight, confirmedTvl, uint64(unconfirmedTvl))
+	btcInfoEvent := queuecli.NewBtcInfoEvent(uint64(unconfirmedTipBlock.Height), confirmedTvl, uint64(unconfirmedTvl))
 	if err := si.consumer.PushBtcInfoEvent(&btcInfoEvent); err != nil {
 		return fmt.Errorf("failed to push the unconfirmed event: %w", err)
 	}
