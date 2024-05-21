@@ -158,7 +158,7 @@ func TestStakingLifeCycle(t *testing.T) {
 
 func TestUnconfirmedTVL(t *testing.T) {
 	// ensure we have UTXOs
-	n := 110
+	n := 100
 	tm := StartManagerWithNBlocks(t, n)
 	defer tm.Stop()
 
@@ -476,7 +476,7 @@ func buildWithdrawTx(
 	lockTime uint16,
 	lockedAmount btcutil.Amount,
 ) *wire.MsgTx {
-	
+
 	destAddress, err := btcutil.NewAddressPubKey(stakerPrivKey.PubKey().SerializeCompressed(), regtestParams)
 
 	require.NoError(t, err)

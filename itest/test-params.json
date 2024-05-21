@@ -2,7 +2,7 @@
     "versions": [
         {
             "version": 0,
-            "activation_height": 1,
+            "activation_height": 100,
             "staking_cap": 5000000000,
             "tag": "01020304",
             "covenant_pks": [

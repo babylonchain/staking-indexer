@@ -195,13 +195,14 @@ func FuzzBlockHandler(f *testing.F) {
 		cfg := config.DefaultConfigWithHome(homePath)
 
 		confirmedBlockChan := make(chan *types.IndexedBlock)
+		tipUnconfirmedBlockChan := make(chan *types.IndexedBlock)
 		n := r.Intn(100) + 1
 		sysParamsVersions := datagen.GenerateGlobalParamsVersions(r, t)
 		testScenario := NewTestScenario(r, t, sysParamsVersions, 80, n, true)
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
-		mockBtcScanner := NewMockedBtcScanner(t, confirmedBlockChan)
+		mockBtcScanner := NewMockedBtcScanner(t, confirmedBlockChan, tipUnconfirmedBlockChan)
 		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParamsVersions, mockBtcScanner)
 		require.NoError(t, err)
 
@@ -287,11 +288,12 @@ func FuzzGetStartHeight(f *testing.F) {
 		cfg := config.DefaultConfigWithHome(homePath)
 
 		confirmedBlockChan := make(chan *types.IndexedBlock)
+		tipUnconfirmedBlockChan := make(chan *types.IndexedBlock)
 		sysParams := datagen.GenerateGlobalParamsVersions(r, t)
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
-		mockBtcScanner := NewMockedBtcScanner(t, confirmedBlockChan)
+		mockBtcScanner := NewMockedBtcScanner(t, confirmedBlockChan, tipUnconfirmedBlockChan)
 		mockBtcScanner.EXPECT().IsSynced().Return(false).AnyTimes()
 		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParams, mockBtcScanner)
 		require.NoError(t, err)
@@ -372,11 +374,12 @@ func FuzzVerifyUnbondingTx(f *testing.F) {
 		cfg := config.DefaultConfigWithHome(homePath)
 
 		confirmedBlockChan := make(chan *types.IndexedBlock)
+		tipUnconfirmedBlockChan := make(chan *types.IndexedBlock)
 		sysParamsVersions := datagen.GenerateGlobalParamsVersions(r, t)
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
-		mockBtcScanner := NewMockedBtcScanner(t, confirmedBlockChan)
+		mockBtcScanner := NewMockedBtcScanner(t, confirmedBlockChan, tipUnconfirmedBlockChan)
 		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParamsVersions, mockBtcScanner)
 		require.NoError(t, err)
 		defer func() {
@@ -433,11 +436,12 @@ func FuzzTestOverflow(f *testing.F) {
 		cfg := config.DefaultConfigWithHome(homePath)
 
 		confirmedBlockChan := make(chan *types.IndexedBlock)
+		tipUnconfirmedBlockChan := make(chan *types.IndexedBlock)
 		sysParamsVersions := datagen.GenerateGlobalParamsVersions(r, t)
 
 		db, err := cfg.DatabaseConfig.GetDbBackend()
 		require.NoError(t, err)
-		mockBtcScanner := NewMockedBtcScanner(t, confirmedBlockChan)
+		mockBtcScanner := NewMockedBtcScanner(t, confirmedBlockChan, tipUnconfirmedBlockChan)
 		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParamsVersions, mockBtcScanner)
 		require.NoError(t, err)
 		defer func() {
@@ -567,11 +571,12 @@ func NewMockedConsumer(t *testing.T) *mocks.MockEventConsumer {
 	return mockedConsumer
 }
 
-func NewMockedBtcScanner(t *testing.T, confirmedBlocksChan chan *types.IndexedBlock) *mocks.MockBtcScanner {
+func NewMockedBtcScanner(t *testing.T, confirmedBlocksChan, tipUnconfirmedBlock chan *types.IndexedBlock) *mocks.MockBtcScanner {
 	ctl := gomock.NewController(t)
 	mockBtcScanner := mocks.NewMockBtcScanner(ctl)
 	mockBtcScanner.EXPECT().Start(gomock.Any()).Return(nil).AnyTimes()
 	mockBtcScanner.EXPECT().ConfirmedBlocksChan().Return(confirmedBlocksChan).AnyTimes()
+	mockBtcScanner.EXPECT().TipUnconfirmedBlocksChan().Return(tipUnconfirmedBlock).AnyTimes()
 	mockBtcScanner.EXPECT().Stop().Return(nil).AnyTimes()
 
 	return mockBtcScanner
