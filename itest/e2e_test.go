@@ -12,6 +12,7 @@ import (
 
 	"github.com/babylonchain/babylon/btcstaking"
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
+	bbnbtclightclienttypes "github.com/babylonchain/babylon/x/btclightclient/types"
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -21,6 +22,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/stretchr/testify/require"
 
+	"github.com/babylonchain/staking-indexer/cmd/sid/cli"
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
@@ -400,6 +402,49 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 
 	// check the withdraw event is consumed
 	tm.CheckNextWithdrawEvent(t, stakingTx.TxHash())
+}
+
+func TestBtcHeaders(t *testing.T) {
+	r := rand.New(rand.NewSource(10))
+	blocksPerRetarget := 2016
+	genState := bbnbtclightclienttypes.DefaultGenesis()
+
+	initBlocksQnt := r.Intn(15) + blocksPerRetarget
+	btcd, btcClient := StartBtcClientAndBtcHandler(t, initBlocksQnt)
+
+	// from zero height
+	infos, err := cli.BtcHeaderInfoList(btcClient, 0, uint64(initBlocksQnt))
+	require.NoError(t, err)
+	require.Equal(t, len(infos), initBlocksQnt+1)
+
+	// should be valid on genesis, start from zero height.
+	genState.BtcHeaders = infos
+	require.NoError(t, genState.Validate())
+
+	generatedBlocksQnt := r.Intn(15) + 2
+	btcd.GenerateBlocks(generatedBlocksQnt)
+	totalBlks := initBlocksQnt + generatedBlocksQnt
+
+	// check from height with interval
+	fromBlockHeight := blocksPerRetarget - 1
+	toBlockHeight := totalBlks - 2
+
+	infos, err = cli.BtcHeaderInfoList(btcClient, uint64(fromBlockHeight), uint64(toBlockHeight))
+	require.NoError(t, err)
+	require.Equal(t, len(infos), int(toBlockHeight-fromBlockHeight)+1)
+
+	// try to check if it is valid on genesis, should fail is not retarget block.
+	genState.BtcHeaders = infos
+	require.EqualError(t, genState.Validate(), "genesis block must be a difficulty adjustment block")
+
+	// from retarget block
+	infos, err = cli.BtcHeaderInfoList(btcClient, uint64(blocksPerRetarget), uint64(totalBlks))
+	require.NoError(t, err)
+	require.Equal(t, len(infos), int(totalBlks-blocksPerRetarget)+1)
+
+	// check if it is valid on genesis
+	genState.BtcHeaders = infos
+	require.NoError(t, genState.Validate())
 }
 
 func buildUnbondingTx(
