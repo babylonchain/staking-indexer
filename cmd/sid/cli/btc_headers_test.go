@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
+	babylontypes "github.com/babylonchain/babylon/types"
 
 	"github.com/babylonchain/staking-indexer/cmd/sid/cli"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
@@ -38,5 +39,13 @@ func FuzzBtcHeaders(f *testing.F) {
 		infos, err := cli.BtcHeaderInfoList(mockBtcClient, startHeight, endHeight)
 		require.NoError(t, err)
 		require.EqualValues(t, len(infos), numBlocks)
+
+		for i, info := range infos {
+			idxBlock := chainIndexedBlocks[i]
+			headerBytes := babylontypes.NewBTCHeaderBytesFromBlockHeader(idxBlock.Header)
+			require.Equal(t, info.Header, &headerBytes)
+			require.EqualValues(t, info.Height, idxBlock.Height)
+			require.EqualValues(t, info.Hash, headerBytes.Hash())
+		}
 	})
 }
