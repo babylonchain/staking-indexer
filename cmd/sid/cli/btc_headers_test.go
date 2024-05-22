@@ -23,7 +23,7 @@ func FuzzBtcHeaders(f *testing.F) {
 		// Generate a random number of blocks
 		numBlocks := bbndatagen.RandomInt(r, 50) + 30
 
-		chainIndexedBlocks := datagen.GetRandomIndexedBlocks(r, numBlocks)
+		chainIndexedBlocks := datagen.GetRandomIndexedBlocks(r, bbndatagen.RandomInt(r, 150), numBlocks)
 		startHeight := uint64(chainIndexedBlocks[0].Height)
 		endHeight := uint64(chainIndexedBlocks[len(chainIndexedBlocks)-1].Height)
 

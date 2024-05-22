@@ -27,8 +27,9 @@ const (
 
 var BtcHeaderCommand = cli.Command{
 	Name:        "btc-headers",
-	Usage:       fmt.Sprintf("btc-headers [from] [to] [--%s=path/to/btc-headers.json]", outputFileFlag),
+	Usage:       "Output a range of BTC headers into a JSON file.",
 	Description: "Output a range of BTC headers into a JSON file.",
+	UsageText:   fmt.Sprintf("btc-headers [from] [to] [--%s=path/to/btc-headers.json]", outputFileFlag),
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  homeFlag,
