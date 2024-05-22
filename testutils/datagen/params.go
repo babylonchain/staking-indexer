@@ -49,7 +49,7 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 		// Max Staking Amount should be more than the minimum staking amount
 		maxStakingAmount := btcutil.Amount(r.Int63n(100000)) + minStakingAmount
 		minStakingTime := uint16(r.Intn(1000)) + 1
-		maxStakingTime := uint16(r.Intn(10000)) + minStakingTime
+		maxStakingTime := uint16(r.Intn(10000)) + minStakingTime + 1
 
 		// These parameters should be monotonically increasing
 		// The staking cap should be more than the maximum staking amount
