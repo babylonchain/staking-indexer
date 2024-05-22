@@ -22,12 +22,12 @@ import (
 
 const (
 	outputFileFlag        = "output"
-	defaultOutputFileName = "output-btc-headers.json"
+	defaultOutputFileName = "btc-headers.json"
 )
 
 var BtcHeaderCommand = cli.Command{
 	Name:        "btc-headers",
-	Usage:       fmt.Sprintf("btc-headers [from] [to] [--%s=path/to/btc-headers.json]", outputFileFlag),
+	Usage:       fmt.Sprintf("btc-head2ers [from] [to] [--%s=path/to/btc-headers.json]", outputFileFlag),
 	Description: "Output a range of BTC headers into a JSON file.",
 	Flags: []cli.Flag{
 		cli.StringFlag{
