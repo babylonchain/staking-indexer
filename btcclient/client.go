@@ -56,6 +56,25 @@ func (c *BTCClient) GetTipHeight() (uint64, error) {
 }
 
 func (c *BTCClient) GetBlockByHeight(height uint64) (*types.IndexedBlock, error) {
+	blockHash, err := c.GetBlockHashByHeight(height)
+	if err != nil {
+		return nil, err
+	}
+
+	callForBlock := func() (*wire.MsgBlock, error) {
+		return c.client.GetBlock(blockHash)
+	}
+
+	block, err := clientCallWithRetry(callForBlock, c.logger, c.cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get block by hash %s: %w", blockHash.String(), err)
+	}
+
+	btcTxs := utils.GetWrappedTxs(block)
+	return types.NewIndexedBlock(int32(height), &block.Header, btcTxs), nil
+}
+
+func (c *BTCClient) GetBlockHashByHeight(height uint64) (*chainhash.Hash, error) {
 	callForBlockHash := func() (*chainhash.Hash, error) {
 		return c.client.GetBlockHash(int64(height))
 	}
@@ -65,19 +84,25 @@ func (c *BTCClient) GetBlockByHeight(height uint64) (*types.IndexedBlock, error)
 		return nil, fmt.Errorf("failed to get block by height %d: %w", height, err)
 	}
 
-	callForBlock := func() (*wire.MsgBlock, error) {
-		return c.client.GetBlock(blockHash)
-	}
+	return blockHash, nil
+}
 
-	block, err := clientCallWithRetry(callForBlock, c.logger, c.cfg)
-
+func (c *BTCClient) GetBlockHeaderByHeight(height uint64) (*wire.BlockHeader, error) {
+	blockHash, err := c.GetBlockHashByHeight(height)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get block by hash %s: %w", blockHash.String(), err)
+		return nil, err
 	}
 
-	btcTxs := utils.GetWrappedTxs(block)
+	callForBlockHeader := func() (*wire.BlockHeader, error) {
+		return c.client.GetBlockHeader(blockHash)
+	}
 
-	return types.NewIndexedBlock(int32(height), &block.Header, btcTxs), nil
+	header, err := clientCallWithRetry(callForBlockHeader, c.logger, c.cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get block header by hash %s: %w", blockHash.String(), err)
+	}
+
+	return header, nil
 }
 
 func clientCallWithRetry[T any](
