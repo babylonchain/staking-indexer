@@ -124,11 +124,10 @@ func BtcHeaderInfoList(btcClient btcscanner.Client, fromBlk, toBlk uint64) ([]*b
 	var currenWork = sdkmath.ZeroUint()
 
 	for blkHeight := fromBlk; blkHeight <= toBlk; blkHeight++ {
-		idxBlock, err := btcClient.GetBlockByHeight(blkHeight)
+		blkHeader, err := btcClient.GetBlockHeaderByHeight(blkHeight)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get block height %d from BTC client: %w", blkHeight, err)
 		}
-		blkHeader := idxBlock.Header
 
 		headerWork := bbnbtclightclienttypes.CalcHeaderWork(blkHeader)
 		currenWork = bbnbtclightclienttypes.CumulativeWork(headerWork, currenWork)
