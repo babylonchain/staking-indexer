@@ -74,6 +74,21 @@ func GenerateStakingTxFromTestData(t *testing.T, r *rand.Rand, params *types.Glo
 }
 
 func GenerateUnbondingTxFromStaking(t *testing.T, params *types.GlobalParams, stakingData *TestStakingData, stakingTxHash *chainhash.Hash, stakingOutputIdx uint32) *btcutil.Tx {
+	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
+		params.Tag,
+		stakingData.StakerKey,
+		stakingData.FinalityProviderKey,
+		params.CovenantPks,
+		params.CovenantQuorum,
+		stakingData.StakingTime,
+		stakingData.StakingAmount,
+		&chaincfg.SigNetParams,
+	)
+	require.NoError(t, err)
+
+	unbondingSpendInfo, err := stakingInfo.UnbondingPathSpendInfo()
+	require.NoError(t, err)
+
 	unbondingInfo, err := btcstaking.BuildUnbondingInfo(
 		stakingData.StakerKey,
 		[]*btcec.PublicKey{stakingData.FinalityProviderKey},
@@ -86,7 +101,9 @@ func GenerateUnbondingTxFromStaking(t *testing.T, params *types.GlobalParams, st
 	require.NoError(t, err)
 
 	unbondingTx := wire.NewMsgTx(2)
-	unbondingTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(stakingTxHash, stakingOutputIdx), nil, nil))
+	witness, err := btcstaking.CreateWitness(unbondingSpendInfo, [][]byte{})
+	require.NoError(t, err)
+	unbondingTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(stakingTxHash, stakingOutputIdx), nil, witness))
 	unbondingTx.AddTxOut(unbondingInfo.UnbondingOutput)
 
 	return btcutil.NewTx(unbondingTx)
