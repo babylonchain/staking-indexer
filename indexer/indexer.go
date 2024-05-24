@@ -159,7 +159,7 @@ func (si *StakingIndexer) blocksEventLoop() {
 			si.logger.Info("received tip unconfirmed block",
 				zap.Int32("height", tipUnconfirmedBlock.Height))
 
-			if err := si.processUnconfirmedInfo(tipUnconfirmedBlock); err != nil {
+			if err := si.processUnconfirmedInfo(); err != nil {
 				si.logger.Error("failed to process tip unconfirmed block",
 					zap.Int32("height", tipUnconfirmedBlock.Height),
 					zap.Error(err))
@@ -182,7 +182,7 @@ func (si *StakingIndexer) blocksEventLoop() {
 // 3. get the current confirmed tvl
 // 4. push unconfirmed info event to the queue
 // 5. record metrics
-func (si *StakingIndexer) processUnconfirmedInfo(unconfirmedTipBlock *types.IndexedBlock) error {
+func (si *StakingIndexer) processUnconfirmedInfo() error {
 	if !si.btcScanner.IsSynced() {
 		si.logger.Debug("the btc scanner is still catching up, skip processing unconfirmed info")
 		return nil
@@ -196,10 +196,6 @@ func (si *StakingIndexer) processUnconfirmedInfo(unconfirmedTipBlock *types.Inde
 		return fmt.Errorf("no unconfirmed blocks")
 	}
 	tipBlockCache := unconfirmedBlocks[len(unconfirmedBlocks)-1]
-	if tipBlockCache.Height != unconfirmedTipBlock.Height {
-		return fmt.Errorf("the tip block %d in the cache does not match the expected tip block %d",
-			tipBlockCache.Height, unconfirmedTipBlock.Height)
-	}
 
 	tvlInUnconfirmedBlocks, err := si.CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks)
 	if err != nil {
@@ -217,12 +213,12 @@ func (si *StakingIndexer) processUnconfirmedInfo(unconfirmedTipBlock *types.Inde
 	}
 
 	si.logger.Info("successfully calculated unconfirmed TVL",
-		zap.Int32("tip_height", unconfirmedTipBlock.Height),
+		zap.Int32("tip_height", tipBlockCache.Height),
 		zap.Uint64("confirmed_tvl", confirmedTvl),
 		zap.Int64("tvl_in_unconfirmed_blocks", int64(tvlInUnconfirmedBlocks)),
 		zap.Int64("unconfirmed_tvl", int64(unconfirmedTvl)))
 
-	btcInfoEvent := queuecli.NewBtcInfoEvent(uint64(unconfirmedTipBlock.Height), confirmedTvl, uint64(unconfirmedTvl))
+	btcInfoEvent := queuecli.NewBtcInfoEvent(uint64(tipBlockCache.Height), confirmedTvl, uint64(unconfirmedTvl))
 	if err := si.consumer.PushBtcInfoEvent(&btcInfoEvent); err != nil {
 		return fmt.Errorf("failed to push the unconfirmed event: %w", err)
 	}
@@ -365,22 +361,8 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 			if err := si.ProcessStakingTx(
 				msgTx, stakingData, uint64(b.Height), b.Header.Timestamp, params,
 			); err != nil {
-				if errors.Is(err, ErrInvalidStakingTx) {
-					invalidTransactionsCounter.WithLabelValues("confirmed_staking_transaction").Inc()
-					si.logger.Warn("found an invalid staking tx",
-						zap.String("tx_hash", msgTx.TxHash().String()),
-						zap.Int32("height", b.Height),
-						zap.Bool("is_confirmed", true),
-						zap.Error(err),
-					)
-					// We will continue to the next tx as the staking tx is invalid
-					// and we don't want to stop the indexer
-					continue
-				}
-
 				// record metrics
 				failedProcessingStakingTxsCounter.Inc()
-
 				return fmt.Errorf("failed to process the staking tx: %w", err)
 			}
 
@@ -389,78 +371,35 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 			// tx that spends the previous staking tx
 		}
 
-		// 2. not a staking tx, check whether it spends a stored staking tx
-		stakingTx, spentInputIdx := si.getSpentStakingTx(msgTx)
-		if spentInputIdx >= 0 {
-			stakingTxHash := stakingTx.Tx.TxHash()
-			paramsFromStakingTxHeight, err := si.paramsVersions.GetParamsForBTCHeight(
-				int32(stakingTx.InclusionHeight),
-			)
-			if err != nil {
-				return fmt.Errorf("failed to get the params for the staking tx height: %w", err)
-			}
-			// 3. is a spending tx, check whether it is a valid unbonding tx
-			isUnbonding, err := si.IsValidUnbondingTx(msgTx, stakingTx, paramsFromStakingTxHeight)
-			if err != nil {
-				if errors.Is(err, ErrInvalidUnbondingTx) {
-					invalidTransactionsCounter.WithLabelValues("confirmed_unbonding_transactions").Inc()
-					si.logger.Warn("found an invalid unbonding tx",
-						zap.String("tx_hash", msgTx.TxHash().String()),
-						zap.Int32("height", b.Height),
-						zap.Bool("is_confirmed", true),
-						zap.Error(err),
-					)
+		// 2. not a staking tx, check whether it is a spending tx from a previous
+		// staking tx, and handle it if so
+		stakingTx, spendingInputIdx := si.getSpentStakingTx(msgTx)
+		if spendingInputIdx >= 0 {
+			// this is a spending tx from a previous staking tx, further process it
+			// by checking whether it is unbonding or withdrawal
+			if err := si.handleSpendingStakingTransaction(
+				msgTx, stakingTx, spendingInputIdx,
+				uint64(b.Height), b.Header.Timestamp); err != nil {
 
-					continue
-				}
-				// record metrics
-				failedVerifyingUnbondingTxsCounter.Inc()
 				return err
 			}
-			if !isUnbonding {
-				// 4. not an unbongidng tx, so this is a withdraw tx from the staking
-				// TODO we should check if it indeed unlocks the timelock path and raise alarm if not
-				if err := si.processWithdrawTx(msgTx, &stakingTxHash, nil, uint64(b.Height)); err != nil {
-					// record metrics
-					failedProcessingWithdrawTxsFromStakingCounter.Inc()
 
-					return err
-				}
-				continue
-			}
-
-			// 5. this is an unbonding tx
-			if err := si.ProcessUnbondingTx(
-				msgTx, &stakingTxHash, uint64(b.Height), b.Header.Timestamp,
-				paramsFromStakingTxHeight,
-			); err != nil {
-				if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
-					// record metrics
-					failedProcessingUnbondingTxsCounter.Inc()
-
-					return err
-				}
-				// we don't consider duplicate error critical as it can happen
-				// when the indexer restarts
-				si.logger.Warn("found a duplicate tx",
-					zap.String("tx_hash", msgTx.TxHash().String()))
-			}
 			continue
 		}
 
-		// 6. it does not spend staking tx, check whether it spends stored
-		// unbonding tx
-		unbondingTx, spentInputIdx := si.getSpentUnbondingTx(msgTx)
-		if spentInputIdx >= 0 {
-			// TODO we should check if it indeed unlocks the time lock path and raise alarm if not
-			// 7. this is a withdraw tx from the unbonding
-			unbondingTxHash := unbondingTx.Tx.TxHash()
-			if err := si.processWithdrawTx(msgTx, unbondingTx.StakingTxHash, &unbondingTxHash, uint64(b.Height)); err != nil {
-				// record metrics
-				failedProcessingWithdrawTxsFromUnbondingCounter.Inc()
+		// 3. it's not a spending tx from a previous staking tx,
+		// check whether it spends a previous unbonding tx, and
+		// handle it if so
+		unbondingTx, spendingInputIdx := si.getSpentUnbondingTx(msgTx)
+		if spendingInputIdx >= 0 {
+			// this is a spending tx from the unbonding, validate it, and processes it
+			if err := si.handleSpendingUnbondingTransaction(
+				msgTx, unbondingTx, spendingInputIdx, uint64(b.Height)); err != nil {
 
 				return err
 			}
+
+			continue
 		}
 	}
 
@@ -470,6 +409,218 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 
 	// record metrics
 	lastProcessedBtcHeight.Set(float64(b.Height))
+
+	return nil
+}
+
+func (si *StakingIndexer) handleSpendingUnbondingTransaction(
+	tx *wire.MsgTx,
+	unbondingTx *indexerstore.StoredUnbondingTransaction,
+	spendingInputIdx int,
+	height uint64,
+) error {
+	// get the stored staking tx for later validation
+	storedStakingTx, err := si.GetStakingTxByHash(unbondingTx.StakingTxHash)
+	if err != nil {
+		// record metrics
+		failedProcessingWithdrawTxsFromUnbondingCounter.Inc()
+
+		return err
+	}
+
+	paramsFromStakingTxHeight, err := si.paramsVersions.GetParamsForBTCHeight(
+		int32(storedStakingTx.InclusionHeight),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get the params for the staking tx height: %w", err)
+	}
+
+	if err := si.validateWithdrawalTxFromUnbonding(tx, storedStakingTx, spendingInputIdx, paramsFromStakingTxHeight); err != nil {
+		if errors.Is(err, ErrInvalidWithdrawalTx) {
+			// TODO consider slashing transaction for phase-2
+			invalidTransactionsCounter.WithLabelValues("confirmed_withdraw_unbonding_transactions").Inc()
+			si.logger.Warn("found an invalid withdrawal tx from unbonding",
+				zap.String("tx_hash", tx.TxHash().String()),
+				zap.Uint64("height", height),
+				zap.Bool("is_confirmed", true),
+				zap.Error(err),
+			)
+
+			return nil
+		}
+
+		failedProcessingWithdrawTxsFromUnbondingCounter.Inc()
+		return err
+	}
+
+	unbondingTxHash := unbondingTx.Tx.TxHash()
+	if err := si.processWithdrawTx(tx, unbondingTx.StakingTxHash, &unbondingTxHash, height); err != nil {
+		// record metrics
+		failedProcessingWithdrawTxsFromUnbondingCounter.Inc()
+
+		return err
+	}
+
+	return nil
+}
+
+func (si *StakingIndexer) handleSpendingStakingTransaction(
+	tx *wire.MsgTx,
+	stakingTx *indexerstore.StoredStakingTransaction,
+	spendingInputIndex int,
+	height uint64,
+	timestamp time.Time,
+) error {
+	stakingTxHash := stakingTx.Tx.TxHash()
+	paramsFromStakingTxHeight, err := si.paramsVersions.GetParamsForBTCHeight(
+		int32(stakingTx.InclusionHeight),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get the params for the staking tx height: %w", err)
+	}
+
+	// check whether it is a valid unbonding tx
+	isUnbonding, err := si.IsValidUnbondingTx(tx, stakingTx, paramsFromStakingTxHeight)
+	if err != nil {
+		if errors.Is(err, ErrInvalidUnbondingTx) {
+			invalidTransactionsCounter.WithLabelValues("confirmed_unbonding_transactions").Inc()
+			si.logger.Warn("found an invalid unbonding tx",
+				zap.String("tx_hash", tx.TxHash().String()),
+				zap.Uint64("height", height),
+				zap.Bool("is_confirmed", true),
+				zap.Error(err),
+			)
+
+			return nil
+		}
+		// record metrics
+		failedVerifyingUnbondingTxsCounter.Inc()
+		return err
+	}
+
+	if !isUnbonding {
+		// not an unbonding tx, so this is a withdraw tx from the staking,
+		// validate it and process it
+		if err := si.validateWithdrawalTxFromStaking(tx, stakingTx, spendingInputIndex, paramsFromStakingTxHeight); err != nil {
+			if errors.Is(err, ErrInvalidWithdrawalTx) {
+				invalidTransactionsCounter.WithLabelValues("confirmed_withdraw_staking_transactions").Inc()
+				si.logger.Warn("found an invalid withdrawal tx from staking",
+					zap.String("tx_hash", tx.TxHash().String()),
+					zap.Uint64("height", height),
+					zap.Bool("is_confirmed", true),
+					zap.Error(err),
+				)
+
+				return nil
+			}
+
+			failedProcessingWithdrawTxsFromStakingCounter.Inc()
+			return err
+		}
+		if err := si.processWithdrawTx(tx, &stakingTxHash, nil, height); err != nil {
+			// record metrics
+			failedProcessingWithdrawTxsFromStakingCounter.Inc()
+
+			return err
+		}
+		return nil
+	}
+
+	// 5. this is a valid unbonding tx, process it
+	if err := si.ProcessUnbondingTx(
+		tx, &stakingTxHash, height, timestamp,
+		paramsFromStakingTxHeight,
+	); err != nil {
+		if !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
+			// record metrics
+			failedProcessingUnbondingTxsCounter.Inc()
+
+			return err
+		}
+		// we don't consider duplicate error critical as it can happen
+		// when the indexer restarts
+		si.logger.Warn("found a duplicate tx",
+			zap.String("tx_hash", tx.TxHash().String()))
+	}
+
+	return nil
+}
+
+func (si *StakingIndexer) validateWithdrawalTxFromStaking(
+	tx *wire.MsgTx,
+	stakingTx *indexerstore.StoredStakingTransaction,
+	spendingInputIdx int,
+	params *types.GlobalParams,
+) error {
+	// re-build the time-lock path script and check whether the script from
+	// the witness matches
+	stakingInfo, err := btcstaking.BuildStakingInfo(
+		stakingTx.StakerPk,
+		[]*btcec.PublicKey{stakingTx.FinalityProviderPk},
+		params.CovenantPks,
+		params.CovenantQuorum,
+		uint16(stakingTx.StakingTime),
+		btcutil.Amount(stakingTx.StakingValue),
+		&si.cfg.BTCNetParams,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to rebuid the staking info: %w", err)
+	}
+	timelockPathInfo, err := stakingInfo.TimeLockPathSpendInfo()
+	if err != nil {
+		return fmt.Errorf("failed to get the unbonding path spend info: %w", err)
+	}
+
+	witness := tx.TxIn[spendingInputIdx].Witness
+	if len(witness) < 2 {
+		panic(fmt.Errorf("spending tx should have at least 2 elements in witness, got %d", len(witness)))
+	}
+
+	scriptFromWitness := tx.TxIn[spendingInputIdx].Witness[len(tx.TxIn[spendingInputIdx].Witness)-2]
+
+	if !bytes.Equal(timelockPathInfo.GetPkScriptPath(), scriptFromWitness) {
+		return fmt.Errorf("%w: the tx does not unlock the time-lock path", ErrInvalidWithdrawalTx)
+	}
+
+	return nil
+}
+
+func (si *StakingIndexer) validateWithdrawalTxFromUnbonding(
+	tx *wire.MsgTx,
+	stakingTx *indexerstore.StoredStakingTransaction,
+	spendingInputIdx int,
+	params *types.GlobalParams,
+) error {
+	// re-build the time-lock path script and check whether the script from
+	// the witness matches
+	expectedUnbondingOutputValue := btcutil.Amount(stakingTx.StakingValue) - params.UnbondingFee
+	unbondingInfo, err := btcstaking.BuildUnbondingInfo(
+		stakingTx.StakerPk,
+		[]*btcec.PublicKey{stakingTx.FinalityProviderPk},
+		params.CovenantPks,
+		params.CovenantQuorum,
+		params.UnbondingTime,
+		expectedUnbondingOutputValue,
+		&si.cfg.BTCNetParams,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to rebuid the unbonding info: %w", err)
+	}
+	timelockPathInfo, err := unbondingInfo.TimeLockPathSpendInfo()
+	if err != nil {
+		return fmt.Errorf("failed to get the unbonding path spend info: %w", err)
+	}
+
+	witness := tx.TxIn[spendingInputIdx].Witness
+	if len(witness) < 2 {
+		panic(fmt.Errorf("spending tx should have at least 2 elements in witness, got %d", len(witness)))
+	}
+
+	scriptFromWitness := tx.TxIn[spendingInputIdx].Witness[len(tx.TxIn[spendingInputIdx].Witness)-2]
+
+	if !bytes.Equal(timelockPathInfo.GetPkScriptPath(), scriptFromWitness) {
+		return fmt.Errorf("%w: the tx does not unlock the time-lock path", ErrInvalidWithdrawalTx)
+	}
 
 	return nil
 }
@@ -565,8 +716,39 @@ func (si *StakingIndexer) IsValidUnbondingTx(tx *wire.MsgTx, stakingTx *indexers
 		return false, nil
 	}
 
-	// 3. the script of an unbonding tx output must be expected
-	// as re-built unbonding output from params
+	// 3. re-build the unbonding path script and check whether the script from
+	// the witness matches
+	stakingInfo, err := btcstaking.BuildStakingInfo(
+		stakingTx.StakerPk,
+		[]*btcec.PublicKey{stakingTx.FinalityProviderPk},
+		params.CovenantPks,
+		params.CovenantQuorum,
+		uint16(stakingTx.StakingTime),
+		btcutil.Amount(stakingTx.StakingValue),
+		&si.cfg.BTCNetParams,
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to rebuid the staking info: %w", err)
+	}
+	unbondingPathInfo, err := stakingInfo.UnbondingPathSpendInfo()
+	if err != nil {
+		return false, fmt.Errorf("failed to get the unbonding path spend info: %w", err)
+	}
+
+	witness := tx.TxIn[0].Witness
+	if len(witness) < 2 {
+		panic(fmt.Errorf("spending tx should have at least 2 elements in witness, got %d", len(witness)))
+	}
+
+	scriptFromWitness := tx.TxIn[0].Witness[len(tx.TxIn[0].Witness)-2]
+
+	if !bytes.Equal(unbondingPathInfo.GetPkScriptPath(), scriptFromWitness) {
+		// not unbonding tx as it does not unlock the unbonding path
+		return false, nil
+	}
+
+	// 4. check whether the script of an unbonding tx output is expected
+	// by re-building unbonding output from params
 	stakingValue := btcutil.Amount(stakingTx.Tx.TxOut[stakingTx.StakingOutputIdx].Value)
 	expectedUnbondingOutputValue := stakingValue - params.UnbondingFee
 	if expectedUnbondingOutputValue <= 0 {
@@ -583,11 +765,10 @@ func (si *StakingIndexer) IsValidUnbondingTx(tx *wire.MsgTx, stakingTx *indexers
 		&si.cfg.BTCNetParams,
 	)
 	if err != nil {
-		return false, fmt.Errorf("%w: failed to rebuid the unbonding info", ErrInvalidGlobalParameters)
+		return false, fmt.Errorf("failed to rebuid the unbonding info: %w", err)
 	}
 	if !bytes.Equal(tx.TxOut[0].PkScript, unbondingInfo.UnbondingOutput.PkScript) {
-		// the tx does not spend the unbonding path, thus not an unbonding tx
-		return false, nil
+		return false, fmt.Errorf("%w: the unbonding output is not expected", ErrInvalidUnbondingTx)
 	}
 	if tx.TxOut[0].Value != unbondingInfo.UnbondingOutput.Value {
 		return false, fmt.Errorf("%w: the unbonding output value %d is not expected %d",
@@ -628,7 +809,15 @@ func (si *StakingIndexer) ProcessStakingTx(
 	} else {
 		// this is a new staking tx, validate it against staking requirement
 		if err := si.validateStakingTx(params, stakingData); err != nil {
-			return err
+			invalidTransactionsCounter.WithLabelValues("confirmed_staking_transaction").Inc()
+			si.logger.Warn("found an invalid staking tx",
+				zap.String("tx_hash", tx.TxHash().String()),
+				zap.Uint64("height", height),
+				zap.Bool("is_confirmed", true),
+				zap.Error(err),
+			)
+			// TODO handle invalid staking tx (storing and pushing events)
+			return nil
 		}
 
 		// check if the staking tvl is overflow with this staking tx

@@ -14,17 +14,13 @@ import (
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/stretchr/testify/require"
 
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
-	"github.com/babylonchain/staking-indexer/types"
 )
 
 func TestBTCScanner(t *testing.T) {
@@ -138,7 +134,7 @@ func TestStakingLifeCycle(t *testing.T) {
 	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
 	require.NoError(t, err)
 	require.NotNil(t, storedStakingTx)
-	withdrawTx := buildWithdrawTx(
+	withdrawTx := testutils.BuildWithdrawTx(
 		t,
 		tm.WalletPrivKey,
 		stakingTx.TxOut[storedStakingTx.StakingOutputIdx],
@@ -147,6 +143,7 @@ func TestStakingLifeCycle(t *testing.T) {
 		withdrawSpendInfo,
 		testStakingData.StakingTime,
 		testStakingData.StakingAmount,
+		regtestParams,
 	)
 	tm.SendTxWithNConfirmations(t, withdrawTx, int(k))
 
@@ -205,7 +202,7 @@ func TestUnconfirmedTVL(t *testing.T) {
 	unbondingSpendInfo, err := stakingInfo.UnbondingPathSpendInfo()
 	require.NoError(t, err)
 	stakingTxHash := stakingTx.TxHash()
-	unbondingTx := buildUnbondingTx(
+	unbondingTx := testutils.BuildUnbondingTx(
 		t,
 		sysParams,
 		tm.WalletPrivKey,
@@ -216,6 +213,7 @@ func TestUnconfirmedTVL(t *testing.T) {
 		unbondingSpendInfo,
 		stakingTx,
 		getCovenantPrivKeys(t),
+		regtestParams,
 	)
 	tm.SendTxWithNConfirmations(t, unbondingTx, 1)
 	tm.CheckNextUnconfirmedEvent(t, uint64(stakingInfo.StakingOutput.Value), 0)
@@ -344,7 +342,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
 	require.NoError(t, err)
 	require.NotNil(t, storedStakingTx)
-	unbondingTx := buildUnbondingTx(
+	unbondingTx := testutils.BuildUnbondingTx(
 		t,
 		sysParams,
 		tm.WalletPrivKey,
@@ -355,6 +353,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 		unbondingSpendInfo,
 		stakingTx,
 		getCovenantPrivKeys(t),
+		regtestParams,
 	)
 	tm.SendTxWithNConfirmations(t, unbondingTx, int(k))
 
@@ -382,7 +381,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	require.NoError(t, err)
 	withdrawSpendInfo, err := unbondingInfo.TimeLockPathSpendInfo()
 	require.NoError(t, err)
-	withdrawTx := buildWithdrawTx(
+	withdrawTx := testutils.BuildWithdrawTx(
 		t,
 		tm.WalletPrivKey,
 		// unbonding tx only has one output
@@ -392,6 +391,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 		withdrawSpendInfo,
 		sysParams.UnbondingTime,
 		testStakingData.StakingAmount,
+		regtestParams,
 	)
 	tm.SendTxWithNConfirmations(t, withdrawTx, int(k))
 
@@ -400,108 +400,6 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 
 	// check the withdraw event is consumed
 	tm.CheckNextWithdrawEvent(t, stakingTx.TxHash())
-}
-
-func buildUnbondingTx(
-	t *testing.T,
-	params *types.GlobalParams,
-	stakerPrivKey *btcec.PrivateKey,
-	fpKey *btcec.PublicKey,
-	stakingAmount btcutil.Amount,
-	stakingTxHash *chainhash.Hash,
-	stakingOutputIdx uint32,
-	unbondingSpendInfo *btcstaking.SpendInfo,
-	stakingTx *wire.MsgTx,
-	covPrivKeys []*btcec.PrivateKey,
-) *wire.MsgTx {
-	expectedOutputValue := stakingAmount - params.UnbondingFee
-	unbondingInfo, err := btcstaking.BuildUnbondingInfo(
-		stakerPrivKey.PubKey(),
-		[]*btcec.PublicKey{fpKey},
-		params.CovenantPks,
-		params.CovenantQuorum,
-		params.UnbondingTime,
-		expectedOutputValue,
-		regtestParams,
-	)
-	require.NoError(t, err)
-
-	unbondingTx := wire.NewMsgTx(2)
-	unbondingTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(stakingTxHash, stakingOutputIdx), nil, nil))
-	unbondingTx.AddTxOut(unbondingInfo.UnbondingOutput)
-
-	// generate covenant unbonding sigs
-	unbondingCovSigs := make([]*schnorr.Signature, len(covPrivKeys))
-	for i, privKey := range covPrivKeys {
-		sig, err := btcstaking.SignTxWithOneScriptSpendInputStrict(
-			unbondingTx,
-			stakingTx,
-			stakingOutputIdx,
-			unbondingSpendInfo.GetPkScriptPath(),
-			privKey,
-		)
-		require.NoError(t, err)
-
-		unbondingCovSigs[i] = sig
-	}
-
-	stakerUnbondingSig, err := btcstaking.SignTxWithOneScriptSpendInputFromScript(
-		unbondingTx,
-		stakingTx.TxOut[stakingOutputIdx],
-		stakerPrivKey,
-		unbondingSpendInfo.RevealedLeaf.Script,
-	)
-	require.NoError(t, err)
-
-	witness, err := unbondingSpendInfo.CreateUnbondingPathWitness(unbondingCovSigs, stakerUnbondingSig)
-	require.NoError(t, err)
-	unbondingTx.TxIn[0].Witness = witness
-
-	return unbondingTx
-}
-
-func buildWithdrawTx(
-	t *testing.T,
-	stakerPrivKey *btcec.PrivateKey,
-	fundTxOutput *wire.TxOut,
-	fundTxHash chainhash.Hash,
-	fundTxOutputIndex uint32,
-	fundTxSpendInfo *btcstaking.SpendInfo,
-	lockTime uint16,
-	lockedAmount btcutil.Amount,
-) *wire.MsgTx {
-
-	destAddress, err := btcutil.NewAddressPubKey(stakerPrivKey.PubKey().SerializeCompressed(), regtestParams)
-
-	require.NoError(t, err)
-	destAddressScript, err := txscript.PayToAddrScript(destAddress)
-	require.NoError(t, err)
-
-	// to spend output with relative timelock transaction need to be version two or higher
-	withdrawTx := wire.NewMsgTx(2)
-	withdrawTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(&fundTxHash, fundTxOutputIndex), nil, nil))
-	withdrawTx.AddTxOut(wire.NewTxOut(int64(lockedAmount.MulF64(0.5)), destAddressScript))
-
-	// we need to set sequence number before signing, as signing commits to sequence
-	// number
-	withdrawTx.TxIn[0].Sequence = uint32(lockTime)
-
-	sig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
-		withdrawTx,
-		fundTxOutput,
-		stakerPrivKey,
-		fundTxSpendInfo.RevealedLeaf,
-	)
-
-	require.NoError(t, err)
-
-	witness, err := fundTxSpendInfo.CreateTimeLockPathWitness(sig)
-
-	require.NoError(t, err)
-
-	withdrawTx.TxIn[0].Witness = witness
-
-	return withdrawTx
 }
 
 func getCovenantPrivKeys(t *testing.T) []*btcec.PrivateKey {

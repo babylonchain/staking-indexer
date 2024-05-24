@@ -425,6 +425,15 @@ func FuzzVerifyUnbondingTx(f *testing.F) {
 		isValid, err = stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx, params)
 		require.ErrorIs(t, err, indexer.ErrInvalidUnbondingTx)
 		require.False(t, isValid)
+
+		// 5. test IsValidUnbondingTx with invalid unbonding tx (random unbonding time in params), expect (false, ErrInvalidUnbondingTx)
+		newParams2 := *params
+		newParams2.UnbondingTime = uint16(bbndatagen.RandomIntOtherThan(r, int(params.UnbondingTime), 1000))
+		unbondingTx = datagen.GenerateUnbondingTxFromStaking(t, &newParams2, stakingData, stakingTx.Hash(), 0)
+		// pass the old params
+		isValid, err = stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx, params)
+		require.ErrorIs(t, err, indexer.ErrInvalidUnbondingTx)
+		require.False(t, isValid)
 	})
 }
 
