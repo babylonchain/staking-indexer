@@ -32,8 +32,8 @@ func FuzzBtcHeaders(f *testing.F) {
 
 		for i := 0; i < int(numBlocks); i++ {
 			idxBlock := chainIndexedBlocks[i]
-			mockBtcClient.EXPECT().GetBlockByHeight(gomock.Eq(uint64(idxBlock.Height))).
-				Return(idxBlock, nil).AnyTimes()
+			mockBtcClient.EXPECT().GetBlockHeaderByHeight(gomock.Eq(uint64(idxBlock.Height))).
+				Return(idxBlock.Header, nil).AnyTimes()
 		}
 
 		infos, err := cli.BtcHeaderInfoList(mockBtcClient, startHeight, endHeight)
