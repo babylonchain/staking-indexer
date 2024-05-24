@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 
 const forceFlag = "force"
 
-var initCommand = cli.Command{
+var InitCommand = cli.Command{
 	Name:  "init",
 	Usage: "Initialize the staking indexer home directory.",
 	Flags: []cli.Flag{
