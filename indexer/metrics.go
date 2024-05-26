@@ -53,10 +53,13 @@ var (
 		},
 	)
 
-	totalStakingTxs = promauto.NewCounter(
+	totalStakingTxs = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "si_total_staking_txs",
 			Help: "Total number of staking transactions",
+		},
+		[]string{
+			"tx_type",
 		},
 	)
 

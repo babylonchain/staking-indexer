@@ -829,6 +829,11 @@ func (si *StakingIndexer) ProcessStakingTx(
 		isOverflow = stakingOverflow
 	}
 
+	if isOverflow {
+		si.logger.Info("the staking tx is overflow",
+			zap.String("tx_hash", tx.TxHash().String()))
+	}
+
 	// add the staking transaction to the system state
 	if err := si.addStakingTransaction(
 		height, timestamp, tx,
@@ -900,7 +905,11 @@ func (si *StakingIndexer) addStakingTransaction(
 	)
 
 	// record metrics
-	totalStakingTxs.Inc()
+	if isOverflow {
+		totalStakingTxs.WithLabelValues("overflow").Inc()
+	} else {
+		totalStakingTxs.WithLabelValues("active").Inc()
+	}
 	lastFoundStakingTxHeight.Set(float64(height))
 
 	return nil
