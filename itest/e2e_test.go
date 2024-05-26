@@ -140,7 +140,7 @@ func TestStakingLifeCycle(t *testing.T) {
 	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
 	require.NoError(t, err)
 	require.NotNil(t, storedStakingTx)
-	withdrawTx := buildWithdrawTx(
+	withdrawTx := testutils.BuildWithdrawTx(
 		t,
 		tm.WalletPrivKey,
 		stakingTx.TxOut[storedStakingTx.StakingOutputIdx],
@@ -149,6 +149,7 @@ func TestStakingLifeCycle(t *testing.T) {
 		withdrawSpendInfo,
 		testStakingData.StakingTime,
 		testStakingData.StakingAmount,
+		regtestParams,
 	)
 	tm.SendTxWithNConfirmations(t, withdrawTx, int(k))
 
@@ -207,7 +208,7 @@ func TestUnconfirmedTVL(t *testing.T) {
 	unbondingSpendInfo, err := stakingInfo.UnbondingPathSpendInfo()
 	require.NoError(t, err)
 	stakingTxHash := stakingTx.TxHash()
-	unbondingTx := buildUnbondingTx(
+	unbondingTx := testutils.BuildUnbondingTx(
 		t,
 		sysParams,
 		tm.WalletPrivKey,
@@ -218,6 +219,7 @@ func TestUnconfirmedTVL(t *testing.T) {
 		unbondingSpendInfo,
 		stakingTx,
 		getCovenantPrivKeys(t),
+		regtestParams,
 	)
 	tm.SendTxWithNConfirmations(t, unbondingTx, 1)
 	tm.CheckNextUnconfirmedEvent(t, uint64(stakingInfo.StakingOutput.Value), 0)
@@ -346,7 +348,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
 	require.NoError(t, err)
 	require.NotNil(t, storedStakingTx)
-	unbondingTx := buildUnbondingTx(
+	unbondingTx := testutils.BuildUnbondingTx(
 		t,
 		sysParams,
 		tm.WalletPrivKey,
@@ -357,6 +359,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 		unbondingSpendInfo,
 		stakingTx,
 		getCovenantPrivKeys(t),
+		regtestParams,
 	)
 	tm.SendTxWithNConfirmations(t, unbondingTx, int(k))
 
@@ -384,7 +387,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	require.NoError(t, err)
 	withdrawSpendInfo, err := unbondingInfo.TimeLockPathSpendInfo()
 	require.NoError(t, err)
-	withdrawTx := buildWithdrawTx(
+	withdrawTx := testutils.BuildWithdrawTx(
 		t,
 		tm.WalletPrivKey,
 		// unbonding tx only has one output
@@ -394,6 +397,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 		withdrawSpendInfo,
 		sysParams.UnbondingTime,
 		testStakingData.StakingAmount,
+		regtestParams,
 	)
 	tm.SendTxWithNConfirmations(t, withdrawTx, int(k))
 

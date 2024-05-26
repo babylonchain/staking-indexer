@@ -7,10 +7,12 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/babylonchain/babylon/btcstaking"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcd/txscript"
@@ -20,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/babylonchain/staking-indexer/config"
+	"github.com/babylonchain/staking-indexer/types"
 )
 
 type Utxo struct {
@@ -231,4 +234,108 @@ func makeInputSource(utxos []Utxo) txauthor.InputSource {
 		}
 		return currentTotal, currentInputs, currentInputValues, currentScripts, nil
 	}
+}
+
+func BuildUnbondingTx(
+	t *testing.T,
+	params *types.GlobalParams,
+	stakerPrivKey *btcec.PrivateKey,
+	fpKey *btcec.PublicKey,
+	stakingAmount btcutil.Amount,
+	stakingTxHash *chainhash.Hash,
+	stakingOutputIdx uint32,
+	unbondingSpendInfo *btcstaking.SpendInfo,
+	stakingTx *wire.MsgTx,
+	covPrivKeys []*btcec.PrivateKey,
+	btcParams *chaincfg.Params,
+) *wire.MsgTx {
+	expectedOutputValue := stakingAmount - params.UnbondingFee
+	unbondingInfo, err := btcstaking.BuildUnbondingInfo(
+		stakerPrivKey.PubKey(),
+		[]*btcec.PublicKey{fpKey},
+		params.CovenantPks,
+		params.CovenantQuorum,
+		params.UnbondingTime,
+		expectedOutputValue,
+		btcParams,
+	)
+	require.NoError(t, err)
+
+	unbondingTx := wire.NewMsgTx(2)
+	unbondingTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(stakingTxHash, stakingOutputIdx), nil, nil))
+	unbondingTx.AddTxOut(unbondingInfo.UnbondingOutput)
+
+	// generate covenant unbonding sigs
+	unbondingCovSigs := make([]*schnorr.Signature, len(covPrivKeys))
+	for i, privKey := range covPrivKeys {
+		sig, err := btcstaking.SignTxWithOneScriptSpendInputStrict(
+			unbondingTx,
+			stakingTx,
+			stakingOutputIdx,
+			unbondingSpendInfo.GetPkScriptPath(),
+			privKey,
+		)
+		require.NoError(t, err)
+
+		unbondingCovSigs[i] = sig
+	}
+
+	stakerUnbondingSig, err := btcstaking.SignTxWithOneScriptSpendInputFromScript(
+		unbondingTx,
+		stakingTx.TxOut[stakingOutputIdx],
+		stakerPrivKey,
+		unbondingSpendInfo.RevealedLeaf.Script,
+	)
+	require.NoError(t, err)
+
+	witness, err := unbondingSpendInfo.CreateUnbondingPathWitness(unbondingCovSigs, stakerUnbondingSig)
+	require.NoError(t, err)
+	unbondingTx.TxIn[0].Witness = witness
+
+	return unbondingTx
+}
+
+func BuildWithdrawTx(
+	t *testing.T,
+	stakerPrivKey *btcec.PrivateKey,
+	fundTxOutput *wire.TxOut,
+	fundTxHash chainhash.Hash,
+	fundTxOutputIndex uint32,
+	fundTxSpendInfo *btcstaking.SpendInfo,
+	lockTime uint16,
+	lockedAmount btcutil.Amount,
+	btcParams *chaincfg.Params,
+) *wire.MsgTx {
+
+	destAddress, err := btcutil.NewAddressPubKey(stakerPrivKey.PubKey().SerializeCompressed(), btcParams)
+
+	require.NoError(t, err)
+	destAddressScript, err := txscript.PayToAddrScript(destAddress)
+	require.NoError(t, err)
+
+	// to spend output with relative timelock transaction need to be version two or higher
+	withdrawTx := wire.NewMsgTx(2)
+	withdrawTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(&fundTxHash, fundTxOutputIndex), nil, nil))
+	withdrawTx.AddTxOut(wire.NewTxOut(int64(lockedAmount.MulF64(0.5)), destAddressScript))
+
+	// we need to set sequence number before signing, as signing commits to sequence
+	// number
+	withdrawTx.TxIn[0].Sequence = uint32(lockTime)
+
+	sig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
+		withdrawTx,
+		fundTxOutput,
+		stakerPrivKey,
+		fundTxSpendInfo.RevealedLeaf,
+	)
+
+	require.NoError(t, err)
+
+	witness, err := fundTxSpendInfo.CreateTimeLockPathWitness(sig)
+
+	require.NoError(t, err)
+
+	withdrawTx.TxIn[0].Witness = witness
+
+	return withdrawTx
 }
