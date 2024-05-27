@@ -435,7 +435,7 @@ func (si *StakingIndexer) handleSpendingUnbondingTransaction(
 		return fmt.Errorf("failed to get the params for the staking tx height: %w", err)
 	}
 
-	if err := si.validateWithdrawalTxFromUnbonding(tx, storedStakingTx, spendingInputIdx, paramsFromStakingTxHeight); err != nil {
+	if err := si.ValidateWithdrawalTxFromUnbonding(tx, storedStakingTx, spendingInputIdx, paramsFromStakingTxHeight); err != nil {
 		if errors.Is(err, ErrInvalidWithdrawalTx) {
 			// TODO consider slashing transaction for phase-2
 			invalidTransactionsCounter.WithLabelValues("confirmed_withdraw_unbonding_transactions").Inc()
@@ -501,7 +501,7 @@ func (si *StakingIndexer) handleSpendingStakingTransaction(
 	if !isUnbonding {
 		// not an unbonding tx, so this is a withdraw tx from the staking,
 		// validate it and process it
-		if err := si.validateWithdrawalTxFromStaking(tx, stakingTx, spendingInputIndex, paramsFromStakingTxHeight); err != nil {
+		if err := si.ValidateWithdrawalTxFromStaking(tx, stakingTx, spendingInputIndex, paramsFromStakingTxHeight); err != nil {
 			if errors.Is(err, ErrInvalidWithdrawalTx) {
 				invalidTransactionsCounter.WithLabelValues("confirmed_withdraw_staking_transactions").Inc()
 				si.logger.Warn("found an invalid withdrawal tx from staking",
@@ -546,7 +546,7 @@ func (si *StakingIndexer) handleSpendingStakingTransaction(
 	return nil
 }
 
-func (si *StakingIndexer) validateWithdrawalTxFromStaking(
+func (si *StakingIndexer) ValidateWithdrawalTxFromStaking(
 	tx *wire.MsgTx,
 	stakingTx *indexerstore.StoredStakingTransaction,
 	spendingInputIdx int,
@@ -585,7 +585,7 @@ func (si *StakingIndexer) validateWithdrawalTxFromStaking(
 	return nil
 }
 
-func (si *StakingIndexer) validateWithdrawalTxFromUnbonding(
+func (si *StakingIndexer) ValidateWithdrawalTxFromUnbonding(
 	tx *wire.MsgTx,
 	stakingTx *indexerstore.StoredStakingTransaction,
 	spendingInputIdx int,

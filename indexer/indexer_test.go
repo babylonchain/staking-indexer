@@ -437,6 +437,124 @@ func FuzzVerifyUnbondingTx(f *testing.F) {
 	})
 }
 
+func FuzzValidateWithdrawTxFromStaking(f *testing.F) {
+	bbndatagen.AddRandomSeedsToFuzzer(f, 10)
+
+	f.Fuzz(func(t *testing.T, seed int64) {
+		r := rand.New(rand.NewSource(seed))
+
+		homePath := filepath.Join(t.TempDir(), "indexer")
+		cfg := config.DefaultConfigWithHome(homePath)
+
+		sysParamsVersions := datagen.GenerateGlobalParamsVersions(r, t)
+
+		db, err := cfg.DatabaseConfig.GetDbBackend()
+		require.NoError(t, err)
+		chainUpdateInfoChan := make(chan *btcscanner.ChainUpdateInfo)
+		mockBtcScanner := NewMockedBtcScanner(t, chainUpdateInfoChan)
+		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParamsVersions, mockBtcScanner)
+		require.NoError(t, err)
+		defer func() {
+			err = db.Close()
+			require.NoError(t, err)
+		}()
+
+		// Select the first params versions to play with
+		params := sysParamsVersions.ParamsVersions[0]
+		// 1. generate and add a valid staking tx to the indexer
+		stakingData := datagen.GenerateTestStakingData(t, r, params)
+		_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, params, stakingData)
+		// For a valid tx, its btc height is always larger than the activation height
+		mockedHeight := uint64(params.ActivationHeight) + 1
+		err = stakingIndexer.ProcessStakingTx(
+			stakingTx.MsgTx(),
+			getParsedStakingData(stakingData, stakingTx.MsgTx(), params),
+			mockedHeight, time.Now(), params)
+		require.NoError(t, err)
+		storedStakingTx, err := stakingIndexer.GetStakingTxByHash(stakingTx.Hash())
+		require.NoError(t, err)
+		require.NotNil(t, storedStakingTx)
+
+		// 2. test ValidateWithdrawalTxFromStaking with valid withdrawal tx
+		withdrawTxFromStaking := datagen.GenerateWithdrawalTxFromStaking(t, r, params, stakingData, stakingTx.Hash(), 0)
+		err = stakingIndexer.ValidateWithdrawalTxFromStaking(withdrawTxFromStaking.MsgTx(), storedStakingTx, 0, params)
+		require.NoError(t, err)
+
+		// 3. test ValidateWithdrawalTxFromStaking with invalid spending input index, expect panic
+		require.Panics(t, func() {
+			_ = stakingIndexer.ValidateWithdrawalTxFromStaking(withdrawTxFromStaking.MsgTx(), storedStakingTx, 1, params)
+		})
+
+		// 4. test ValidateWithdrawalTxFromStaking with a different staking time, expect ErrInvalidWithdrawTx
+		invalidStakingTx := *storedStakingTx
+		invalidStakingTx.StakingTime = uint32(bbndatagen.RandomIntOtherThan(r, int(storedStakingTx.StakingTime), 1000))
+		err = stakingIndexer.ValidateWithdrawalTxFromStaking(withdrawTxFromStaking.MsgTx(), &invalidStakingTx, 0, params)
+		require.ErrorIs(t, err, indexer.ErrInvalidWithdrawalTx)
+	})
+}
+
+func FuzzValidateWithdrawTxFromUnbonding(f *testing.F) {
+	bbndatagen.AddRandomSeedsToFuzzer(f, 10)
+
+	f.Fuzz(func(t *testing.T, seed int64) {
+		r := rand.New(rand.NewSource(seed))
+
+		homePath := filepath.Join(t.TempDir(), "indexer")
+		cfg := config.DefaultConfigWithHome(homePath)
+
+		sysParamsVersions := datagen.GenerateGlobalParamsVersions(r, t)
+
+		db, err := cfg.DatabaseConfig.GetDbBackend()
+		require.NoError(t, err)
+		chainUpdateInfoChan := make(chan *btcscanner.ChainUpdateInfo)
+		mockBtcScanner := NewMockedBtcScanner(t, chainUpdateInfoChan)
+		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParamsVersions, mockBtcScanner)
+		require.NoError(t, err)
+		defer func() {
+			err = db.Close()
+			require.NoError(t, err)
+		}()
+
+		// Select the first params versions to play with
+		params := sysParamsVersions.ParamsVersions[0]
+		// 1. generate and add a valid staking tx to the indexer
+		stakingData := datagen.GenerateTestStakingData(t, r, params)
+		_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, params, stakingData)
+		// For a valid tx, its btc height is always larger than the activation height
+		mockedHeight := uint64(params.ActivationHeight) + 1
+		err = stakingIndexer.ProcessStakingTx(
+			stakingTx.MsgTx(),
+			getParsedStakingData(stakingData, stakingTx.MsgTx(), params),
+			mockedHeight, time.Now(), params)
+		require.NoError(t, err)
+		storedStakingTx, err := stakingIndexer.GetStakingTxByHash(stakingTx.Hash())
+		require.NoError(t, err)
+		require.NotNil(t, storedStakingTx)
+
+		// 2. generate a valid unbonding tx
+		unbondingTx := datagen.GenerateUnbondingTxFromStaking(t, params, stakingData, stakingTx.Hash(), 0)
+		isValid, err := stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx, params)
+		require.NoError(t, err)
+		require.True(t, isValid)
+
+		// 3. test ValidateWithdrawalTxFromUnbonding with valid withdrawal tx
+		withdrawTxFromUnbonding := datagen.GenerateWithdrawalTxFromUnbonding(t, r, params, stakingData, unbondingTx.Hash())
+		err = stakingIndexer.ValidateWithdrawalTxFromUnbonding(withdrawTxFromUnbonding.MsgTx(), storedStakingTx, 0, params)
+		require.NoError(t, err)
+
+		// 4. test ValidateWithdrawalTxFromUnbonding with invalid spending input index, expect panic
+		require.Panics(t, func() {
+			_ = stakingIndexer.ValidateWithdrawalTxFromUnbonding(withdrawTxFromUnbonding.MsgTx(), storedStakingTx, 1, params)
+		})
+
+		// 5. test ValidateWithdrawalTxFromUnbonding with a different param, expect ErrInvalidWithdrawTx
+		invalidParams := *params
+		invalidParams.UnbondingTime = uint16(bbndatagen.RandomIntOtherThan(r, int(params.UnbondingTime), 1000))
+		err = stakingIndexer.ValidateWithdrawalTxFromUnbonding(withdrawTxFromUnbonding.MsgTx(), storedStakingTx, 0, &invalidParams)
+		require.ErrorIs(t, err, indexer.ErrInvalidWithdrawalTx)
+	})
+}
+
 func FuzzTestOverflow(f *testing.F) {
 	bbndatagen.AddRandomSeedsToFuzzer(f, 10)
 

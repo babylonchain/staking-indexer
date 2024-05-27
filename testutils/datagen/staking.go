@@ -109,6 +109,67 @@ func GenerateUnbondingTxFromStaking(t *testing.T, params *types.GlobalParams, st
 	return btcutil.NewTx(unbondingTx)
 }
 
+func GenerateWithdrawalTxFromStaking(t *testing.T, r *rand.Rand, params *types.GlobalParams, stakingData *TestStakingData, stakingTxHash *chainhash.Hash, stakingOutputIdx uint32) *btcutil.Tx {
+	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
+		params.Tag,
+		stakingData.StakerKey,
+		stakingData.FinalityProviderKey,
+		params.CovenantPks,
+		params.CovenantQuorum,
+		stakingData.StakingTime,
+		stakingData.StakingAmount,
+		&chaincfg.SigNetParams,
+	)
+	require.NoError(t, err)
+
+	timelockSpendInfo, err := stakingInfo.TimeLockPathSpendInfo()
+	require.NoError(t, err)
+
+	withdrawalTx := wire.NewMsgTx(2)
+	witness, err := btcstaking.CreateWitness(timelockSpendInfo, [][]byte{})
+	require.NoError(t, err)
+
+	withdrawalTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(stakingTxHash, stakingOutputIdx), nil, witness))
+	// add a dump input
+	randomOutput := &wire.OutPoint{
+		Hash:  chainhash.HashH(bbndatagen.GenRandomByteArray(r, 10)),
+		Index: r.Uint32(),
+	}
+	withdrawalTx.AddTxIn(wire.NewTxIn(randomOutput, bbndatagen.GenRandomByteArray(r, 10), nil))
+
+	return btcutil.NewTx(withdrawalTx)
+}
+
+func GenerateWithdrawalTxFromUnbonding(t *testing.T, r *rand.Rand, params *types.GlobalParams, stakingData *TestStakingData, unbondingTxHash *chainhash.Hash) *btcutil.Tx {
+	// build and send withdraw tx from the unbonding tx
+	unbondingInfo, err := btcstaking.BuildUnbondingInfo(
+		stakingData.StakerKey,
+		[]*btcec.PublicKey{stakingData.FinalityProviderKey},
+		params.CovenantPks,
+		params.CovenantQuorum,
+		params.UnbondingTime,
+		stakingData.StakingAmount.MulF64(0.9),
+		&chaincfg.SigNetParams,
+	)
+	require.NoError(t, err)
+	withdrawSpendInfo, err := unbondingInfo.TimeLockPathSpendInfo()
+	require.NoError(t, err)
+
+	withdrawalTx := wire.NewMsgTx(2)
+	witness, err := btcstaking.CreateWitness(withdrawSpendInfo, [][]byte{})
+	require.NoError(t, err)
+
+	withdrawalTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(unbondingTxHash, 0), nil, witness))
+	// add a dump input
+	randomOutput := &wire.OutPoint{
+		Hash:  chainhash.HashH(bbndatagen.GenRandomByteArray(r, 10)),
+		Index: r.Uint32(),
+	}
+	withdrawalTx.AddTxIn(wire.NewTxIn(randomOutput, bbndatagen.GenRandomByteArray(r, 10), nil))
+
+	return btcutil.NewTx(withdrawalTx)
+}
+
 func GenNStoredStakingTxs(t *testing.T, r *rand.Rand, n int, maxStakingTime uint16) []*indexerstore.StoredStakingTransaction {
 	storedTxs := make([]*indexerstore.StoredStakingTransaction, n)
 
