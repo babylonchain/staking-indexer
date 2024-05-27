@@ -103,7 +103,7 @@ func (bs *BtcPoller) Start(startHeight uint64) error {
 
 	// start handling new blocks
 	bs.wg.Add(1)
-	go bs.blockEventLoop()
+	go bs.blockEventLoop(startHeight)
 
 	bs.logger.Info("the BTC scanner is started")
 
