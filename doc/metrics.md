@@ -40,6 +40,9 @@ global parameters.
 * `failedProcessingStakingTxsCounter`: Total number of failures when 
   processing valid staking transactions
 
+* `failedProcessingUnconfirmedBlockCounter`: Total number of failures
+  when processing unconfirmed blocks
+
 * `failedVerifyingUnbondingTxsCounter`: Total number of failures when 
   verifying unbonding txs 
 
@@ -53,9 +56,3 @@ global parameters.
   failures when processing valid withdrawal transactions from unbonding
 
 * `invalidTransactionsCounter`: Total number of invalid transactions
-
-* `irregularTxsFromStakingCounter`: Total number of irregular transactions 
-  that spend a staking tx
-
-* `irregularTxsFromUnbondingCounter`: Total number of irregular transactions 
-  that spend an unbonding tx
