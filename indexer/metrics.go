@@ -93,6 +93,13 @@ var (
 		},
 	)
 
+	failedProcessingUnconfirmedBlockCounter = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "si_failed_processing_unconfirmed_block_counter",
+			Help: "Total number of failures when processing unconfirmed blocks",
+		},
+	)
+
 	invalidTransactionsCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "si_invalid_txs_counter",

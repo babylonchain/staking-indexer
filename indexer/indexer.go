@@ -163,6 +163,8 @@ func (si *StakingIndexer) blocksEventLoop() {
 				si.logger.Error("failed to process tip unconfirmed block",
 					zap.Int32("height", tipUnconfirmedBlock.Height),
 					zap.Error(err))
+
+				failedProcessingUnconfirmedBlockCounter.Inc()
 			}
 
 		case <-si.quit:
