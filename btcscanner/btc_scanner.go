@@ -183,6 +183,9 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 		confirmedBlocks = append(confirmedBlocks, tempConfirmedBlocks...)
 	}
 
+	// ensure that `isSynced` is set to true
+	bs.isSynced.Store(true)
+
 	bs.commitChainUpdate(confirmedBlocks)
 
 	bs.logger.Info("bootstrapping is finished",
