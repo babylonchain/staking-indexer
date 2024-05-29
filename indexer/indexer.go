@@ -1062,15 +1062,15 @@ func getTxHex(tx *wire.MsgTx) (string, error) {
 // validateStakingTx performs the validation checks for the staking tx
 // such as min and max staking amount and staking time
 func (si *StakingIndexer) validateStakingTx(params *types.GlobalParams, stakingData *btcstaking.ParsedV0StakingTx) error {
-	value := stakingData.StakingOutput.Value
+	value := btcutil.Amount(stakingData.StakingOutput.Value)
 	// Minimum staking amount check
-	if value < int64(params.MinStakingAmount) {
+	if value < params.MinStakingAmount {
 		return fmt.Errorf("%w: staking amount is too low, expected: %v, got: %v",
 			ErrInvalidStakingTx, params.MinStakingAmount, value)
 	}
 
 	// Maximum staking amount check
-	if value > int64(params.MaxStakingAmount) {
+	if value > params.MaxStakingAmount {
 		return fmt.Errorf("%w: staking amount is too high, expected: %v, got: %v",
 			ErrInvalidStakingTx, params.MaxStakingAmount, value)
 	}
@@ -1086,6 +1086,7 @@ func (si *StakingIndexer) validateStakingTx(params *types.GlobalParams, stakingD
 		return fmt.Errorf("%w: staking time is too low, expected: %v, got: %v",
 			ErrInvalidStakingTx, params.MinStakingTime, stakingData.OpReturnData.StakingTime)
 	}
+
 	return nil
 }
 
