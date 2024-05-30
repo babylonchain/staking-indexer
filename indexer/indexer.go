@@ -163,6 +163,8 @@ func (si *StakingIndexer) blocksEventLoop() {
 				si.logger.Error("failed to process tip unconfirmed block",
 					zap.Int32("height", tipUnconfirmedBlock.Height),
 					zap.Error(err))
+
+				failedProcessingUnconfirmedBlockCounter.Inc()
 			}
 
 		case <-si.quit:
@@ -435,7 +437,7 @@ func (si *StakingIndexer) handleSpendingUnbondingTransaction(
 		return fmt.Errorf("failed to get the params for the staking tx height: %w", err)
 	}
 
-	if err := si.validateWithdrawalTxFromUnbonding(tx, storedStakingTx, spendingInputIdx, paramsFromStakingTxHeight); err != nil {
+	if err := si.ValidateWithdrawalTxFromUnbonding(tx, storedStakingTx, spendingInputIdx, paramsFromStakingTxHeight); err != nil {
 		if errors.Is(err, ErrInvalidWithdrawalTx) {
 			// TODO consider slashing transaction for phase-2
 			invalidTransactionsCounter.WithLabelValues("confirmed_withdraw_unbonding_transactions").Inc()
@@ -501,7 +503,7 @@ func (si *StakingIndexer) handleSpendingStakingTransaction(
 	if !isUnbonding {
 		// not an unbonding tx, so this is a withdraw tx from the staking,
 		// validate it and process it
-		if err := si.validateWithdrawalTxFromStaking(tx, stakingTx, spendingInputIndex, paramsFromStakingTxHeight); err != nil {
+		if err := si.ValidateWithdrawalTxFromStaking(tx, stakingTx, spendingInputIndex, paramsFromStakingTxHeight); err != nil {
 			if errors.Is(err, ErrInvalidWithdrawalTx) {
 				invalidTransactionsCounter.WithLabelValues("confirmed_withdraw_staking_transactions").Inc()
 				si.logger.Warn("found an invalid withdrawal tx from staking",
@@ -546,7 +548,7 @@ func (si *StakingIndexer) handleSpendingStakingTransaction(
 	return nil
 }
 
-func (si *StakingIndexer) validateWithdrawalTxFromStaking(
+func (si *StakingIndexer) ValidateWithdrawalTxFromStaking(
 	tx *wire.MsgTx,
 	stakingTx *indexerstore.StoredStakingTransaction,
 	spendingInputIdx int,
@@ -585,7 +587,7 @@ func (si *StakingIndexer) validateWithdrawalTxFromStaking(
 	return nil
 }
 
-func (si *StakingIndexer) validateWithdrawalTxFromUnbonding(
+func (si *StakingIndexer) ValidateWithdrawalTxFromUnbonding(
 	tx *wire.MsgTx,
 	stakingTx *indexerstore.StoredStakingTransaction,
 	spendingInputIdx int,
@@ -829,6 +831,11 @@ func (si *StakingIndexer) ProcessStakingTx(
 		isOverflow = stakingOverflow
 	}
 
+	if isOverflow {
+		si.logger.Info("the staking tx is overflow",
+			zap.String("tx_hash", tx.TxHash().String()))
+	}
+
 	// add the staking transaction to the system state
 	if err := si.addStakingTransaction(
 		height, timestamp, tx,
@@ -900,7 +907,11 @@ func (si *StakingIndexer) addStakingTransaction(
 	)
 
 	// record metrics
-	totalStakingTxs.Inc()
+	if isOverflow {
+		totalStakingTxs.WithLabelValues("overflow").Inc()
+	} else {
+		totalStakingTxs.WithLabelValues("active").Inc()
+	}
 	lastFoundStakingTxHeight.Set(float64(height))
 
 	return nil
@@ -1051,15 +1062,15 @@ func getTxHex(tx *wire.MsgTx) (string, error) {
 // validateStakingTx performs the validation checks for the staking tx
 // such as min and max staking amount and staking time
 func (si *StakingIndexer) validateStakingTx(params *types.GlobalParams, stakingData *btcstaking.ParsedV0StakingTx) error {
-	value := stakingData.StakingOutput.Value
+	value := btcutil.Amount(stakingData.StakingOutput.Value)
 	// Minimum staking amount check
-	if value < int64(params.MinStakingAmount) {
+	if value < params.MinStakingAmount {
 		return fmt.Errorf("%w: staking amount is too low, expected: %v, got: %v",
 			ErrInvalidStakingTx, params.MinStakingAmount, value)
 	}
 
 	// Maximum staking amount check
-	if value > int64(params.MaxStakingAmount) {
+	if value > params.MaxStakingAmount {
 		return fmt.Errorf("%w: staking amount is too high, expected: %v, got: %v",
 			ErrInvalidStakingTx, params.MaxStakingAmount, value)
 	}
@@ -1075,6 +1086,7 @@ func (si *StakingIndexer) validateStakingTx(params *types.GlobalParams, stakingD
 		return fmt.Errorf("%w: staking time is too low, expected: %v, got: %v",
 			ErrInvalidStakingTx, params.MinStakingTime, stakingData.OpReturnData.StakingTime)
 	}
+
 	return nil
 }
 

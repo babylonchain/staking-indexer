@@ -9,10 +9,10 @@ import (
 	"github.com/babylonchain/staking-indexer/types"
 )
 
-// blockEventLoop handles new blocks from the BTC client unpon new block event
+// blockEventLoop handles new blocks from the BTC client upon new block event
 // Note: in case of rollback, the blockNotifier will emit information about new
 // best block for every new block after rollback
-func (bs *BtcPoller) blockEventLoop() {
+func (bs *BtcPoller) blockEventLoop(startHeight uint64) {
 	defer bs.wg.Done()
 
 	var (
@@ -58,9 +58,16 @@ func (bs *BtcPoller) blockEventLoop() {
 					zap.Error(err))
 
 				if bs.isSynced.Swap(false) {
-					err := bs.Bootstrap(bs.LastConfirmedHeight() + 1)
+					bootStrapHeight := startHeight
+					lastConfirmedHeight := bs.LastConfirmedHeight()
+					if lastConfirmedHeight != 0 {
+						bootStrapHeight = lastConfirmedHeight + 1
+					}
+
+					err := bs.Bootstrap(bootStrapHeight)
 					if err != nil {
 						bs.logger.Error("failed to bootstrap",
+							zap.Uint64("start_height", bootStrapHeight),
 							zap.Error(err))
 					}
 				}

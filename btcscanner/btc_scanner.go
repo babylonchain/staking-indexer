@@ -103,7 +103,7 @@ func (bs *BtcPoller) Start(startHeight uint64) error {
 
 	// start handling new blocks
 	bs.wg.Add(1)
-	go bs.blockEventLoop()
+	go bs.blockEventLoop(startHeight)
 
 	bs.logger.Info("the BTC scanner is started")
 
@@ -182,6 +182,9 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 		tempConfirmedBlocks := bs.unconfirmedBlockCache.TrimConfirmedBlocks(int(params.ConfirmationDepth) - 1)
 		confirmedBlocks = append(confirmedBlocks, tempConfirmedBlocks...)
 	}
+
+	// ensure that `isSynced` is set to true
+	bs.isSynced.Store(true)
 
 	bs.commitChainUpdate(confirmedBlocks)
 

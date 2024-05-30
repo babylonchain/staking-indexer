@@ -53,10 +53,13 @@ var (
 		},
 	)
 
-	totalStakingTxs = promauto.NewCounter(
+	totalStakingTxs = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "si_total_staking_txs",
 			Help: "Total number of staking transactions",
+		},
+		[]string{
+			"tx_type",
 		},
 	)
 
@@ -87,6 +90,13 @@ var (
 		prometheus.CounterOpts{
 			Name: "si_failed_processing_staking_txs_counter",
 			Help: "Total number of failures when processing valid staking transactions",
+		},
+	)
+
+	failedProcessingUnconfirmedBlockCounter = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "si_failed_processing_unconfirmed_block_counter",
+			Help: "Total number of failures when processing unconfirmed blocks",
 		},
 	)
 
