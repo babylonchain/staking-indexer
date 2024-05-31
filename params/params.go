@@ -39,8 +39,8 @@ func parseConfirmationDepthValue(confirmationDepth uint64) (uint16, error) {
 		return 0, fmt.Errorf("timelock value %d is too large. Max: %d", confirmationDepth, math.MaxUint16)
 	}
 
-	if err := checkPositive(confirmationDepth); err != nil {
-		return 0, fmt.Errorf("invalid confirmation depth value: %w", err)
+	if confirmationDepth <= 1 {
+		return 0, fmt.Errorf("confirmation depth value should be at least 2, got %d", confirmationDepth)
 	}
 
 	return uint16(confirmationDepth), nil
@@ -179,7 +179,7 @@ func ParseGlobalParams(p *GlobalParams) (*ParsedGlobalParams, error) {
 			if cv.StakingCap < pv.StakingCap {
 				return nil, fmt.Errorf("invalid params with version %d. staking cap cannot be decreased in later versions", cv.Version)
 			}
-			if cv.ActivationHeight < pv.ActivationHeight {
+			if cv.ActivationHeight <= pv.ActivationHeight {
 				return nil, fmt.Errorf("invalid params with version %d. activation height cannot be overlapping between earlier and later versions", cv.Version)
 			}
 		}
