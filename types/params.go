@@ -15,6 +15,7 @@ type GlobalParams struct {
 	Version           uint16
 	ActivationHeight  uint64
 	StakingCap        btcutil.Amount
+	CapHeight         uint64
 	Tag               []byte
 	CovenantPks       []*btcec.PublicKey
 	CovenantQuorum    uint32
