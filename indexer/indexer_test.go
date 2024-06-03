@@ -84,7 +84,7 @@ func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *types.ParamsVe
 		// no active staking events created, otherwise, to be an unbonding event
 		if r.Intn(100) < stakingChance || !hasActiveStakingEvent(stakingEvents) {
 			stakingEvent := buildStakingEvent(r, t, height, p)
-			if checkOverflow && tvl >= p.StakingCap {
+			if checkOverflow && isOverflow(t, uint64(height), tvl, p) {
 				stakingEvent.IsOverflow = true
 			} else {
 				tvl += stakingEvent.StakingTxData.StakingAmount
@@ -748,4 +748,21 @@ func sendStakingTx(
 	require.NotNil(t, storedStakingTx)
 
 	return stakingData, tvl, storedStakingTx, stakingTx
+}
+
+func isOverflow(t *testing.T, height uint64, tvl btcutil.Amount, params *types.GlobalParams) bool {
+	isTimeBased, err := params.IsTimeBasedCap()
+	require.NoError(t, err)
+
+	if isTimeBased {
+		require.GreaterOrEqual(t, height, params.ActivationHeight)
+
+		if height > params.CapHeight {
+			return true
+		}
+
+		return false
+	}
+
+	return tvl >= params.StakingCap
 }

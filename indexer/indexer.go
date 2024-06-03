@@ -823,7 +823,7 @@ func (si *StakingIndexer) ProcessStakingTx(
 		}
 
 		// check if the staking tvl is overflow with this staking tx
-		stakingOverflow, err := si.isOverflow(uint64(params.StakingCap))
+		stakingOverflow, err := si.isOverflow(height, params)
 		if err != nil {
 			return fmt.Errorf("failed to check the overflow of staking tx: %w", err)
 		}
@@ -1090,13 +1090,31 @@ func (si *StakingIndexer) validateStakingTx(params *types.GlobalParams, stakingD
 	return nil
 }
 
-func (si *StakingIndexer) isOverflow(cap uint64) (bool, error) {
+func (si *StakingIndexer) isOverflow(height uint64, params *types.GlobalParams) (bool, error) {
+	isTimeBased, err := params.IsTimeBasedCap()
+	if err != nil {
+		return false, err
+	}
+
+	if isTimeBased {
+		if height < params.ActivationHeight {
+			return false, fmt.Errorf("the transaction height %d should not be lower than the param activation height: %d",
+				height, params.ActivationHeight)
+		}
+
+		if height > params.CapHeight {
+			return true, nil
+		}
+
+		return false, nil
+	}
+
 	confirmedTvl, err := si.is.GetConfirmedTvl()
 	if err != nil {
 		return false, fmt.Errorf("failed to get the confirmed TVL: %w", err)
 	}
 
-	return confirmedTvl >= cap, nil
+	return confirmedTvl >= uint64(params.StakingCap), nil
 }
 
 func (si *StakingIndexer) GetConfirmedTvl() (uint64, error) {
