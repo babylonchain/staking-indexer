@@ -347,19 +347,6 @@ func parseVersionedGlobalParams(p *VersionedGlobalParams) (*ParsedVersionedGloba
 	}, nil
 }
 
-func (g *ParsedGlobalParams) getVersionedGlobalParamsByHeight(btcHeight uint64) *ParsedVersionedGlobalParams {
-	// Iterate the list in reverse (i.e. decreasing ActivationHeight)
-	// and identify the first element that has an activation height below
-	// the specified BTC height.
-	for i := len(g.Versions) - 1; i >= 0; i-- {
-		paramsVersion := g.Versions[i]
-		if paramsVersion.ActivationHeight <= btcHeight {
-			return paramsVersion
-		}
-	}
-	return nil
-}
-
 func (g *ParsedGlobalParams) ToGlobalParams() *types.ParamsVersions {
 	versionedParams := make([]*types.GlobalParams, len(g.Versions))
 	for i, p := range g.Versions {

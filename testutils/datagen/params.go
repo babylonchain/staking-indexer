@@ -65,7 +65,6 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 			stakingCap = lastStakingCap + btcutil.Amount(r.Int63n(1000000000)+1)
 		}
 
-		lastStakingCap = stakingCap
 		rotatedKeys := rotateCovenantPks(lastCovKeys, r, t)
 		copy(lastCovKeys, rotatedKeys)
 		paramsVersions.ParamsVersions = append(paramsVersions.ParamsVersions, &types.GlobalParams{

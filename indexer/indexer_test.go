@@ -757,11 +757,7 @@ func isOverflow(t *testing.T, height uint64, tvl btcutil.Amount, params *types.G
 	if isTimeBased {
 		require.GreaterOrEqual(t, height, params.ActivationHeight)
 
-		if height > params.CapHeight {
-			return true
-		}
-
-		return false
+		return height > params.CapHeight
 	}
 
 	return tvl >= params.StakingCap
