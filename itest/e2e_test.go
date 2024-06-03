@@ -123,7 +123,7 @@ func TestStakingLifeCycle(t *testing.T) {
 	tm.SendTxWithNConfirmations(t, stakingTx, int(k))
 
 	// check that the staking tx is already stored
-	tm.WaitForStakingTxStored(t, stakingTxHash)
+	_ = tm.WaitForStakingTxStored(t, stakingTxHash)
 
 	// check the staking event is received by the queue
 	tm.CheckNextStakingEvent(t, stakingTxHash)
@@ -273,7 +273,7 @@ func TestIndexerRestart(t *testing.T) {
 	tm.SendTxWithNConfirmations(t, stakingTx, int(k))
 
 	// check that the staking tx is already stored
-	tm.WaitForStakingTxStored(t, stakingTxHash)
+	_ = tm.WaitForStakingTxStored(t, stakingTxHash)
 
 	// check the staking event is received by the queue
 	tm.CheckNextStakingEvent(t, stakingTxHash)
@@ -337,7 +337,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	tm.SendTxWithNConfirmations(t, stakingTx, int(k))
 
 	// check that the staking tx is already stored
-	tm.WaitForStakingTxStored(t, stakingTxHash)
+	_ = tm.WaitForStakingTxStored(t, stakingTxHash)
 
 	// check the staking event is received by the queue
 	tm.CheckNextStakingEvent(t, stakingTxHash)
@@ -406,6 +406,36 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 
 	// check the withdraw event is consumed
 	tm.CheckNextWithdrawEvent(t, stakingTx.TxHash())
+}
+
+// TestTimeBasedCap tests the case where the time-based cap is applied
+func TestTimeBasedCap(t *testing.T) {
+	// start from the height at which the time-based cap is effective
+	n := 110
+	tm := StartManagerWithNBlocks(t, n, 100)
+	defer tm.Stop()
+
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	sysParams := tm.VersionedParams.ParamsVersions[1]
+	k := uint64(sysParams.ConfirmationDepth)
+
+	// build and send staking tx which should not overflow
+	stakingTx, _, _ := tm.BuildStakingTx(t, r, sysParams)
+	tm.SendTxWithNConfirmations(t, stakingTx, int(k))
+	storedTx := tm.WaitForStakingTxStored(t, stakingTx.TxHash())
+	require.False(t, storedTx.IsOverflow)
+
+	// generate blocks so that the height is out of the cap height
+	tm.BitcoindHandler.GenerateBlocks(20)
+	currentHeight, err := tm.BitcoindHandler.GetBlockCount()
+	require.NoError(t, err)
+	require.Greater(t, uint64(currentHeight), sysParams.CapHeight)
+
+	// send another staking tx which should be overflow
+	stakingTx2, _, _ := tm.BuildStakingTx(t, r, sysParams)
+	tm.SendTxWithNConfirmations(t, stakingTx2, int(k))
+	storedTx2 := tm.WaitForStakingTxStored(t, stakingTx2.TxHash())
+	require.True(t, storedTx2.IsOverflow)
 }
 
 func TestBtcHeaders(t *testing.T) {

@@ -3,12 +3,14 @@ package e2etest
 import (
 	"encoding/hex"
 	"encoding/json"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/babylonchain/babylon/btcstaking"
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/babylonchain/staking-queue-client/queuemngr"
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -31,6 +33,8 @@ import (
 	"github.com/babylonchain/staking-indexer/log"
 	"github.com/babylonchain/staking-indexer/params"
 	"github.com/babylonchain/staking-indexer/server"
+	"github.com/babylonchain/staking-indexer/testutils"
+	"github.com/babylonchain/staking-indexer/testutils/datagen"
 	"github.com/babylonchain/staking-indexer/types"
 )
 
@@ -226,6 +230,36 @@ func DefaultStakingIndexerConfig(homePath string) *config.Config {
 	return defaultConfig
 }
 
+func (tm *TestManager) BuildStakingTx(
+	t *testing.T,
+	r *rand.Rand,
+	params *types.GlobalParams,
+) (*wire.MsgTx, *datagen.TestStakingData, *btcstaking.IdentifiableStakingInfo) {
+
+	testStakingData := datagen.GenerateTestStakingData(t, r, params)
+	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
+		params.Tag,
+		tm.WalletPrivKey.PubKey(),
+		testStakingData.FinalityProviderKey,
+		params.CovenantPks,
+		params.CovenantQuorum,
+		testStakingData.StakingTime,
+		testStakingData.StakingAmount,
+		regtestParams,
+	)
+	require.NoError(t, err)
+
+	stakingTx, err := testutils.CreateTxFromOutputsAndSign(
+		tm.WalletClient,
+		[]*wire.TxOut{stakingInfo.OpReturnOutput, stakingInfo.StakingOutput},
+		1000,
+		tm.MinerAddr,
+	)
+	require.NoError(t, err)
+
+	return stakingTx, testStakingData, stakingInfo
+}
+
 func (tm *TestManager) SendTxWithNConfirmations(t *testing.T, tx *wire.MsgTx, n int) {
 	txHash, err := tm.WalletClient.SendRawTransaction(tx, true)
 	require.NoError(t, err)
@@ -347,7 +381,7 @@ func (tm *TestManager) CheckNextUnconfirmedEvent(t *testing.T, confirmedTvl, tot
 	}
 }
 
-func (tm *TestManager) WaitForStakingTxStored(t *testing.T, txHash chainhash.Hash) {
+func (tm *TestManager) WaitForStakingTxStored(t *testing.T, txHash chainhash.Hash) *indexerstore.StoredStakingTransaction {
 	var storedTx indexerstore.StoredStakingTransaction
 	require.Eventually(t, func() bool {
 		storedStakingTx, err := tm.Si.GetStakingTxByHash(&txHash)
@@ -359,6 +393,8 @@ func (tm *TestManager) WaitForStakingTxStored(t *testing.T, txHash chainhash.Has
 	}, eventuallyWaitTimeOut, eventuallyPollTime)
 
 	require.Equal(t, txHash.String(), storedTx.Tx.TxHash().String())
+
+	return &storedTx
 }
 
 func (tm *TestManager) WaitForUnbondingTxStored(t *testing.T, txHash chainhash.Hash) {
