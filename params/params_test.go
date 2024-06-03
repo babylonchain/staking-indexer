@@ -43,7 +43,7 @@ func generateInitParams(t *testing.T, r *rand.Rand) *params.VersionedGlobalParam
 		MinStakingAmount:  uint64(r.Int63n(1000000) + 1000000),
 		MaxStakingTime:    math.MaxUint16,
 		MinStakingTime:    uint64(r.Int63n(10000) + 10000),
-		ConfirmationDepth: uint64(r.Int63n(10) + 1),
+		ConfirmationDepth: uint64(r.Int63n(10) + 2),
 	}
 
 	return &gp
