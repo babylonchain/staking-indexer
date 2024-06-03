@@ -235,7 +235,6 @@ func (tm *TestManager) BuildStakingTx(
 	r *rand.Rand,
 	params *types.GlobalParams,
 ) (*wire.MsgTx, *datagen.TestStakingData, *btcstaking.IdentifiableStakingInfo) {
-
 	testStakingData := datagen.GenerateTestStakingData(t, r, params)
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
 		params.Tag,

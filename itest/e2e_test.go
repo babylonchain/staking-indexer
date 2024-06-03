@@ -15,10 +15,7 @@ import (
 	bbnbtclightclienttypes "github.com/babylonchain/babylon/x/btclightclient/types"
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/stretchr/testify/require"
 
@@ -26,7 +23,6 @@ import (
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
-	"github.com/babylonchain/staking-indexer/types"
 )
 
 func TestBTCScanner(t *testing.T) {
@@ -97,28 +93,9 @@ func TestStakingLifeCycle(t *testing.T) {
 	// TODO: test with multiple system parameters
 	sysParams := tm.VersionedParams.ParamsVersions[0]
 	k := uint64(sysParams.ConfirmationDepth)
-	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
-	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
-		sysParams.Tag,
-		tm.WalletPrivKey.PubKey(),
-		testStakingData.FinalityProviderKey,
-		sysParams.CovenantPks,
-		sysParams.CovenantQuorum,
-		testStakingData.StakingTime,
-		testStakingData.StakingAmount,
-		regtestParams,
-	)
-	require.NoError(t, err)
 
-	// send the staking tx and mine blocks
-	require.NoError(t, err)
-	stakingTx, err := testutils.CreateTxFromOutputsAndSign(
-		tm.WalletClient,
-		[]*wire.TxOut{stakingInfo.OpReturnOutput, stakingInfo.StakingOutput},
-		1000,
-		tm.MinerAddr,
-	)
-	require.NoError(t, err)
+	// build, send the staking tx and mine blocks
+	stakingTx, testStakingData, stakingInfo := tm.BuildStakingTx(t, r, sysParams)
 	stakingTxHash := stakingTx.TxHash()
 	tm.SendTxWithNConfirmations(t, stakingTx, int(k))
 
@@ -172,29 +149,9 @@ func TestUnconfirmedTVL(t *testing.T) {
 	k := sysParams.ConfirmationDepth
 
 	// build staking tx
-	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
-	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
-		sysParams.Tag,
-		tm.WalletPrivKey.PubKey(),
-		testStakingData.FinalityProviderKey,
-		sysParams.CovenantPks,
-		sysParams.CovenantQuorum,
-		testStakingData.StakingTime,
-		testStakingData.StakingAmount,
-		regtestParams,
-	)
-	require.NoError(t, err)
-
+	stakingTx, testStakingData, stakingInfo := tm.BuildStakingTx(t, r, sysParams)
 	// send the staking tx and mine 1 block to trigger
 	// unconfirmed calculation
-	require.NoError(t, err)
-	stakingTx, err := testutils.CreateTxFromOutputsAndSign(
-		tm.WalletClient,
-		[]*wire.TxOut{stakingInfo.OpReturnOutput, stakingInfo.StakingOutput},
-		1000,
-		tm.MinerAddr,
-	)
-	require.NoError(t, err)
 	tm.SendTxWithNConfirmations(t, stakingTx, 1)
 	tm.CheckNextUnconfirmedEvent(t, 0, uint64(stakingInfo.StakingOutput.Value))
 
@@ -244,7 +201,6 @@ func TestIndexerRestart(t *testing.T) {
 
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	// TODO: test with multiple system parameters
 	sysParams := tm.VersionedParams.ParamsVersions[0]
 	k := sysParams.ConfirmationDepth
 	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
@@ -479,108 +435,6 @@ func TestBtcHeaders(t *testing.T) {
 	// check if it is valid on genesis
 	genState.BtcHeaders = infos
 	require.NoError(t, genState.Validate())
-}
-
-func buildUnbondingTx(
-	t *testing.T,
-	params *types.GlobalParams,
-	stakerPrivKey *btcec.PrivateKey,
-	fpKey *btcec.PublicKey,
-	stakingAmount btcutil.Amount,
-	stakingTxHash *chainhash.Hash,
-	stakingOutputIdx uint32,
-	unbondingSpendInfo *btcstaking.SpendInfo,
-	stakingTx *wire.MsgTx,
-	covPrivKeys []*btcec.PrivateKey,
-) *wire.MsgTx {
-	expectedOutputValue := stakingAmount - params.UnbondingFee
-	unbondingInfo, err := btcstaking.BuildUnbondingInfo(
-		stakerPrivKey.PubKey(),
-		[]*btcec.PublicKey{fpKey},
-		params.CovenantPks,
-		params.CovenantQuorum,
-		params.UnbondingTime,
-		expectedOutputValue,
-		regtestParams,
-	)
-	require.NoError(t, err)
-
-	unbondingTx := wire.NewMsgTx(2)
-	unbondingTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(stakingTxHash, stakingOutputIdx), nil, nil))
-	unbondingTx.AddTxOut(unbondingInfo.UnbondingOutput)
-
-	// generate covenant unbonding sigs
-	unbondingCovSigs := make([]*schnorr.Signature, len(covPrivKeys))
-	for i, privKey := range covPrivKeys {
-		sig, err := btcstaking.SignTxWithOneScriptSpendInputStrict(
-			unbondingTx,
-			stakingTx,
-			stakingOutputIdx,
-			unbondingSpendInfo.GetPkScriptPath(),
-			privKey,
-		)
-		require.NoError(t, err)
-
-		unbondingCovSigs[i] = sig
-	}
-
-	stakerUnbondingSig, err := btcstaking.SignTxWithOneScriptSpendInputFromScript(
-		unbondingTx,
-		stakingTx.TxOut[stakingOutputIdx],
-		stakerPrivKey,
-		unbondingSpendInfo.RevealedLeaf.Script,
-	)
-	require.NoError(t, err)
-
-	witness, err := unbondingSpendInfo.CreateUnbondingPathWitness(unbondingCovSigs, stakerUnbondingSig)
-	require.NoError(t, err)
-	unbondingTx.TxIn[0].Witness = witness
-
-	return unbondingTx
-}
-
-func buildWithdrawTx(
-	t *testing.T,
-	stakerPrivKey *btcec.PrivateKey,
-	fundTxOutput *wire.TxOut,
-	fundTxHash chainhash.Hash,
-	fundTxOutputIndex uint32,
-	fundTxSpendInfo *btcstaking.SpendInfo,
-	lockTime uint16,
-	lockedAmount btcutil.Amount,
-) *wire.MsgTx {
-
-	destAddress, err := btcutil.NewAddressPubKey(stakerPrivKey.PubKey().SerializeCompressed(), regtestParams)
-
-	require.NoError(t, err)
-	destAddressScript, err := txscript.PayToAddrScript(destAddress)
-	require.NoError(t, err)
-
-	// to spend output with relative timelock transaction need to be version two or higher
-	withdrawTx := wire.NewMsgTx(2)
-	withdrawTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(&fundTxHash, fundTxOutputIndex), nil, nil))
-	withdrawTx.AddTxOut(wire.NewTxOut(int64(lockedAmount.MulF64(0.5)), destAddressScript))
-
-	// we need to set sequence number before signing, as signing commits to sequence
-	// number
-	withdrawTx.TxIn[0].Sequence = uint32(lockTime)
-
-	sig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
-		withdrawTx,
-		fundTxOutput,
-		stakerPrivKey,
-		fundTxSpendInfo.RevealedLeaf,
-	)
-
-	require.NoError(t, err)
-
-	witness, err := fundTxSpendInfo.CreateTimeLockPathWitness(sig)
-
-	require.NoError(t, err)
-
-	withdrawTx.TxIn[0].Witness = witness
-
-	return withdrawTx
 }
 
 func getCovenantPrivKeys(t *testing.T) []*btcec.PrivateKey {
