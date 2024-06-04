@@ -1091,21 +1091,18 @@ func (si *StakingIndexer) validateStakingTx(params *types.GlobalParams, stakingD
 }
 
 func (si *StakingIndexer) isOverflow(height uint64, params *types.GlobalParams) (bool, error) {
-	isTimeBased, err := params.IsTimeBasedCap()
-	if err != nil {
-		return false, err
+	isTimeBased := params.IsTimeBasedCap()
+
+	if isTimeBased && height < params.ActivationHeight {
+		panic(fmt.Errorf("the transaction height %d should not be lower than the param activation height: %d",
+			height, params.ActivationHeight))
 	}
 
-	if isTimeBased {
-		if height < params.ActivationHeight {
-			return false, fmt.Errorf("the transaction height %d should not be lower than the param activation height: %d",
-				height, params.ActivationHeight)
-		}
+	if isTimeBased && height > params.CapHeight {
+		return true, nil
+	}
 
-		if height > params.CapHeight {
-			return true, nil
-		}
-
+	if isTimeBased && height <= params.CapHeight {
 		return false, nil
 	}
 

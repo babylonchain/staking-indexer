@@ -45,18 +45,14 @@ func (pv *ParamsVersions) GetParamsForBTCHeight(btcHeight int32) (*GlobalParams,
 	return nil, fmt.Errorf("no version corresponds to the provided BTC height")
 }
 
-func (gp *GlobalParams) IsTimeBasedCap() (bool, error) {
-	if gp.StakingCap != 0 {
-		if gp.CapHeight != 0 {
-			return false, fmt.Errorf("only either of staking cap and cap height can be set")
-		}
-
-		return false, nil
+func (gp *GlobalParams) IsTimeBasedCap() bool {
+	if gp.StakingCap != 0 && gp.CapHeight != 0 {
+		panic(fmt.Errorf("only either of staking cap and cap height can be set"))
 	}
 
-	if gp.CapHeight == 0 {
-		return false, fmt.Errorf("either of staking cap and cap height must be set")
+	if gp.StakingCap == 0 && gp.CapHeight == 0 {
+		panic(fmt.Errorf("either of staking cap and cap height must be set"))
 	}
 
-	return true, nil
+	return gp.CapHeight != 0
 }

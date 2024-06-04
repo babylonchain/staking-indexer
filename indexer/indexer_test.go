@@ -593,10 +593,7 @@ func NewMockedBtcScanner(t *testing.T, chainUpdateInfoChan chan *btcscanner.Chai
 }
 
 func isOverflow(t *testing.T, height uint64, tvl btcutil.Amount, params *types.GlobalParams) bool {
-	isTimeBased, err := params.IsTimeBasedCap()
-	require.NoError(t, err)
-
-	if isTimeBased {
+	if params.IsTimeBasedCap() {
 		require.GreaterOrEqual(t, height, params.ActivationHeight)
 
 		return height > params.CapHeight

@@ -45,25 +45,19 @@ func parseConfirmationDepthValue(confirmationDepth uint64) (uint16, error) {
 	return uint16(confirmationDepth), nil
 }
 
-// either staking cap and cap height should be positive
-// if cap height is positive, then it should be greater
-// than the activation height
-func parseCap(stakingCap, capHeight, activationHeight uint64) (btcutil.Amount, uint64, error) {
-	if stakingCap != 0 {
-		if capHeight != 0 {
-			return 0, 0, fmt.Errorf("only either of staking cap and cap height can be set")
-		}
-
-		parsedStakingCap, err := parseBtcValue(stakingCap)
-		return parsedStakingCap, 0, err
+// either staking cap and cap height should be positive if cap height is positive
+func parseCap(stakingCap, capHeight uint64) (btcutil.Amount, uint64, error) {
+	if stakingCap != 0 && capHeight != 0 {
+		return 0, 0, fmt.Errorf("only either of staking cap and cap height can be set")
 	}
 
-	if capHeight == 0 {
+	if stakingCap == 0 && capHeight == 0 {
 		return 0, 0, fmt.Errorf("either of staking cap and cap height must be set")
 	}
 
-	if capHeight <= activationHeight {
-		return 0, 0, fmt.Errorf("the cap height %d should be greater than the activation height %d", capHeight, activationHeight)
+	if stakingCap != 0 {
+		parsedStakingCap, err := parseBtcValue(stakingCap)
+		return parsedStakingCap, 0, err
 	}
 
 	return 0, capHeight, nil
@@ -324,7 +318,7 @@ func parseVersionedGlobalParams(p *VersionedGlobalParams) (*ParsedVersionedGloba
 		return nil, fmt.Errorf("invalid confirmation_depth: %w", err)
 	}
 
-	stakingCap, capHeight, err := parseCap(p.StakingCap, p.CapHeight, p.ActivationHeight)
+	stakingCap, capHeight, err := parseCap(p.StakingCap, p.CapHeight)
 	if err != nil {
 		return nil, fmt.Errorf("invalid cap: %w", err)
 	}
