@@ -32,7 +32,7 @@ var (
 // Config is the main config for the fpd cli command
 type Config struct {
 	LogLevel       string         `long:"loglevel" description:"Logging level for all subsystems" choice:"trace" choice:"debug" choice:"info" choice:"warn" choice:"error" choice:"fatal"`
-	BitcoinNetwork string         `long:"bitcoinnetwork" description:"Bitcoin network to run on" choise:"mainnet" choice:"regtest" choice:"testnet" choice:"simnet" choice:"signet"`
+	BitcoinNetwork string         `long:"bitcoinnetwork" description:"Bitcoin network to run on" choice:"mainnet" choice:"regtest" choice:"testnet" choice:"simnet" choice:"signet"`
 	BTCConfig      *BTCConfig     `group:"btcconfig" namespace:"btcconfig"`
 	DatabaseConfig *DBConfig      `group:"dbconfig" namespace:"dbconfig"`
 	QueueConfig    *QueueConfig   `group:"queueconfig" namespace:"queueconfig"`
