@@ -1,6 +1,8 @@
 package indexer_test
 
 import (
+	"bytes"
+	"encoding/hex"
 	"math/rand"
 	"path/filepath"
 	"sync"
@@ -10,6 +12,7 @@ import (
 	"github.com/babylonchain/babylon/btcstaking"
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/golang/mock/gomock"
@@ -20,6 +23,7 @@ import (
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/indexer"
 	"github.com/babylonchain/staking-indexer/indexerstore"
+	"github.com/babylonchain/staking-indexer/params"
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
 	"github.com/babylonchain/staking-indexer/testutils/mocks"
@@ -748,4 +752,39 @@ func sendStakingTx(
 	require.NotNil(t, storedStakingTx)
 
 	return stakingData, tvl, storedStakingTx, stakingTx
+}
+
+func getParams(t *testing.T, homepath string) *types.ParamsVersions {
+	paramsRetriever, err := params.NewGlobalParamsRetriever(homepath)
+	require.NoError(t, err)
+	return paramsRetriever.VersionedParams()
+}
+
+func TestStakingParser(t *testing.T) {
+	p := getParams(t, "./../itest/test-params.json")
+	txHex := "0200000000010133ceace6ad2ae3672290f313a7b5a8e26896ae8813acab3025ffddfeb0dd01710000000000ffffffff0350c3000000000000225120bd2f283bd7ec2261900ebaf299b75fc14bd868f9b7d0f704ccfbba8d923f5dbf0000000000000000496a476262743400bd2f283bd7ec2261900ebaf299b75fc14bd868f9b7d0f704ccfbba8d923f5dbf353c7d4f849495bf68a61812c4c3478b2526ca6c67d52e8118ad40065146f038fa009ad70600000000002251206cf6226e9c21483dd9cb30990001a1024f927f7686f02145b1e196b83ce2d57a01408ca15d790cc9cdf210ffdf0ae07684377f908e5fe2af9db47d7bb7c790c97d357c055e323ca07b5aea40b4b2bb6c8d9c1451b007376de7596c11ee1c3dd533d208080300"
+	txBytes, err := hex.DecodeString(txHex)
+	require.NoError(t, err)
+	var stakingTx wire.MsgTx
+	err = stakingTx.Deserialize(bytes.NewReader(txBytes))
+	require.NoError(t, err)
+	parsedData, err := btcstaking.NewV0OpReturnDataFromTxOutput(stakingTx.TxOut[1])
+	require.NoError(t, err)
+	_, err = btcstaking.ParseV0StakingTx(
+		&stakingTx,
+		p.ParamsVersions[1].Tag,
+		p.ParamsVersions[1].CovenantPks,
+		p.ParamsVersions[1].CovenantQuorum,
+		&chaincfg.SigNetParams)
+	require.NoError(t, err)
+	t.Logf("staker public key: %s", hex.EncodeToString(parsedData.StakerPublicKey.Marshall()))
+	t.Logf("finality provider public key: %s", hex.EncodeToString(parsedData.FinalityProviderPublicKey.Marshall()))
+	t.Logf("staking time: %v", parsedData.StakingTime)
+	t.Logf("staking value: %v", stakingTx.TxOut[0].Value)
+	var covenantPks []string
+	for _, pk := range p.ParamsVersions[1].CovenantPks {
+		covenantPks = append(covenantPks, hex.EncodeToString(pk.SerializeCompressed()))
+	}
+	t.Logf("covenant pks: %v", covenantPks)
+	t.Logf("covenant quorum: %v", p.ParamsVersions[1].CovenantQuorum)
 }
