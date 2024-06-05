@@ -15,6 +15,7 @@ type GlobalParams struct {
 	Version           uint16
 	ActivationHeight  uint64
 	StakingCap        btcutil.Amount
+	CapHeight         uint64
 	Tag               []byte
 	CovenantPks       []*btcec.PublicKey
 	CovenantQuorum    uint32
@@ -42,4 +43,16 @@ func (pv *ParamsVersions) GetParamsForBTCHeight(btcHeight int32) (*GlobalParams,
 		}
 	}
 	return nil, fmt.Errorf("no version corresponds to the provided BTC height")
+}
+
+func (gp *GlobalParams) IsTimeBasedCap() bool {
+	if gp.StakingCap != 0 && gp.CapHeight != 0 {
+		panic(fmt.Errorf("only either of staking cap and cap height can be set"))
+	}
+
+	if gp.StakingCap == 0 && gp.CapHeight == 0 {
+		panic(fmt.Errorf("either of staking cap and cap height must be set"))
+	}
+
+	return gp.CapHeight != 0
 }

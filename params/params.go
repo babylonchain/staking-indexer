@@ -1,7 +1,6 @@
 package params
 
 import (
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -44,6 +43,24 @@ func parseConfirmationDepthValue(confirmationDepth uint64) (uint16, error) {
 	}
 
 	return uint16(confirmationDepth), nil
+}
+
+// either staking cap and cap height should be positive if cap height is positive
+func parseCap(stakingCap, capHeight uint64) (btcutil.Amount, uint64, error) {
+	if stakingCap != 0 && capHeight != 0 {
+		return 0, 0, fmt.Errorf("only either of staking cap and cap height can be set")
+	}
+
+	if stakingCap == 0 && capHeight == 0 {
+		return 0, 0, fmt.Errorf("either of staking cap and cap height must be set")
+	}
+
+	if stakingCap != 0 {
+		parsedStakingCap, err := parseBtcValue(stakingCap)
+		return parsedStakingCap, 0, err
+	}
+
+	return 0, capHeight, nil
 }
 
 func parseBtcValue(value uint64) (btcutil.Amount, error) {
@@ -102,6 +119,7 @@ type VersionedGlobalParams struct {
 	Version           uint64   `json:"version"`
 	ActivationHeight  uint64   `json:"activation_height"`
 	StakingCap        uint64   `json:"staking_cap"`
+	CapHeight         uint64   `json:"cap_height"`
 	Tag               string   `json:"tag"`
 	CovenantPks       []string `json:"covenant_pks"`
 	CovenantQuorum    uint64   `json:"covenant_quorum"`
@@ -122,6 +140,7 @@ type ParsedVersionedGlobalParams struct {
 	Version           uint64
 	ActivationHeight  uint64
 	StakingCap        btcutil.Amount
+	CapHeight         uint64
 	Tag               []byte
 	CovenantPks       []*btcec.PublicKey
 	CovenantQuorum    uint32
@@ -161,7 +180,7 @@ func ParseGlobalParams(p *GlobalParams) (*ParsedGlobalParams, error) {
 	}
 	var parsedVersions []*ParsedVersionedGlobalParams
 
-	for _, v := range p.Versions {
+	for i, v := range p.Versions {
 		vCopy := v
 		cv, err := parseVersionedGlobalParams(vCopy)
 
@@ -173,14 +192,20 @@ func ParseGlobalParams(p *GlobalParams) (*ParsedGlobalParams, error) {
 		if len(parsedVersions) > 0 {
 			pv := parsedVersions[len(parsedVersions)-1]
 
+			lastStakingCap := FindLastStakingCap(p.Versions[:i])
+
 			if cv.Version != pv.Version+1 {
 				return nil, fmt.Errorf("invalid params with version %d. versions should be monotonically increasing by 1", cv.Version)
 			}
-			if cv.StakingCap < pv.StakingCap {
-				return nil, fmt.Errorf("invalid params with version %d. staking cap cannot be decreased in later versions", cv.Version)
+			if cv.StakingCap != 0 && cv.StakingCap < btcutil.Amount(lastStakingCap) {
+				return nil, fmt.Errorf("invalid params with version %d. staking cap cannot be decreased in later versions, last non-zero staking cap: %d, got: %d",
+					cv.Version, lastStakingCap, cv.StakingCap)
 			}
 			if cv.ActivationHeight < pv.ActivationHeight {
 				return nil, fmt.Errorf("invalid params with version %d. activation height cannot be overlapping between earlier and later versions", cv.Version)
+			}
+			if cv.ActivationHeight <= pv.CapHeight {
+				return nil, fmt.Errorf("invalid params with version %d. activation height must be greater than the cap height of the previous version", cv.Version)
 			}
 		}
 
@@ -190,6 +215,23 @@ func ParseGlobalParams(p *GlobalParams) (*ParsedGlobalParams, error) {
 	return &ParsedGlobalParams{
 		Versions: parsedVersions,
 	}, nil
+}
+
+// FindLastStakingCap finds the last staking cap that is not zero
+// it returns zero if not non-zero value is found
+func FindLastStakingCap(prevVersions []*VersionedGlobalParams) uint64 {
+	numPrevVersions := len(prevVersions)
+	if len(prevVersions) == 0 {
+		return 0
+	}
+
+	for i := numPrevVersions - 1; i >= 0; i-- {
+		if prevVersions[i].StakingCap > 0 {
+			return prevVersions[i].StakingCap
+		}
+	}
+
+	return 0
 }
 
 func (lp *GlobalParamsRetriever) VersionedParams() *types.ParamsVersions {
@@ -276,15 +318,16 @@ func parseVersionedGlobalParams(p *VersionedGlobalParams) (*ParsedVersionedGloba
 		return nil, fmt.Errorf("invalid confirmation_depth: %w", err)
 	}
 
-	stakingCap, err := parseBtcValue(p.StakingCap)
+	stakingCap, capHeight, err := parseCap(p.StakingCap, p.CapHeight)
 	if err != nil {
-		return nil, fmt.Errorf("invalid staking_cap: %w", err)
+		return nil, fmt.Errorf("invalid cap: %w", err)
 	}
 
 	return &ParsedVersionedGlobalParams{
 		Version:           p.Version,
 		ActivationHeight:  p.ActivationHeight,
 		StakingCap:        stakingCap,
+		CapHeight:         capHeight,
 		Tag:               tag,
 		CovenantPks:       covenantKeys,
 		CovenantQuorum:    quroum,
@@ -298,39 +341,6 @@ func parseVersionedGlobalParams(p *VersionedGlobalParams) (*ParsedVersionedGloba
 	}, nil
 }
 
-func (g *ParsedGlobalParams) getVersionedGlobalParamsByHeight(btcHeight uint64) *ParsedVersionedGlobalParams {
-	// Iterate the list in reverse (i.e. decreasing ActivationHeight)
-	// and identify the first element that has an activation height below
-	// the specified BTC height.
-	for i := len(g.Versions) - 1; i >= 0; i-- {
-		paramsVersion := g.Versions[i]
-		if paramsVersion.ActivationHeight <= btcHeight {
-			return paramsVersion
-		}
-	}
-	return nil
-}
-
-func (g *ParsedGlobalParams) ParamsByHeight(_ context.Context, height uint64) (*types.GlobalParams, error) {
-	versionedParams := g.getVersionedGlobalParamsByHeight(height)
-	if versionedParams == nil {
-		return nil, fmt.Errorf("no global params for height %d", height)
-	}
-
-	return &types.GlobalParams{
-		CovenantPks:       versionedParams.CovenantPks,
-		CovenantQuorum:    versionedParams.CovenantQuorum,
-		Tag:               versionedParams.Tag,
-		UnbondingTime:     versionedParams.UnbondingTime,
-		UnbondingFee:      versionedParams.UnbondingFee,
-		MaxStakingAmount:  versionedParams.MaxStakingAmount,
-		MinStakingAmount:  versionedParams.MinStakingAmount,
-		MaxStakingTime:    versionedParams.MaxStakingTime,
-		MinStakingTime:    versionedParams.MinStakingTime,
-		ConfirmationDepth: versionedParams.ConfirmationDepth,
-	}, nil
-}
-
 func (g *ParsedGlobalParams) ToGlobalParams() *types.ParamsVersions {
 	versionedParams := make([]*types.GlobalParams, len(g.Versions))
 	for i, p := range g.Versions {
@@ -338,6 +348,7 @@ func (g *ParsedGlobalParams) ToGlobalParams() *types.ParamsVersions {
 			Version:           uint16(p.Version),
 			ActivationHeight:  p.ActivationHeight,
 			StakingCap:        p.StakingCap,
+			CapHeight:         p.CapHeight,
 			Tag:               p.Tag,
 			CovenantPks:       p.CovenantPks,
 			CovenantQuorum:    p.CovenantQuorum,

@@ -35,6 +35,7 @@ Bitcoin activation height. Each version contains the following:
   "version": <params_version>,
   "activation_height": <bitcoin_activation_height>,
   "staking_cap": <satoshis_staking_cap_of_version>,
+  "cap_height": <bitcoin_cap_height>,
   "tag": "<magic_bytes_to_identify_staking_txs>",
   "covenant_pks": [
     "<covenant_btc_pk1>",

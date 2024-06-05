@@ -1,7 +1,6 @@
 package params_test
 
 import (
-	"context"
 	"encoding/hex"
 	"math"
 	"math/rand"
@@ -34,6 +33,7 @@ func generateInitParams(t *testing.T, r *rand.Rand) *params.VersionedGlobalParam
 		Version:           0,
 		ActivationHeight:  0,
 		StakingCap:        uint64(r.Int63n(int64(initialCapMin)) + int64(initialCapMin)),
+		CapHeight:         0,
 		Tag:               tag,
 		CovenantPks:       pks,
 		CovenantQuorum:    uint64(quorum),
@@ -70,9 +70,17 @@ func genValidGlobalParam(
 	for i := 1; i < int(num); i++ {
 		prev := versions[i-1]
 		next := generateInitParams(t, r)
-		next.ActivationHeight = prev.ActivationHeight + uint64(r.Int63n(100)+100)
+		next.ActivationHeight = uint64(math.Max(float64(prev.ActivationHeight), float64(prev.CapHeight))) + uint64(r.Int63n(100)+100)
 		next.Version = prev.Version + 1
-		next.StakingCap = prev.StakingCap + uint64(r.Int63n(1000000000)+1)
+
+		// 1/3 chance to have a time-based cap
+		if r.Intn(3) == 0 {
+			next.CapHeight = next.ActivationHeight + uint64(r.Int63n(100)+100)
+			next.StakingCap = 0
+		} else {
+			lastStakingCap := params.FindLastStakingCap(versions[:i])
+			next.StakingCap = lastStakingCap + uint64(r.Int63n(1000000000)+1)
+		}
 		versions = append(versions, next)
 	}
 
@@ -96,6 +104,7 @@ func FuzzParseValidParams(f *testing.F) {
 			require.Equal(t, globalParams.Versions[i].Version, p.Version)
 			require.Equal(t, globalParams.Versions[i].ActivationHeight, p.ActivationHeight)
 			require.Equal(t, globalParams.Versions[i].StakingCap, uint64(p.StakingCap))
+			require.Equal(t, globalParams.Versions[i].CapHeight, p.CapHeight)
 			require.Equal(t, globalParams.Versions[i].Tag, hex.EncodeToString(p.Tag))
 			require.Equal(t, globalParams.Versions[i].CovenantQuorum, uint64(p.CovenantQuorum))
 			require.Equal(t, globalParams.Versions[i].UnbondingTime, uint64(p.UnbondingTime))
@@ -121,15 +130,18 @@ func FuzzRetrievingParametersByHeight(f *testing.F) {
 		randParameterIndex := r.Intn(numOfParams)
 		randVersionedParams := parsedParams.Versions[randParameterIndex]
 
-		// If we are querying exactly by one of the activation height, we shuld always
-		// retriveve original parameters
-		params, err := parsedParams.ParamsByHeight(context.Background(), randVersionedParams.ActivationHeight)
+		// If we are querying exactly by one of the activation height, we should always
+		// retrieve original parameters
+		typeGlobalParams := parsedParams.ToGlobalParams()
+		params, err := typeGlobalParams.GetParamsForBTCHeight(int32(randVersionedParams.ActivationHeight))
 		require.NoError(t, err)
 		require.NotNil(t, params)
 
 		require.Equal(t, randVersionedParams.CovenantQuorum, params.CovenantQuorum)
 		require.Equal(t, randVersionedParams.CovenantPks, params.CovenantPks)
 		require.Equal(t, randVersionedParams.Tag, params.Tag)
+		require.Equal(t, randVersionedParams.StakingCap, params.StakingCap)
+		require.Equal(t, randVersionedParams.CapHeight, params.CapHeight)
 		require.Equal(t, randVersionedParams.UnbondingTime, params.UnbondingTime)
 		require.Equal(t, randVersionedParams.UnbondingFee, params.UnbondingFee)
 		require.Equal(t, randVersionedParams.MaxStakingAmount, params.MaxStakingAmount)
@@ -141,7 +153,7 @@ func FuzzRetrievingParametersByHeight(f *testing.F) {
 		if randParameterIndex > 0 {
 			// If we are querying by a height that is one before the activations height
 			// of the randomly chosen parameter, we should retrieve previous parameters version
-			params, err := parsedParams.ParamsByHeight(context.Background(), randVersionedParams.ActivationHeight-1)
+			params, err := typeGlobalParams.GetParamsForBTCHeight(int32(randVersionedParams.ActivationHeight) - 1)
 			require.NoError(t, err)
 			require.NotNil(t, params)
 			paramsBeforeRand := parsedParams.Versions[randParameterIndex-1]
