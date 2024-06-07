@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/babylonchain/babylon/btcstaking"
+	"github.com/babylonchain/networks/parameters/parser"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcjson"
@@ -22,7 +23,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/babylonchain/staking-indexer/config"
-	"github.com/babylonchain/staking-indexer/types"
 )
 
 type Utxo struct {
@@ -238,7 +238,7 @@ func makeInputSource(utxos []Utxo) txauthor.InputSource {
 
 func BuildUnbondingTx(
 	t *testing.T,
-	params *types.GlobalParams,
+	params *parser.ParsedVersionedGlobalParams,
 	stakerPrivKey *btcec.PrivateKey,
 	fpKey *btcec.PublicKey,
 	stakingAmount btcutil.Amount,

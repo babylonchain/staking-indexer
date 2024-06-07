@@ -4,16 +4,15 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/babylonchain/networks/parameters/parser"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/stretchr/testify/require"
-
-	"github.com/babylonchain/staking-indexer/types"
 )
 
 // GenerateGlobalParamsVersions generate test params and save it in a file
 // It returns the file path
-func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersions {
+func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *parser.ParsedGlobalParams {
 	// Random number of versions
 	numVersions := uint16(r.Intn(10) + 1)
 
@@ -33,8 +32,8 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 	// the value should be at least 2
 	confirmationDepth := uint16(r.Intn(100) + 2)
 
-	paramsVersions := &types.ParamsVersions{
-		ParamsVersions: make([]*types.GlobalParams, 0),
+	paramsVersions := &parser.ParsedGlobalParams{
+		Versions: make([]*parser.ParsedVersionedGlobalParams, 0),
 	}
 	lastStakingCap := btcutil.Amount(0)
 	lastActivationHeight := int32(0)
@@ -61,14 +60,14 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *types.ParamsVersi
 			capHeight = uint64(activationHeight) + uint64(r.Int63n(100)+100)
 			stakingCap = 0
 		} else {
-			lastStakingCap = findLastStakingCap(paramsVersions.ParamsVersions[:int(version)])
+			lastStakingCap = findLastStakingCap(paramsVersions.Versions[:int(version)])
 			stakingCap = lastStakingCap + btcutil.Amount(r.Int63n(1000000000)+1)
 		}
 
 		rotatedKeys := rotateCovenantPks(lastCovKeys, r, t)
 		copy(lastCovKeys, rotatedKeys)
-		paramsVersions.ParamsVersions = append(paramsVersions.ParamsVersions, &types.GlobalParams{
-			Version:           version,
+		paramsVersions.Versions = append(paramsVersions.Versions, &parser.ParsedVersionedGlobalParams{
+			Version:           uint64(version),
 			StakingCap:        stakingCap,
 			CapHeight:         capHeight,
 			ActivationHeight:  uint64(activationHeight),
@@ -112,7 +111,7 @@ func rotateCovenantPks(oldKeys []*btcec.PublicKey, r *rand.Rand, t *testing.T) [
 
 // findLastStakingCap finds the last staking cap that is not zero
 // it returns zero if not non-zero value is found
-func findLastStakingCap(prevVersions []*types.GlobalParams) btcutil.Amount {
+func findLastStakingCap(prevVersions []*parser.ParsedVersionedGlobalParams) btcutil.Amount {
 	numPrevVersions := len(prevVersions)
 	if len(prevVersions) == 0 {
 		return 0

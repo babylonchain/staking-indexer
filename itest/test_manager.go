@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/babylonchain/babylon/btcstaking"
+	"github.com/babylonchain/networks/parameters/parser"
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/babylonchain/staking-queue-client/queuemngr"
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -35,7 +36,6 @@ import (
 	"github.com/babylonchain/staking-indexer/server"
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
-	"github.com/babylonchain/staking-indexer/types"
 )
 
 type TestManager struct {
@@ -55,7 +55,7 @@ type TestManager struct {
 	UnbondingEventChan <-chan queuecli.QueueMessage
 	WithdrawEventChan  <-chan queuecli.QueueMessage
 	BtcInfoEventChan   <-chan queuecli.QueueMessage
-	VersionedParams    *types.ParamsVersions
+	VersionedParams    *parser.ParsedGlobalParams
 }
 
 // bitcoin params used for testing
@@ -131,7 +131,7 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 	require.NoError(t, err)
 	versionedParams := paramsRetriever.VersionedParams()
 	require.NoError(t, err)
-	scanner, err := btcscanner.NewBTCScanner(versionedParams, logger, btcClient, btcNotifier)
+	scanner, err := btcscanner.NewBTCScanner(versionedParams.Versions[0].ConfirmationDepth, logger, btcClient, btcNotifier)
 	require.NoError(t, err)
 
 	// create event consumer
@@ -233,7 +233,7 @@ func DefaultStakingIndexerConfig(homePath string) *config.Config {
 func (tm *TestManager) BuildStakingTx(
 	t *testing.T,
 	r *rand.Rand,
-	params *types.GlobalParams,
+	params *parser.ParsedVersionedGlobalParams,
 ) (*wire.MsgTx, *datagen.TestStakingData, *btcstaking.IdentifiableStakingInfo) {
 	testStakingData := datagen.GenerateTestStakingData(t, r, params)
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(

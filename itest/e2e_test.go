@@ -34,7 +34,7 @@ func TestBTCScanner(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, n, count)
 
-	k := int(tm.VersionedParams.ParamsVersions[0].ConfirmationDepth)
+	k := int(tm.VersionedParams.Versions[0].ConfirmationDepth)
 
 	_ = tm.BitcoindHandler.GenerateBlocks(10)
 
@@ -91,7 +91,7 @@ func TestStakingLifeCycle(t *testing.T) {
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// TODO: test with multiple system parameters
-	sysParams := tm.VersionedParams.ParamsVersions[0]
+	sysParams := tm.VersionedParams.Versions[0]
 	k := uint64(sysParams.ConfirmationDepth)
 
 	// build, send the staking tx and mine blocks
@@ -145,7 +145,7 @@ func TestUnconfirmedTVL(t *testing.T) {
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// TODO: test with multiple system parameters
-	sysParams := tm.VersionedParams.ParamsVersions[0]
+	sysParams := tm.VersionedParams.Versions[0]
 	k := sysParams.ConfirmationDepth
 
 	// build staking tx
@@ -201,7 +201,7 @@ func TestIndexerRestart(t *testing.T) {
 
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	sysParams := tm.VersionedParams.ParamsVersions[0]
+	sysParams := tm.VersionedParams.Versions[0]
 	k := sysParams.ConfirmationDepth
 	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
@@ -265,7 +265,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 
 	// generate valid staking tx data
 	// TODO: test with multiple system parameters
-	sysParams := tm.VersionedParams.ParamsVersions[0]
+	sysParams := tm.VersionedParams.Versions[0]
 	k := uint64(sysParams.ConfirmationDepth)
 	testStakingData := getTestStakingData(t)
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
@@ -372,7 +372,7 @@ func TestTimeBasedCap(t *testing.T) {
 	defer tm.Stop()
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	sysParams := tm.VersionedParams.ParamsVersions[1]
+	sysParams := tm.VersionedParams.Versions[1]
 	k := uint64(sysParams.ConfirmationDepth)
 
 	// build and send staking tx which should not overflow

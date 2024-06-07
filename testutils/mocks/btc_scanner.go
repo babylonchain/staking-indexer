@@ -93,17 +93,17 @@ func (mr *MockBtcScannerMockRecorder) LastConfirmedHeight() *gomock.Call {
 }
 
 // Start mocks base method.
-func (m *MockBtcScanner) Start(startHeight uint64) error {
+func (m *MockBtcScanner) Start(startHeight, activationHeight uint64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Start", startHeight)
+	ret := m.ctrl.Call(m, "Start", startHeight, activationHeight)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Start indicates an expected call of Start.
-func (mr *MockBtcScannerMockRecorder) Start(startHeight interface{}) *gomock.Call {
+func (mr *MockBtcScannerMockRecorder) Start(startHeight, activationHeight interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockBtcScanner)(nil).Start), startHeight)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockBtcScanner)(nil).Start), startHeight, activationHeight)
 }
 
 // Stop mocks base method.
