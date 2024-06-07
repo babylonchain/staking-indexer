@@ -1,4 +1,4 @@
-FROM golang:1.21.6-alpine as builder
+FROM golang:1.22.3-alpine as builder
 
 # TARGETPLATFORM should be one of linux/amd64 or linux/arm64.
 ARG TARGETPLATFORM="linux/amd64"

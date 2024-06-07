@@ -12,12 +12,14 @@ import (
 
 	"github.com/babylonchain/babylon/btcstaking"
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
+	bbnbtclightclienttypes "github.com/babylonchain/babylon/x/btclightclient/types"
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/stretchr/testify/require"
 
+	"github.com/babylonchain/staking-indexer/cmd/sid/cli"
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
@@ -32,7 +34,7 @@ func TestBTCScanner(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, n, count)
 
-	k := int(tm.VersionedParams.ParamsVersions[0].ConfirmationDepth)
+	k := int(tm.VersionedParams.Versions[0].ConfirmationDepth)
 
 	_ = tm.BitcoindHandler.GenerateBlocks(10)
 
@@ -89,35 +91,16 @@ func TestStakingLifeCycle(t *testing.T) {
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// TODO: test with multiple system parameters
-	sysParams := tm.VersionedParams.ParamsVersions[0]
+	sysParams := tm.VersionedParams.Versions[0]
 	k := uint64(sysParams.ConfirmationDepth)
-	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
-	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
-		sysParams.Tag,
-		tm.WalletPrivKey.PubKey(),
-		testStakingData.FinalityProviderKey,
-		sysParams.CovenantPks,
-		sysParams.CovenantQuorum,
-		testStakingData.StakingTime,
-		testStakingData.StakingAmount,
-		regtestParams,
-	)
-	require.NoError(t, err)
 
-	// send the staking tx and mine blocks
-	require.NoError(t, err)
-	stakingTx, err := testutils.CreateTxFromOutputsAndSign(
-		tm.WalletClient,
-		[]*wire.TxOut{stakingInfo.OpReturnOutput, stakingInfo.StakingOutput},
-		1000,
-		tm.MinerAddr,
-	)
-	require.NoError(t, err)
+	// build, send the staking tx and mine blocks
+	stakingTx, testStakingData, stakingInfo := tm.BuildStakingTx(t, r, sysParams)
 	stakingTxHash := stakingTx.TxHash()
 	tm.SendTxWithNConfirmations(t, stakingTx, int(k))
 
 	// check that the staking tx is already stored
-	tm.WaitForStakingTxStored(t, stakingTxHash)
+	_ = tm.WaitForStakingTxStored(t, stakingTxHash)
 
 	// check the staking event is received by the queue
 	tm.CheckNextStakingEvent(t, stakingTxHash)
@@ -162,33 +145,13 @@ func TestUnconfirmedTVL(t *testing.T) {
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// TODO: test with multiple system parameters
-	sysParams := tm.VersionedParams.ParamsVersions[0]
+	sysParams := tm.VersionedParams.Versions[0]
 	k := sysParams.ConfirmationDepth
 
 	// build staking tx
-	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
-	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
-		sysParams.Tag,
-		tm.WalletPrivKey.PubKey(),
-		testStakingData.FinalityProviderKey,
-		sysParams.CovenantPks,
-		sysParams.CovenantQuorum,
-		testStakingData.StakingTime,
-		testStakingData.StakingAmount,
-		regtestParams,
-	)
-	require.NoError(t, err)
-
+	stakingTx, testStakingData, stakingInfo := tm.BuildStakingTx(t, r, sysParams)
 	// send the staking tx and mine 1 block to trigger
 	// unconfirmed calculation
-	require.NoError(t, err)
-	stakingTx, err := testutils.CreateTxFromOutputsAndSign(
-		tm.WalletClient,
-		[]*wire.TxOut{stakingInfo.OpReturnOutput, stakingInfo.StakingOutput},
-		1000,
-		tm.MinerAddr,
-	)
-	require.NoError(t, err)
 	tm.SendTxWithNConfirmations(t, stakingTx, 1)
 	tm.CheckNextUnconfirmedEvent(t, 0, uint64(stakingInfo.StakingOutput.Value))
 
@@ -238,8 +201,7 @@ func TestIndexerRestart(t *testing.T) {
 
 	// generate valid staking tx data
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	// TODO: test with multiple system parameters
-	sysParams := tm.VersionedParams.ParamsVersions[0]
+	sysParams := tm.VersionedParams.Versions[0]
 	k := sysParams.ConfirmationDepth
 	testStakingData := datagen.GenerateTestStakingData(t, r, sysParams)
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
@@ -267,7 +229,7 @@ func TestIndexerRestart(t *testing.T) {
 	tm.SendTxWithNConfirmations(t, stakingTx, int(k))
 
 	// check that the staking tx is already stored
-	tm.WaitForStakingTxStored(t, stakingTxHash)
+	_ = tm.WaitForStakingTxStored(t, stakingTxHash)
 
 	// check the staking event is received by the queue
 	tm.CheckNextStakingEvent(t, stakingTxHash)
@@ -303,7 +265,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 
 	// generate valid staking tx data
 	// TODO: test with multiple system parameters
-	sysParams := tm.VersionedParams.ParamsVersions[0]
+	sysParams := tm.VersionedParams.Versions[0]
 	k := uint64(sysParams.ConfirmationDepth)
 	testStakingData := getTestStakingData(t)
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
@@ -331,7 +293,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	tm.SendTxWithNConfirmations(t, stakingTx, int(k))
 
 	// check that the staking tx is already stored
-	tm.WaitForStakingTxStored(t, stakingTxHash)
+	_ = tm.WaitForStakingTxStored(t, stakingTxHash)
 
 	// check the staking event is received by the queue
 	tm.CheckNextStakingEvent(t, stakingTxHash)
@@ -400,6 +362,79 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 
 	// check the withdraw event is consumed
 	tm.CheckNextWithdrawEvent(t, stakingTx.TxHash())
+}
+
+// TestTimeBasedCap tests the case where the time-based cap is applied
+func TestTimeBasedCap(t *testing.T) {
+	// start from the height at which the time-based cap is effective
+	n := 110
+	tm := StartManagerWithNBlocks(t, n, 100)
+	defer tm.Stop()
+
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	sysParams := tm.VersionedParams.Versions[1]
+	k := uint64(sysParams.ConfirmationDepth)
+
+	// build and send staking tx which should not overflow
+	stakingTx, _, _ := tm.BuildStakingTx(t, r, sysParams)
+	tm.SendTxWithNConfirmations(t, stakingTx, int(k))
+	storedTx := tm.WaitForStakingTxStored(t, stakingTx.TxHash())
+	require.False(t, storedTx.IsOverflow)
+
+	// generate blocks so that the height is out of the cap height
+	tm.BitcoindHandler.GenerateBlocks(20)
+	currentHeight, err := tm.BitcoindHandler.GetBlockCount()
+	require.NoError(t, err)
+	require.Greater(t, uint64(currentHeight), sysParams.CapHeight)
+
+	// send another staking tx which should be overflow
+	stakingTx2, _, _ := tm.BuildStakingTx(t, r, sysParams)
+	tm.SendTxWithNConfirmations(t, stakingTx2, int(k))
+	storedTx2 := tm.WaitForStakingTxStored(t, stakingTx2.TxHash())
+	require.True(t, storedTx2.IsOverflow)
+}
+
+func TestBtcHeaders(t *testing.T) {
+	r := rand.New(rand.NewSource(10))
+	blocksPerRetarget := 2016
+	genState := bbnbtclightclienttypes.DefaultGenesis()
+
+	initBlocksQnt := r.Intn(15) + blocksPerRetarget
+	btcd, btcClient := StartBtcClientAndBtcHandler(t, initBlocksQnt)
+
+	// from zero height
+	infos, err := cli.BtcHeaderInfoList(btcClient, 0, uint64(initBlocksQnt))
+	require.NoError(t, err)
+	require.Equal(t, len(infos), initBlocksQnt+1)
+
+	// should be valid on genesis, start from zero height.
+	genState.BtcHeaders = infos
+	require.NoError(t, genState.Validate())
+
+	generatedBlocksQnt := r.Intn(15) + 2
+	btcd.GenerateBlocks(generatedBlocksQnt)
+	totalBlks := initBlocksQnt + generatedBlocksQnt
+
+	// check from height with interval
+	fromBlockHeight := blocksPerRetarget - 1
+	toBlockHeight := totalBlks - 2
+
+	infos, err = cli.BtcHeaderInfoList(btcClient, uint64(fromBlockHeight), uint64(toBlockHeight))
+	require.NoError(t, err)
+	require.Equal(t, len(infos), int(toBlockHeight-fromBlockHeight)+1)
+
+	// try to check if it is valid on genesis, should fail is not retarget block.
+	genState.BtcHeaders = infos
+	require.EqualError(t, genState.Validate(), "genesis block must be a difficulty adjustment block")
+
+	// from retarget block
+	infos, err = cli.BtcHeaderInfoList(btcClient, uint64(blocksPerRetarget), uint64(totalBlks))
+	require.NoError(t, err)
+	require.Equal(t, len(infos), int(totalBlks-blocksPerRetarget)+1)
+
+	// check if it is valid on genesis
+	genState.BtcHeaders = infos
+	require.NoError(t, genState.Validate())
 }
 
 func getCovenantPrivKeys(t *testing.T) []*btcec.PrivateKey {

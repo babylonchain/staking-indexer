@@ -3,12 +3,15 @@ package e2etest
 import (
 	"encoding/hex"
 	"encoding/json"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/babylonchain/babylon/btcstaking"
+	"github.com/babylonchain/networks/parameters/parser"
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/babylonchain/staking-queue-client/queuemngr"
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -21,6 +24,7 @@ import (
 	"github.com/lightningnetwork/lnd/kvdb"
 	"github.com/lightningnetwork/lnd/signal"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
 	"github.com/babylonchain/staking-indexer/btcclient"
 	"github.com/babylonchain/staking-indexer/btcscanner"
@@ -30,7 +34,8 @@ import (
 	"github.com/babylonchain/staking-indexer/log"
 	"github.com/babylonchain/staking-indexer/params"
 	"github.com/babylonchain/staking-indexer/server"
-	"github.com/babylonchain/staking-indexer/types"
+	"github.com/babylonchain/staking-indexer/testutils"
+	"github.com/babylonchain/staking-indexer/testutils/datagen"
 )
 
 type TestManager struct {
@@ -50,7 +55,7 @@ type TestManager struct {
 	UnbondingEventChan <-chan queuecli.QueueMessage
 	WithdrawEventChan  <-chan queuecli.QueueMessage
 	BtcInfoEventChan   <-chan queuecli.QueueMessage
-	VersionedParams    *types.ParamsVersions
+	VersionedParams    *parser.ParsedGlobalParams
 }
 
 // bitcoin params used for testing
@@ -59,14 +64,14 @@ var (
 	eventuallyWaitTimeOut = 1 * time.Minute
 	eventuallyPollTime    = 500 * time.Millisecond
 	testParamsPath        = "test-params.json"
-	passphrase            = "pass"
-	walletName            = "test-wallet"
+	Passphrase            = "pass"
+	WalletName            = "test-wallet"
 )
 
 func StartManagerWithNBlocks(t *testing.T, n int, startHeight uint64) *TestManager {
 	h := NewBitcoindHandler(t)
 	h.Start()
-	_ = h.CreateWallet(walletName, passphrase)
+	_ = h.CreateWallet(WalletName, Passphrase)
 	resp := h.GenerateBlocks(n)
 
 	minerAddressDecoded, err := btcutil.DecodeAddress(resp.Address, regtestParams)
@@ -79,14 +84,32 @@ func StartManagerWithNBlocks(t *testing.T, n int, startHeight uint64) *TestManag
 	return StartWithBitcoinHandler(t, h, minerAddressDecoded, dirPath, startHeight)
 }
 
+func StartBtcClientAndBtcHandler(t *testing.T, generateNBlocks int) (*BitcoindTestHandler, *btcclient.BTCClient) {
+	btcd := NewBitcoindHandler(t)
+	btcd.Start()
+	_ = btcd.CreateWallet(WalletName, Passphrase)
+
+	resp := btcd.GenerateBlocks(generateNBlocks)
+	require.Equal(t, len(resp.Blocks), generateNBlocks)
+
+	cfg := DefaultStakingIndexerConfig(t.TempDir())
+	btcClient, err := btcclient.NewBTCClient(
+		cfg.BTCConfig,
+		zap.NewNop(),
+	)
+	require.NoError(t, err)
+
+	return btcd, btcClient
+}
+
 func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress btcutil.Address, dirPath string, startHeight uint64) *TestManager {
-	cfg := defaultStakingIndexerConfig(dirPath)
+	cfg := DefaultStakingIndexerConfig(dirPath)
 	logger, err := log.NewRootLoggerWithFile(config.LogFile(dirPath), "debug")
 	require.NoError(t, err)
 
 	rpcclient, err := rpcclient.New(cfg.BTCConfig.ToConnConfig(), nil)
 	require.NoError(t, err)
-	err = rpcclient.WalletPassphrase(passphrase, 200)
+	err = rpcclient.WalletPassphrase(Passphrase, 200)
 	require.NoError(t, err)
 	walletPrivKey, err := rpcclient.DumpPrivKey(minerAddress)
 	require.NoError(t, err)
@@ -108,7 +131,7 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 	require.NoError(t, err)
 	versionedParams := paramsRetriever.VersionedParams()
 	require.NoError(t, err)
-	scanner, err := btcscanner.NewBTCScanner(versionedParams, logger, btcClient, btcNotifier)
+	scanner, err := btcscanner.NewBTCScanner(versionedParams.Versions[0].ConfirmationDepth, logger, btcClient, btcNotifier)
 	require.NoError(t, err)
 
 	// create event consumer
@@ -188,7 +211,7 @@ func ReStartFromHeight(t *testing.T, tm *TestManager, height uint64) *TestManage
 	return restartedTm
 }
 
-func defaultStakingIndexerConfig(homePath string) *config.Config {
+func DefaultStakingIndexerConfig(homePath string) *config.Config {
 	defaultConfig := config.DefaultConfigWithHome(homePath)
 
 	// both wallet and node are bicoind
@@ -205,6 +228,35 @@ func defaultStakingIndexerConfig(homePath string) *config.Config {
 	defaultConfig.BTCConfig.TxPollingInterval = 1 * time.Second
 
 	return defaultConfig
+}
+
+func (tm *TestManager) BuildStakingTx(
+	t *testing.T,
+	r *rand.Rand,
+	params *parser.ParsedVersionedGlobalParams,
+) (*wire.MsgTx, *datagen.TestStakingData, *btcstaking.IdentifiableStakingInfo) {
+	testStakingData := datagen.GenerateTestStakingData(t, r, params)
+	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
+		params.Tag,
+		tm.WalletPrivKey.PubKey(),
+		testStakingData.FinalityProviderKey,
+		params.CovenantPks,
+		params.CovenantQuorum,
+		testStakingData.StakingTime,
+		testStakingData.StakingAmount,
+		regtestParams,
+	)
+	require.NoError(t, err)
+
+	stakingTx, err := testutils.CreateTxFromOutputsAndSign(
+		tm.WalletClient,
+		[]*wire.TxOut{stakingInfo.OpReturnOutput, stakingInfo.StakingOutput},
+		1000,
+		tm.MinerAddr,
+	)
+	require.NoError(t, err)
+
+	return stakingTx, testStakingData, stakingInfo
 }
 
 func (tm *TestManager) SendTxWithNConfirmations(t *testing.T, tx *wire.MsgTx, n int) {
@@ -328,7 +380,7 @@ func (tm *TestManager) CheckNextUnconfirmedEvent(t *testing.T, confirmedTvl, tot
 	}
 }
 
-func (tm *TestManager) WaitForStakingTxStored(t *testing.T, txHash chainhash.Hash) {
+func (tm *TestManager) WaitForStakingTxStored(t *testing.T, txHash chainhash.Hash) *indexerstore.StoredStakingTransaction {
 	var storedTx indexerstore.StoredStakingTransaction
 	require.Eventually(t, func() bool {
 		storedStakingTx, err := tm.Si.GetStakingTxByHash(&txHash)
@@ -340,6 +392,8 @@ func (tm *TestManager) WaitForStakingTxStored(t *testing.T, txHash chainhash.Has
 	}, eventuallyWaitTimeOut, eventuallyPollTime)
 
 	require.Equal(t, txHash.String(), storedTx.Tx.TxHash().String())
+
+	return &storedTx
 }
 
 func (tm *TestManager) WaitForUnbondingTxStored(t *testing.T, txHash chainhash.Hash) {

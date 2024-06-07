@@ -8,6 +8,7 @@ import (
 	reflect "reflect"
 
 	types "github.com/babylonchain/staking-indexer/types"
+	wire "github.com/btcsuite/btcd/wire"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -47,6 +48,21 @@ func (m *MockClient) GetBlockByHeight(height uint64) (*types.IndexedBlock, error
 func (mr *MockClientMockRecorder) GetBlockByHeight(height interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlockByHeight", reflect.TypeOf((*MockClient)(nil).GetBlockByHeight), height)
+}
+
+// GetBlockHeaderByHeight mocks base method.
+func (m *MockClient) GetBlockHeaderByHeight(height uint64) (*wire.BlockHeader, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlockHeaderByHeight", height)
+	ret0, _ := ret[0].(*wire.BlockHeader)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBlockHeaderByHeight indicates an expected call of GetBlockHeaderByHeight.
+func (mr *MockClientMockRecorder) GetBlockHeaderByHeight(height interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlockHeaderByHeight", reflect.TypeOf((*MockClient)(nil).GetBlockHeaderByHeight), height)
 }
 
 // GetTipHeight mocks base method.

@@ -126,13 +126,8 @@ func (bs *BtcPoller) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
 		return fmt.Errorf("failed to add the block %d to cache: %w", ib.Height, err)
 	}
 
-	params, err := bs.paramsVersions.GetParamsForBTCHeight(blockEpoch.Height)
-	if err != nil {
-		return fmt.Errorf("failed to get parameters for height %d: %w", blockEpoch.Height, err)
-	}
-
 	// try to extract confirmed blocks
-	confirmedBlocks := bs.unconfirmedBlockCache.TrimConfirmedBlocks(int(params.ConfirmationDepth) - 1)
+	confirmedBlocks := bs.unconfirmedBlockCache.TrimConfirmedBlocks(int(bs.confirmationDepth) - 1)
 
 	bs.commitChainUpdate(confirmedBlocks)
 

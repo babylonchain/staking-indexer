@@ -22,8 +22,8 @@ func FuzzPoller(f *testing.F) {
 	f.Fuzz(func(t *testing.T, seed int64) {
 		r := rand.New(rand.NewSource(seed))
 		versionedParams := datagen.GenerateGlobalParamsVersions(r, t)
-		k := uint64(versionedParams.ParamsVersions[0].ConfirmationDepth)
-		startHeight := versionedParams.ParamsVersions[0].ActivationHeight
+		k := uint64(versionedParams.Versions[0].ConfirmationDepth)
+		startHeight := versionedParams.Versions[0].ActivationHeight
 		// Generate a random number of blocks
 		numBlocks := bbndatagen.RandomIntOtherThan(r, 0, 50) + k // make sure we have at least k+1 entry
 		chainIndexedBlocks := datagen.GetRandomIndexedBlocks(r, startHeight, numBlocks)
@@ -38,7 +38,7 @@ func FuzzPoller(f *testing.F) {
 				Return(chainIndexedBlocks[i], nil).AnyTimes()
 		}
 
-		btcScanner, err := btcscanner.NewBTCScanner(versionedParams, zap.NewNop(), mockBtcClient, &mock.ChainNotifier{})
+		btcScanner, err := btcscanner.NewBTCScanner(uint16(k), zap.NewNop(), mockBtcClient, &mock.ChainNotifier{})
 		require.NoError(t, err)
 
 		var wg sync.WaitGroup
@@ -54,7 +54,7 @@ func FuzzPoller(f *testing.F) {
 			require.Equal(t, bestHeight, updateInfo.TipUnconfirmedBlock.Height)
 		}()
 
-		err = btcScanner.Start(startHeight)
+		err = btcScanner.Start(startHeight, startHeight)
 		require.NoError(t, err)
 		defer func() {
 			err := btcScanner.Stop()
