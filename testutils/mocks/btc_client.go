@@ -8,8 +8,8 @@ import (
 	reflect "reflect"
 
 	types "github.com/babylonchain/staking-indexer/types"
+	wire "github.com/btcsuite/btcd/wire"
 	gomock "github.com/golang/mock/gomock"
-	"github.com/btcsuite/btcd/wire"
 )
 
 // MockClient is a mock of Client interface.

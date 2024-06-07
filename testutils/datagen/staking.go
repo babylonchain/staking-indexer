@@ -6,6 +6,7 @@ import (
 
 	"github.com/babylonchain/babylon/btcstaking"
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
+	"github.com/babylonchain/networks/parameters/parser"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -14,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/babylonchain/staking-indexer/indexerstore"
-	"github.com/babylonchain/staking-indexer/types"
 )
 
 type TestStakingData struct {
@@ -27,7 +27,7 @@ type TestStakingData struct {
 func GenerateTestStakingData(
 	t *testing.T,
 	r *rand.Rand,
-	params *types.GlobalParams,
+	params *parser.ParsedVersionedGlobalParams,
 ) *TestStakingData {
 	stakerPrivKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
@@ -46,7 +46,7 @@ func GenerateTestStakingData(
 	}
 }
 
-func GenerateStakingTxFromTestData(t *testing.T, r *rand.Rand, params *types.GlobalParams, stakingData *TestStakingData) (*btcstaking.IdentifiableStakingInfo, *btcutil.Tx) {
+func GenerateStakingTxFromTestData(t *testing.T, r *rand.Rand, params *parser.ParsedVersionedGlobalParams, stakingData *TestStakingData) (*btcstaking.IdentifiableStakingInfo, *btcutil.Tx) {
 	stakingInfo, tx, err := btcstaking.BuildV0IdentifiableStakingOutputsAndTx(
 		params.Tag,
 		stakingData.StakerKey,
@@ -73,7 +73,7 @@ func GenerateStakingTxFromTestData(t *testing.T, r *rand.Rand, params *types.Glo
 	return stakingInfo, btcutil.NewTx(tx)
 }
 
-func GenerateUnbondingTxFromStaking(t *testing.T, params *types.GlobalParams, stakingData *TestStakingData, stakingTxHash *chainhash.Hash, stakingOutputIdx uint32) *btcutil.Tx {
+func GenerateUnbondingTxFromStaking(t *testing.T, params *parser.ParsedVersionedGlobalParams, stakingData *TestStakingData, stakingTxHash *chainhash.Hash, stakingOutputIdx uint32) *btcutil.Tx {
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
 		params.Tag,
 		stakingData.StakerKey,
@@ -109,7 +109,7 @@ func GenerateUnbondingTxFromStaking(t *testing.T, params *types.GlobalParams, st
 	return btcutil.NewTx(unbondingTx)
 }
 
-func GenerateWithdrawalTxFromStaking(t *testing.T, r *rand.Rand, params *types.GlobalParams, stakingData *TestStakingData, stakingTxHash *chainhash.Hash, stakingOutputIdx uint32) *btcutil.Tx {
+func GenerateWithdrawalTxFromStaking(t *testing.T, r *rand.Rand, params *parser.ParsedVersionedGlobalParams, stakingData *TestStakingData, stakingTxHash *chainhash.Hash, stakingOutputIdx uint32) *btcutil.Tx {
 	stakingInfo, err := btcstaking.BuildV0IdentifiableStakingOutputs(
 		params.Tag,
 		stakingData.StakerKey,
@@ -140,7 +140,7 @@ func GenerateWithdrawalTxFromStaking(t *testing.T, r *rand.Rand, params *types.G
 	return btcutil.NewTx(withdrawalTx)
 }
 
-func GenerateWithdrawalTxFromUnbonding(t *testing.T, r *rand.Rand, params *types.GlobalParams, stakingData *TestStakingData, unbondingTxHash *chainhash.Hash) *btcutil.Tx {
+func GenerateWithdrawalTxFromUnbonding(t *testing.T, r *rand.Rand, params *parser.ParsedVersionedGlobalParams, stakingData *TestStakingData, unbondingTxHash *chainhash.Hash) *btcutil.Tx {
 	// build and send withdraw tx from the unbonding tx
 	unbondingInfo, err := btcstaking.BuildUnbondingInfo(
 		stakingData.StakerKey,

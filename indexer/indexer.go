@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/babylonchain/babylon/btcstaking"
+	"github.com/babylonchain/networks/parameters/parser"
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -30,7 +31,7 @@ type StakingIndexer struct {
 	stopOnce  sync.Once
 
 	consumer       consumer.EventConsumer
-	paramsVersions *types.ParamsVersions
+	paramsVersions *parser.ParsedGlobalParams
 
 	cfg    *config.Config
 	logger *zap.Logger
@@ -48,7 +49,7 @@ func NewStakingIndexer(
 	logger *zap.Logger,
 	consumer consumer.EventConsumer,
 	db kvdb.Backend,
-	paramsVersions *types.ParamsVersions,
+	paramsVersions *parser.ParsedGlobalParams,
 	btcScanner btcscanner.BtcScanner,
 ) (*StakingIndexer, error) {
 	is, err := indexerstore.NewIndexerStore(db)
@@ -81,7 +82,7 @@ func (si *StakingIndexer) Start(startHeight uint64) error {
 			return
 		}
 
-		if err := si.btcScanner.Start(startHeight); err != nil {
+		if err := si.btcScanner.Start(startHeight, si.paramsVersions.Versions[0].ActivationHeight); err != nil {
 			startErr = err
 			return
 		}
@@ -102,7 +103,7 @@ func (si *StakingIndexer) Start(startHeight uint64) error {
 // (1) does not handle irrelevant blocks (impossible to have staking tx)
 // (2) does not miss relevant blocks (possible to have staking tx)
 func (si *StakingIndexer) ValidateStartHeight(startHeight uint64) error {
-	baseHeight := si.paramsVersions.ParamsVersions[0].ActivationHeight
+	baseHeight := si.paramsVersions.Versions[0].ActivationHeight
 	if startHeight < baseHeight {
 		return fmt.Errorf("the start height should not be lower than the earliest activation height %d", baseHeight)
 	}
@@ -125,7 +126,7 @@ func (si *StakingIndexer) ValidateStartHeight(startHeight uint64) error {
 func (si *StakingIndexer) GetStartHeight() uint64 {
 	lastProcessedHeight, err := si.is.GetLastProcessedHeight()
 	if err != nil {
-		return si.paramsVersions.ParamsVersions[0].ActivationHeight
+		return si.paramsVersions.Versions[0].ActivationHeight
 	}
 
 	return lastProcessedHeight + 1
@@ -235,9 +236,9 @@ func (si *StakingIndexer) CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks []*t
 	tvl := btcutil.Amount(0)
 	unconfirmedStakingTxs := make(map[chainhash.Hash]*indexerstore.StoredStakingTransaction)
 	for _, b := range unconfirmedBlocks {
-		params, err := si.paramsVersions.GetParamsForBTCHeight(b.Height)
+		params, err := si.getVersionedParams(uint64(b.Height))
 		if err != nil {
-			return 0, fmt.Errorf("failed to get params for height %d: %w", b.Height, err)
+			return 0, err
 		}
 
 		for _, tx := range b.Txs {
@@ -296,11 +297,9 @@ func (si *StakingIndexer) CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks []*t
 			}
 			if spentInputIdx >= 0 {
 				// 3. is a spending tx, check whether it is a valid unbonding tx
-				paramsFromStakingTxHeight, err := si.paramsVersions.GetParamsForBTCHeight(
-					int32(stakingTx.InclusionHeight),
-				)
+				paramsFromStakingTxHeight, err := si.getVersionedParams(stakingTx.InclusionHeight)
 				if err != nil {
-					return 0, fmt.Errorf("failed to get the params for the staking tx height %d: %w", stakingTx.InclusionHeight, err)
+					return 0, err
 				}
 				isUnbonding, err := si.IsValidUnbondingTx(msgTx, stakingTx, paramsFromStakingTxHeight)
 				if err != nil {
@@ -350,7 +349,7 @@ func (si *StakingIndexer) CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks []*t
 // HandleConfirmedBlock iterates through the tx set of a confirmed block and
 // parse the staking, unbonding, and withdrawal txs if there are any.
 func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
-	params, err := si.paramsVersions.GetParamsForBTCHeight(b.Height)
+	params, err := si.getVersionedParams(uint64(b.Height))
 	if err != nil {
 		return err
 	}
@@ -430,11 +429,9 @@ func (si *StakingIndexer) handleSpendingUnbondingTransaction(
 		return err
 	}
 
-	paramsFromStakingTxHeight, err := si.paramsVersions.GetParamsForBTCHeight(
-		int32(storedStakingTx.InclusionHeight),
-	)
+	paramsFromStakingTxHeight, err := si.getVersionedParams(storedStakingTx.InclusionHeight)
 	if err != nil {
-		return fmt.Errorf("failed to get the params for the staking tx height: %w", err)
+		return err
 	}
 
 	if err := si.ValidateWithdrawalTxFromUnbonding(tx, storedStakingTx, spendingInputIdx, paramsFromStakingTxHeight); err != nil {
@@ -474,11 +471,9 @@ func (si *StakingIndexer) handleSpendingStakingTransaction(
 	timestamp time.Time,
 ) error {
 	stakingTxHash := stakingTx.Tx.TxHash()
-	paramsFromStakingTxHeight, err := si.paramsVersions.GetParamsForBTCHeight(
-		int32(stakingTx.InclusionHeight),
-	)
+	paramsFromStakingTxHeight, err := si.getVersionedParams(stakingTx.InclusionHeight)
 	if err != nil {
-		return fmt.Errorf("failed to get the params for the staking tx height: %w", err)
+		return err
 	}
 
 	// check whether it is a valid unbonding tx
@@ -552,7 +547,7 @@ func (si *StakingIndexer) ValidateWithdrawalTxFromStaking(
 	tx *wire.MsgTx,
 	stakingTx *indexerstore.StoredStakingTransaction,
 	spendingInputIdx int,
-	params *types.GlobalParams,
+	params *parser.ParsedVersionedGlobalParams,
 ) error {
 	// re-build the time-lock path script and check whether the script from
 	// the witness matches
@@ -591,7 +586,7 @@ func (si *StakingIndexer) ValidateWithdrawalTxFromUnbonding(
 	tx *wire.MsgTx,
 	stakingTx *indexerstore.StoredStakingTransaction,
 	spendingInputIdx int,
-	params *types.GlobalParams,
+	params *parser.ParsedVersionedGlobalParams,
 ) error {
 	// re-build the time-lock path script and check whether the script from
 	// the witness matches
@@ -700,7 +695,7 @@ func (si *StakingIndexer) getSpentUnbondingTx(tx *wire.MsgTx) (*indexerstore.Sto
 // It returns error when (1) it fails to verify the unbonding tx due
 // to invalid parameters, and (2) the tx spends the unbonding path
 // but is invalid
-func (si *StakingIndexer) IsValidUnbondingTx(tx *wire.MsgTx, stakingTx *indexerstore.StoredStakingTransaction, params *types.GlobalParams) (bool, error) {
+func (si *StakingIndexer) IsValidUnbondingTx(tx *wire.MsgTx, stakingTx *indexerstore.StoredStakingTransaction, params *parser.ParsedVersionedGlobalParams) (bool, error) {
 	// 1. an unbonding tx must have exactly one input and output
 	if len(tx.TxIn) != 1 {
 		return false, nil
@@ -784,7 +779,7 @@ func (si *StakingIndexer) ProcessStakingTx(
 	tx *wire.MsgTx,
 	stakingData *btcstaking.ParsedV0StakingTx,
 	height uint64, timestamp time.Time,
-	params *types.GlobalParams,
+	params *parser.ParsedVersionedGlobalParams,
 ) error {
 	var (
 		// whether the staking tx is overflow
@@ -921,7 +916,7 @@ func (si *StakingIndexer) ProcessUnbondingTx(
 	tx *wire.MsgTx,
 	stakingTxHash *chainhash.Hash,
 	height uint64, timestamp time.Time,
-	params *types.GlobalParams,
+	params *parser.ParsedVersionedGlobalParams,
 ) error {
 	si.logger.Info("found an unbonding tx",
 		zap.Uint64("height", height),
@@ -1003,7 +998,7 @@ func (si *StakingIndexer) processWithdrawTx(tx *wire.MsgTx, stakingTxHash *chain
 	return nil
 }
 
-func (si *StakingIndexer) tryParseStakingTx(tx *wire.MsgTx, params *types.GlobalParams) (*btcstaking.ParsedV0StakingTx, error) {
+func (si *StakingIndexer) tryParseStakingTx(tx *wire.MsgTx, params *parser.ParsedVersionedGlobalParams) (*btcstaking.ParsedV0StakingTx, error) {
 	possible := btcstaking.IsPossibleV0StakingTx(tx, params.Tag)
 	if !possible {
 		return nil, fmt.Errorf("not staking tx")
@@ -1061,7 +1056,7 @@ func getTxHex(tx *wire.MsgTx) (string, error) {
 
 // validateStakingTx performs the validation checks for the staking tx
 // such as min and max staking amount and staking time
-func (si *StakingIndexer) validateStakingTx(params *types.GlobalParams, stakingData *btcstaking.ParsedV0StakingTx) error {
+func (si *StakingIndexer) validateStakingTx(params *parser.ParsedVersionedGlobalParams, stakingData *btcstaking.ParsedV0StakingTx) error {
 	value := btcutil.Amount(stakingData.StakingOutput.Value)
 	// Minimum staking amount check
 	if value < params.MinStakingAmount {
@@ -1090,8 +1085,8 @@ func (si *StakingIndexer) validateStakingTx(params *types.GlobalParams, stakingD
 	return nil
 }
 
-func (si *StakingIndexer) isOverflow(height uint64, params *types.GlobalParams) (bool, error) {
-	isTimeBased := params.IsTimeBasedCap()
+func (si *StakingIndexer) isOverflow(height uint64, params *parser.ParsedVersionedGlobalParams) (bool, error) {
+	isTimeBased := params.CapHeight != 0
 
 	if isTimeBased && height < params.ActivationHeight {
 		panic(fmt.Errorf("the transaction height %d should not be lower than the param activation height: %d",
@@ -1116,4 +1111,13 @@ func (si *StakingIndexer) isOverflow(height uint64, params *types.GlobalParams) 
 
 func (si *StakingIndexer) GetConfirmedTvl() (uint64, error) {
 	return si.is.GetConfirmedTvl()
+}
+
+func (si *StakingIndexer) getVersionedParams(height uint64) (*parser.ParsedVersionedGlobalParams, error) {
+	params := si.paramsVersions.GetVersionedGlobalParamsByHeight(height)
+	if params == nil {
+		return nil, fmt.Errorf("the params for height %d does not exist", height)
+	}
+
+	return params, nil
 }

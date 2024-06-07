@@ -9,6 +9,7 @@ import (
 
 	"github.com/babylonchain/babylon/btcstaking"
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
+	"github.com/babylonchain/networks/parameters/parser"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
@@ -46,7 +47,7 @@ type UnbondingEvent struct {
 }
 
 type TestScenario struct {
-	VersionedParams *types.ParamsVersions
+	VersionedParams *parser.ParsedGlobalParams
 	StakingEvents   []*StakingEvent
 	UnbondingEvents []*UnbondingEvent
 	Blocks          []*types.IndexedBlock
@@ -58,8 +59,8 @@ type TestScenario struct {
 // randomly distributed across blocks. A tx has a given chance (stakingChance/100)
 // to be a staking tx while the rest to be an unbonding tx, n is the number of
 // staking txs and unbonding txs
-func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *types.ParamsVersions, stakingChance int, numEvents int, checkOverflow bool) *TestScenario {
-	startHeight := r.Int31n(1000) + 1 + int32(versionedParams.ParamsVersions[0].ActivationHeight)
+func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *parser.ParsedGlobalParams, stakingChance int, numEvents int, checkOverflow bool) *TestScenario {
+	startHeight := r.Int31n(1000) + 1 + int32(versionedParams.Versions[0].ActivationHeight)
 	lastEventHeight := startHeight
 	stakingEvents := make([]*StakingEvent, 0)
 	unbondingEvents := make([]*UnbondingEvent, 0)
@@ -71,8 +72,8 @@ func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *types.ParamsVe
 	for i := 0; i < numEvents; i++ {
 		// randomly select a height at which the event should be happening
 		height := lastEventHeight + r.Int31n(3)
-		p, err := versionedParams.GetParamsForBTCHeight(height)
-		require.NoError(t, err)
+		p := versionedParams.GetVersionedGlobalParamsByHeight(uint64(height))
+		require.NotNil(t, p)
 		txs, ok := txsPerHeight[height]
 		if !ok {
 			// new height
@@ -83,7 +84,7 @@ func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *types.ParamsVe
 		// no active staking events created, otherwise, to be an unbonding event
 		if r.Intn(100) < stakingChance || !hasActiveStakingEvent(stakingEvents) {
 			stakingEvent := buildStakingEvent(r, t, height, p)
-			if checkOverflow && isOverflow(t, uint64(height), tvl, p) {
+			if checkOverflow && isOverflow(uint64(height), tvl, p) {
 				stakingEvent.IsOverflow = true
 			} else {
 				tvl += stakingEvent.StakingTxData.StakingAmount
@@ -94,8 +95,8 @@ func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *types.ParamsVe
 			prevStakingEvent := findActiveStakingEvent(stakingEvents, r)
 			require.NotNil(t, prevStakingEvent)
 			require.False(t, prevStakingEvent.Unbonded)
-			stakingParams, err := versionedParams.GetParamsForBTCHeight(prevStakingEvent.Height)
-			require.NoError(t, err)
+			stakingParams := versionedParams.GetVersionedGlobalParamsByHeight(uint64(prevStakingEvent.Height))
+			require.NotNil(t, stakingParams)
 			unbondingEvent := buildUnbondingEvent(prevStakingEvent, height, stakingParams, t)
 			unbondingEvents = append(unbondingEvents, unbondingEvent)
 			prevStakingEvent.Unbonded = true
@@ -135,7 +136,7 @@ func NewTestScenario(r *rand.Rand, t *testing.T, versionedParams *types.ParamsVe
 	}
 }
 
-func buildUnbondingEvent(stakingEvent *StakingEvent, height int32, p *types.GlobalParams, t *testing.T) *UnbondingEvent {
+func buildUnbondingEvent(stakingEvent *StakingEvent, height int32, p *parser.ParsedVersionedGlobalParams, t *testing.T) *UnbondingEvent {
 	stakingTxHash := stakingEvent.StakingTx.Hash()
 	unbondingTx := datagen.GenerateUnbondingTxFromStaking(t, p, stakingEvent.StakingTxData, stakingTxHash, 0)
 
@@ -169,7 +170,7 @@ func hasActiveStakingEvent(stakingEvents []*StakingEvent) bool {
 	return false
 }
 
-func buildStakingEvent(r *rand.Rand, t *testing.T, height int32, p *types.GlobalParams) *StakingEvent {
+func buildStakingEvent(r *rand.Rand, t *testing.T, height int32, p *parser.ParsedVersionedGlobalParams) *StakingEvent {
 	stakingData := datagen.GenerateTestStakingData(t, r, p)
 	_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, p, stakingData)
 
@@ -298,7 +299,7 @@ func FuzzGetStartHeight(f *testing.F) {
 
 		// 1. no blocks have been processed, the start height should be equal to the base height
 		initialHeight := stakingIndexer.GetStartHeight()
-		require.Equal(t, sysParams.ParamsVersions[0].ActivationHeight, initialHeight)
+		require.Equal(t, sysParams.Versions[0].ActivationHeight, initialHeight)
 		err = stakingIndexer.ValidateStartHeight(initialHeight)
 		require.NoError(t, err)
 
@@ -389,7 +390,7 @@ func FuzzVerifyUnbondingTx(f *testing.F) {
 		}()
 
 		// Select the first params versions to play with
-		params := sysParamsVersions.ParamsVersions[0]
+		params := sysParamsVersions.Versions[0]
 		// 1. generate and add a valid staking tx to the indexer
 		stakingData := datagen.GenerateTestStakingData(t, r, params)
 		_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, params, stakingData)
@@ -459,7 +460,7 @@ func FuzzValidateWithdrawTxFromStaking(f *testing.F) {
 		}()
 
 		// Select the first params versions to play with
-		params := sysParamsVersions.ParamsVersions[0]
+		params := sysParamsVersions.Versions[0]
 		// 1. generate and add a valid staking tx to the indexer
 		stakingData := datagen.GenerateTestStakingData(t, r, params)
 		_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, params, stakingData)
@@ -515,7 +516,7 @@ func FuzzValidateWithdrawTxFromUnbonding(f *testing.F) {
 		}()
 
 		// Select the first params versions to play with
-		params := sysParamsVersions.ParamsVersions[0]
+		params := sysParamsVersions.Versions[0]
 		// 1. generate and add a valid staking tx to the indexer
 		stakingData := datagen.GenerateTestStakingData(t, r, params)
 		_, stakingTx := datagen.GenerateStakingTxFromTestData(t, r, params, stakingData)
@@ -554,7 +555,7 @@ func FuzzValidateWithdrawTxFromUnbonding(f *testing.F) {
 	})
 }
 
-func getParsedStakingData(data *datagen.TestStakingData, tx *wire.MsgTx, params *types.GlobalParams) *btcstaking.ParsedV0StakingTx {
+func getParsedStakingData(data *datagen.TestStakingData, tx *wire.MsgTx, params *parser.ParsedVersionedGlobalParams) *btcstaking.ParsedV0StakingTx {
 	return &btcstaking.ParsedV0StakingTx{
 		StakingOutput:     tx.TxOut[0],
 		StakingOutputIdx:  0,
@@ -585,17 +586,15 @@ func NewMockedConsumer(t *testing.T) *mocks.MockEventConsumer {
 func NewMockedBtcScanner(t *testing.T, chainUpdateInfoChan chan *btcscanner.ChainUpdateInfo) *mocks.MockBtcScanner {
 	ctl := gomock.NewController(t)
 	mockBtcScanner := mocks.NewMockBtcScanner(ctl)
-	mockBtcScanner.EXPECT().Start(gomock.Any()).Return(nil).AnyTimes()
+	mockBtcScanner.EXPECT().Start(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	mockBtcScanner.EXPECT().ChainUpdateInfoChan().Return(chainUpdateInfoChan).AnyTimes()
 	mockBtcScanner.EXPECT().Stop().Return(nil).AnyTimes()
 
 	return mockBtcScanner
 }
 
-func isOverflow(t *testing.T, height uint64, tvl btcutil.Amount, params *types.GlobalParams) bool {
-	if params.IsTimeBasedCap() {
-		require.GreaterOrEqual(t, height, params.ActivationHeight)
-
+func isOverflow(height uint64, tvl btcutil.Amount, params *parser.ParsedVersionedGlobalParams) bool {
+	if params.CapHeight != 0 {
 		return height > params.CapHeight
 	}
 
