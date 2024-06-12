@@ -57,19 +57,17 @@ func (bs *BtcPoller) blockEventLoop(startHeight uint64) {
 					zap.Int32("height", newBlock.Height),
 					zap.Error(err))
 
-				if bs.isSynced.Swap(false) {
-					bootStrapHeight := startHeight
-					lastConfirmedHeight := bs.LastConfirmedHeight()
-					if lastConfirmedHeight != 0 {
-						bootStrapHeight = lastConfirmedHeight + 1
-					}
+				bootStrapHeight := startHeight
+				lastConfirmedHeight := bs.LastConfirmedHeight()
+				if lastConfirmedHeight != 0 {
+					bootStrapHeight = lastConfirmedHeight + 1
+				}
 
-					err := bs.Bootstrap(bootStrapHeight)
-					if err != nil {
-						bs.logger.Error("failed to bootstrap",
-							zap.Uint64("start_height", bootStrapHeight),
-							zap.Error(err))
-					}
+				err := bs.Bootstrap(bootStrapHeight)
+				if err != nil {
+					bs.logger.Error("failed to bootstrap",
+						zap.Uint64("start_height", bootStrapHeight),
+						zap.Error(err))
 				}
 			}
 		case <-bs.quit:
@@ -84,10 +82,6 @@ func (bs *BtcPoller) blockEventLoop(startHeight uint64) {
 // error will be returned if the new block is not in the same branch
 // of the cache
 func (bs *BtcPoller) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
-	if !bs.isSynced.Load() {
-		return fmt.Errorf("the btc scanner is not synced")
-	}
-
 	// get cache tip and check whether this block is expected
 	cacheTip := bs.unconfirmedBlockCache.Tip()
 	if cacheTip == nil {
