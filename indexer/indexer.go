@@ -249,22 +249,17 @@ func (si *StakingIndexer) CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks []*t
 			if err == nil {
 				// this is a new staking tx, validate it against staking requirement
 				if err := si.validateStakingTx(params, stakingData); err != nil {
-					if errors.Is(err, ErrInvalidStakingTx) {
-						// Note: the metrics and logs will be repeated when the tx is confirmed
-						invalidTransactionsCounter.WithLabelValues("unconfirmed_staking_transaction").Inc()
-						si.logger.Warn("found an invalid staking tx",
-							zap.String("tx_hash", msgTx.TxHash().String()),
-							zap.Int32("height", b.Height),
-							zap.Bool("is_confirmed", false),
-							zap.Error(err),
-						)
-						continue
-					}
+					// Note: the metrics and logs will be repeated when the tx is confirmed
+					invalidTransactionsCounter.WithLabelValues("unconfirmed_staking_transaction").Inc()
+					si.logger.Warn("found an invalid staking tx",
+						zap.String("tx_hash", msgTx.TxHash().String()),
+						zap.Int32("height", b.Height),
+						zap.Bool("is_confirmed", false),
+						zap.Error(err),
+					)
 
-					// record metrics
-					failedProcessingStakingTxsCounter.Inc()
-
-					return 0, fmt.Errorf("failed to validate unconfirmed staking tx: %w", err)
+					// invalid staking tx will not be counted for TVL
+					continue
 				}
 
 				tvl += btcutil.Amount(stakingData.StakingOutput.Value)
