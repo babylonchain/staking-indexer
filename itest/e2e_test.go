@@ -240,15 +240,17 @@ func TestWithdrawFromMultipleUnbondingTxs(t *testing.T) {
 		stakingTxHash1, storedStakingTx1.StakingOutputIdx, stakingInfo1, stakingTx1,
 		getCovenantPrivKeys(t), regtestParams,
 	)
-	unbondingTxHash1, err := tm.WalletClient.SendRawTransaction(unbondingTx1, true)
-	require.NoError(t, err)
+	unbondingTxHash1 := unbondingTx1.TxHash()
+	tm.SendTxWithNConfirmations(t, unbondingTx1, 1)
+
 	unbondingTx2, unbondingInfo2 := testutils.BuildUnbondingTx(
 		t, sysParams, tm.WalletPrivKey,
 		testStakingData2.FinalityProviderKey, testStakingData2.StakingAmount,
 		stakingTxHash2, storedStakingTx2.StakingOutputIdx, stakingInfo2, stakingTx2,
 		getCovenantPrivKeys(t), regtestParams,
 	)
-	unbondingTxHash2, err := tm.WalletClient.SendRawTransaction(unbondingTx2, true)
+	unbondingTxHash2 := unbondingTx2.TxHash()
+	tm.SendTxWithNConfirmations(t, unbondingTx2, 1)
 	require.NoError(t, err)
 
 	// wait for the unbonding tx expires
@@ -262,7 +264,7 @@ func TestWithdrawFromMultipleUnbondingTxs(t *testing.T) {
 
 	fundingInfo1 := &testutils.FundingInfo{
 		FundTxOutput:      unbondingTx1.TxOut[0],
-		FundTxHash:        *unbondingTxHash1,
+		FundTxHash:        unbondingTxHash1,
 		FundTxOutputIndex: 0,
 		FundTxSpendInfo:   withdrawSpendInfo1,
 		LockTime:          sysParams.UnbondingTime,
@@ -270,7 +272,7 @@ func TestWithdrawFromMultipleUnbondingTxs(t *testing.T) {
 	}
 	fundingInfo2 := &testutils.FundingInfo{
 		FundTxOutput:      unbondingTx2.TxOut[0],
-		FundTxHash:        *unbondingTxHash2,
+		FundTxHash:        unbondingTxHash2,
 		FundTxOutputIndex: 0,
 		FundTxSpendInfo:   withdrawSpendInfo2,
 		LockTime:          sysParams.UnbondingTime,
@@ -289,8 +291,8 @@ func TestWithdrawFromMultipleUnbondingTxs(t *testing.T) {
 	tm.CheckNextWithdrawEvent(t, *stakingTxHash1)
 	tm.CheckNextWithdrawEvent(t, *stakingTxHash2)
 	// consume unbonding events
-	tm.CheckNextUnbondingEvent(t, *unbondingTxHash1)
-	tm.CheckNextUnbondingEvent(t, *unbondingTxHash2)
+	tm.CheckNextUnbondingEvent(t, unbondingTxHash1)
+	tm.CheckNextUnbondingEvent(t, unbondingTxHash2)
 }
 
 // TestWithdrawStakingAndUnbondingTxs tests withdrawal from staking and unbonding tx in

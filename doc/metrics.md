@@ -56,3 +56,5 @@ global parameters.
   failures when processing valid withdrawal transactions from unbonding
 
 * `invalidTransactionsCounter`: Total number of invalid transactions
+
+* `majorReorgsCounter`: Total number of major reorgs happened
