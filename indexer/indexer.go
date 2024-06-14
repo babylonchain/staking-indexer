@@ -186,11 +186,6 @@ func (si *StakingIndexer) blocksEventLoop() {
 // 4. push unconfirmed info event to the queue
 // 5. record metrics
 func (si *StakingIndexer) processUnconfirmedInfo() error {
-	if !si.btcScanner.IsSynced() {
-		si.logger.Debug("the btc scanner is still catching up, skip processing unconfirmed info")
-		return nil
-	}
-
 	unconfirmedBlocks, err := si.btcScanner.GetUnconfirmedBlocks()
 	if err != nil {
 		return fmt.Errorf("failed to get unconfirmed blocks: %w", err)

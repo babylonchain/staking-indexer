@@ -27,8 +27,6 @@ type BtcScanner interface {
 	// cache
 	GetUnconfirmedBlocks() ([]*types.IndexedBlock, error)
 
-	IsSynced() bool
-
 	Stop() error
 }
 
@@ -57,7 +55,6 @@ type BtcPoller struct {
 
 	wg        sync.WaitGroup
 	isStarted *atomic.Bool
-	isSynced  *atomic.Bool
 	quit      chan struct{}
 }
 
@@ -79,7 +76,6 @@ func NewBTCScanner(
 		confirmationDepth:     confirmationDepth,
 		chainUpdateInfoChan:   make(chan *ChainUpdateInfo),
 		unconfirmedBlockCache: unconfirmedBlockCache,
-		isSynced:              atomic.NewBool(false),
 		isStarted:             atomic.NewBool(false),
 		quit:                  make(chan struct{}),
 	}, nil
@@ -132,12 +128,6 @@ func (bs *BtcPoller) waitUntilActivation(activationHeight uint64) error {
 
 // Bootstrap syncs with BTC by getting the confirmed blocks and the caching the unconfirmed blocks
 func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
-	if bs.isSynced.Load() {
-		// the scanner is already synced
-		return nil
-	}
-	defer bs.isSynced.Store(true)
-
 	bs.logger.Info("the bootstrapping starts", zap.Uint64("start_height", startHeight))
 
 	// clear all the blocks in the cache to avoid forks
@@ -176,9 +166,6 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 		confirmedBlocks = append(confirmedBlocks, tempConfirmedBlocks...)
 	}
 
-	// ensure that `isSynced` is set to true
-	bs.isSynced.Store(true)
-
 	bs.commitChainUpdate(confirmedBlocks)
 
 	bs.logger.Info("bootstrapping is finished",
@@ -207,10 +194,6 @@ func (bs *BtcPoller) LastConfirmedHeight() uint64 {
 		return 0
 	}
 	return uint64(bs.confirmedTipBlock.Height)
-}
-
-func (bs *BtcPoller) IsSynced() bool {
-	return bs.isSynced.Load()
 }
 
 func (bs *BtcPoller) Stop() error {
