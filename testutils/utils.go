@@ -121,10 +121,6 @@ func CreateTxFromOutputsAndSign(
 		return nil, err
 	}
 
-	if err != nil {
-		return nil, err
-	}
-
 	fundedTx, signed, err := btcClient.SignRawTransactionWithWallet(tx)
 
 	if err != nil {
