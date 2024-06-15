@@ -14,7 +14,8 @@ Staking protocol and serves as the ground truth for the Bitcoin Staking system.
    poller ensures that all the output blocks have at least `N` confirmations 
    where `N` is a configurable value, which should be large enough so that 
    the chance of the output blocks being forked is enormously low, e.g., 
-   greater than or equal to `6` in Bitcoin mainnet.
+   greater than or equal to `6` in Bitcoin mainnet. In case of major reorg,
+   the indexer will terminate and should manually bootstrap from a clean DB.
 2. Extracting transaction data for staking, unbonding, and withdrawal. These 
    transactions are verified and compared against the system parameters to 
    identify whether they are active, inactive due to staking cap overflow, 

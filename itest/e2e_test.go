@@ -117,21 +117,260 @@ func TestStakingLifeCycle(t *testing.T) {
 	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
 	require.NoError(t, err)
 	require.NotNil(t, storedStakingTx)
+	fundingInfo := &testutils.FundingInfo{
+		FundTxOutput:      stakingTx.TxOut[storedStakingTx.StakingOutputIdx],
+		FundTxHash:        stakingTxHash,
+		FundTxOutputIndex: storedStakingTx.StakingOutputIdx,
+		FundTxSpendInfo:   withdrawSpendInfo,
+		LockTime:          testStakingData.StakingTime,
+		Value:             testStakingData.StakingAmount,
+	}
 	withdrawTx := testutils.BuildWithdrawTx(
 		t,
 		tm.WalletPrivKey,
-		stakingTx.TxOut[storedStakingTx.StakingOutputIdx],
-		stakingTx.TxHash(),
-		storedStakingTx.StakingOutputIdx,
-		withdrawSpendInfo,
-		testStakingData.StakingTime,
-		testStakingData.StakingAmount,
+		[]*testutils.FundingInfo{fundingInfo},
 		regtestParams,
 	)
 	tm.SendTxWithNConfirmations(t, withdrawTx, int(k))
 
 	// check the withdraw event is received
 	tm.CheckNextWithdrawEvent(t, stakingTx.TxHash())
+}
+
+// TestWithdrawFromMultipleStakingTxs tests withdrawal from multiple staking tx in
+// a single withdrawal tx
+func TestWithdrawFromMultipleStakingTxs(t *testing.T) {
+	// ensure we have UTXOs
+	n := 110
+	tm := StartManagerWithNBlocks(t, n, 100)
+	defer tm.Stop()
+
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	sysParams := tm.VersionedParams.Versions[0]
+	k := uint64(sysParams.ConfirmationDepth)
+
+	// build, send the staking txs and mine blocks
+	stakingTx1, testStakingData1, stakingInfo1 := tm.BuildStakingTx(t, r, sysParams)
+	stakingTxHash1, err := tm.WalletClient.SendRawTransaction(stakingTx1, true)
+	stakingTx2, testStakingData2, stakingInfo2 := tm.BuildStakingTx(t, r, sysParams)
+	stakingTxHash2, err := tm.WalletClient.SendRawTransaction(stakingTx2, true)
+
+	tm.BitcoindHandler.GenerateBlocks(int(k))
+
+	// check that the staking txs are already stored
+	_ = tm.WaitForStakingTxStored(t, *stakingTxHash1)
+	_ = tm.WaitForStakingTxStored(t, *stakingTxHash2)
+
+	// wait for the staking tx expires
+	tm.BitcoindHandler.GenerateBlocks(int(uint64(sysParams.MaxStakingTime) - k))
+
+	// build and send withdraw tx and mine blocks
+	withdrawSpendInfo1, err := stakingInfo1.TimeLockPathSpendInfo()
+	require.NoError(t, err)
+	withdrawSpendInfo2, err := stakingInfo2.TimeLockPathSpendInfo()
+	require.NoError(t, err)
+
+	storedStakingTx1, err := tm.Si.GetStakingTxByHash(stakingTxHash1)
+	require.NoError(t, err)
+	require.NotNil(t, storedStakingTx1)
+	storedStakingTx2, err := tm.Si.GetStakingTxByHash(stakingTxHash2)
+	require.NoError(t, err)
+	require.NotNil(t, storedStakingTx2)
+
+	fundingInfo1 := &testutils.FundingInfo{
+		FundTxOutput:      stakingTx1.TxOut[storedStakingTx1.StakingOutputIdx],
+		FundTxHash:        *stakingTxHash1,
+		FundTxOutputIndex: storedStakingTx1.StakingOutputIdx,
+		FundTxSpendInfo:   withdrawSpendInfo1,
+		LockTime:          testStakingData1.StakingTime,
+		Value:             testStakingData1.StakingAmount,
+	}
+	fundingInfo2 := &testutils.FundingInfo{
+		FundTxOutput:      stakingTx2.TxOut[storedStakingTx2.StakingOutputIdx],
+		FundTxHash:        *stakingTxHash2,
+		FundTxOutputIndex: storedStakingTx2.StakingOutputIdx,
+		FundTxSpendInfo:   withdrawSpendInfo2,
+		LockTime:          testStakingData2.StakingTime,
+		Value:             testStakingData2.StakingAmount,
+	}
+
+	withdrawTx := testutils.BuildWithdrawTx(
+		t,
+		tm.WalletPrivKey,
+		[]*testutils.FundingInfo{fundingInfo1, fundingInfo2},
+		regtestParams,
+	)
+	tm.SendTxWithNConfirmations(t, withdrawTx, int(k))
+
+	// check the withdraw events are received
+	tm.CheckNextWithdrawEvent(t, *stakingTxHash1)
+	tm.CheckNextWithdrawEvent(t, *stakingTxHash2)
+}
+
+// TestWithdrawFromMultipleStakingTxs tests withdrawal from multiple unbonding tx in
+// a single withdrawal tx
+func TestWithdrawFromMultipleUnbondingTxs(t *testing.T) {
+	// ensure we have UTXOs
+	n := 110
+	tm := StartManagerWithNBlocks(t, n, 100)
+	defer tm.Stop()
+
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	sysParams := tm.VersionedParams.Versions[0]
+	k := uint64(sysParams.ConfirmationDepth)
+
+	// build, send the staking txs and mine blocks
+	stakingTx1, testStakingData1, stakingInfo1 := tm.BuildStakingTx(t, r, sysParams)
+	stakingTxHash1, err := tm.WalletClient.SendRawTransaction(stakingTx1, true)
+	require.NoError(t, err)
+	stakingTx2, testStakingData2, stakingInfo2 := tm.BuildStakingTx(t, r, sysParams)
+	stakingTxHash2, err := tm.WalletClient.SendRawTransaction(stakingTx2, true)
+	require.NoError(t, err)
+
+	tm.BitcoindHandler.GenerateBlocks(int(k))
+
+	// check that the staking txs are already stored
+	storedStakingTx1 := tm.WaitForStakingTxStored(t, *stakingTxHash1)
+	storedStakingTx2 := tm.WaitForStakingTxStored(t, *stakingTxHash2)
+
+	// build and send unbonding tx from the previous staking tx
+	unbondingTx1, unbondingInfo1 := testutils.BuildUnbondingTx(
+		t, sysParams, tm.WalletPrivKey,
+		testStakingData1.FinalityProviderKey, testStakingData1.StakingAmount,
+		stakingTxHash1, storedStakingTx1.StakingOutputIdx, stakingInfo1, stakingTx1,
+		getCovenantPrivKeys(t), regtestParams,
+	)
+	unbondingTxHash1 := unbondingTx1.TxHash()
+	tm.SendTxWithNConfirmations(t, unbondingTx1, 1)
+
+	unbondingTx2, unbondingInfo2 := testutils.BuildUnbondingTx(
+		t, sysParams, tm.WalletPrivKey,
+		testStakingData2.FinalityProviderKey, testStakingData2.StakingAmount,
+		stakingTxHash2, storedStakingTx2.StakingOutputIdx, stakingInfo2, stakingTx2,
+		getCovenantPrivKeys(t), regtestParams,
+	)
+	unbondingTxHash2 := unbondingTx2.TxHash()
+	tm.SendTxWithNConfirmations(t, unbondingTx2, 1)
+	require.NoError(t, err)
+
+	// wait for the unbonding tx expires
+	tm.BitcoindHandler.GenerateBlocks(int(sysParams.UnbondingTime))
+
+	// build and send withdraw tx and mine blocks
+	withdrawSpendInfo1, err := unbondingInfo1.TimeLockPathSpendInfo()
+	require.NoError(t, err)
+	withdrawSpendInfo2, err := unbondingInfo2.TimeLockPathSpendInfo()
+	require.NoError(t, err)
+
+	fundingInfo1 := &testutils.FundingInfo{
+		FundTxOutput:      unbondingTx1.TxOut[0],
+		FundTxHash:        unbondingTxHash1,
+		FundTxOutputIndex: 0,
+		FundTxSpendInfo:   withdrawSpendInfo1,
+		LockTime:          sysParams.UnbondingTime,
+		Value:             btcutil.Amount(unbondingTx1.TxOut[0].Value),
+	}
+	fundingInfo2 := &testutils.FundingInfo{
+		FundTxOutput:      unbondingTx2.TxOut[0],
+		FundTxHash:        unbondingTxHash2,
+		FundTxOutputIndex: 0,
+		FundTxSpendInfo:   withdrawSpendInfo2,
+		LockTime:          sysParams.UnbondingTime,
+		Value:             btcutil.Amount(unbondingTx2.TxOut[0].Value),
+	}
+
+	withdrawTx := testutils.BuildWithdrawTx(
+		t,
+		tm.WalletPrivKey,
+		[]*testutils.FundingInfo{fundingInfo1, fundingInfo2},
+		regtestParams,
+	)
+	tm.SendTxWithNConfirmations(t, withdrawTx, int(k))
+
+	// check the withdraw event is received
+	tm.CheckNextWithdrawEvent(t, *stakingTxHash1)
+	tm.CheckNextWithdrawEvent(t, *stakingTxHash2)
+	// consume unbonding events
+	tm.CheckNextUnbondingEvent(t, unbondingTxHash1)
+	tm.CheckNextUnbondingEvent(t, unbondingTxHash2)
+}
+
+// TestWithdrawStakingAndUnbondingTxs tests withdrawal from staking and unbonding tx in
+// a single withdrawal tx
+func TestWithdrawStakingAndUnbondingTxs(t *testing.T) {
+	// ensure we have UTXOs
+	n := 110
+	tm := StartManagerWithNBlocks(t, n, 100)
+	defer tm.Stop()
+
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	sysParams := tm.VersionedParams.Versions[0]
+	k := uint64(sysParams.ConfirmationDepth)
+
+	// build, send the staking txs and mine blocks
+	stakingTx1, testStakingData1, stakingInfo1 := tm.BuildStakingTx(t, r, sysParams)
+	stakingTxHash1, err := tm.WalletClient.SendRawTransaction(stakingTx1, true)
+	require.NoError(t, err)
+	stakingTx2, testStakingData2, stakingInfo2 := tm.BuildStakingTx(t, r, sysParams)
+	stakingTxHash2, err := tm.WalletClient.SendRawTransaction(stakingTx2, true)
+	require.NoError(t, err)
+
+	tm.BitcoindHandler.GenerateBlocks(int(k))
+
+	// check that the staking txs are already stored
+	storedStakingTx1 := tm.WaitForStakingTxStored(t, *stakingTxHash1)
+	storedStakingTx2 := tm.WaitForStakingTxStored(t, *stakingTxHash2)
+
+	// build unbonding tx 1 from the previous staking tx 1
+	unbondingTx1, unbondingInfo1 := testutils.BuildUnbondingTx(
+		t, sysParams, tm.WalletPrivKey,
+		testStakingData1.FinalityProviderKey, testStakingData1.StakingAmount,
+		stakingTxHash1, storedStakingTx1.StakingOutputIdx, stakingInfo1, stakingTx1,
+		getCovenantPrivKeys(t), regtestParams,
+	)
+	unbondingTxHash1, err := tm.WalletClient.SendRawTransaction(unbondingTx1, true)
+	require.NoError(t, err)
+
+	// wait for the staking tx expires
+	tm.BitcoindHandler.GenerateBlocks(int(uint64(sysParams.MaxStakingTime) - k))
+
+	// build withdrawal from unbonding tx 1 and staking tx 2
+	withdrawSpendInfo1, err := unbondingInfo1.TimeLockPathSpendInfo()
+	require.NoError(t, err)
+	withdrawSpendInfo2, err := stakingInfo2.TimeLockPathSpendInfo()
+	require.NoError(t, err)
+
+	fundingInfo1 := &testutils.FundingInfo{
+		FundTxOutput:      unbondingTx1.TxOut[0],
+		FundTxHash:        *unbondingTxHash1,
+		FundTxOutputIndex: 0,
+		FundTxSpendInfo:   withdrawSpendInfo1,
+		LockTime:          sysParams.UnbondingTime,
+		Value:             btcutil.Amount(unbondingTx1.TxOut[0].Value),
+	}
+	fundingInfo2 := &testutils.FundingInfo{
+		FundTxOutput:      stakingTx2.TxOut[storedStakingTx2.StakingOutputIdx],
+		FundTxHash:        *stakingTxHash2,
+		FundTxOutputIndex: storedStakingTx2.StakingOutputIdx,
+		FundTxSpendInfo:   withdrawSpendInfo2,
+		LockTime:          testStakingData2.StakingTime,
+		Value:             testStakingData2.StakingAmount,
+	}
+
+	withdrawTx := testutils.BuildWithdrawTx(
+		t,
+		tm.WalletPrivKey,
+		[]*testutils.FundingInfo{fundingInfo1, fundingInfo2},
+		regtestParams,
+	)
+	tm.SendTxWithNConfirmations(t, withdrawTx, int(k))
+
+	// check the withdraw event is received
+	// this is expected to receive the withdrawal from
+	tm.CheckNextWithdrawEvent(t, *stakingTxHash2)
+	tm.CheckNextWithdrawEvent(t, *stakingTxHash1)
+	// consume unbonding event
+	tm.CheckNextUnbondingEvent(t, *unbondingTxHash1)
 }
 
 func TestUnconfirmedTVL(t *testing.T) {
@@ -162,10 +401,8 @@ func TestUnconfirmedTVL(t *testing.T) {
 	tm.CheckNextUnconfirmedEvent(t, uint64(stakingInfo.StakingOutput.Value), uint64(stakingInfo.StakingOutput.Value))
 
 	// build and send unbonding tx from the previous staking tx
-	unbondingSpendInfo, err := stakingInfo.UnbondingPathSpendInfo()
-	require.NoError(t, err)
 	stakingTxHash := stakingTx.TxHash()
-	unbondingTx := testutils.BuildUnbondingTx(
+	unbondingTx, _ := testutils.BuildUnbondingTx(
 		t,
 		sysParams,
 		tm.WalletPrivKey,
@@ -173,7 +410,7 @@ func TestUnconfirmedTVL(t *testing.T) {
 		testStakingData.StakingAmount,
 		&stakingTxHash,
 		1,
-		unbondingSpendInfo,
+		stakingInfo,
 		stakingTx,
 		getCovenantPrivKeys(t),
 		regtestParams,
@@ -299,12 +536,10 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	tm.CheckNextStakingEvent(t, stakingTxHash)
 
 	// build and send unbonding tx from the previous staking tx
-	unbondingSpendInfo, err := stakingInfo.UnbondingPathSpendInfo()
-	require.NoError(t, err)
 	storedStakingTx, err := tm.Si.GetStakingTxByHash(&stakingTxHash)
 	require.NoError(t, err)
 	require.NotNil(t, storedStakingTx)
-	unbondingTx := testutils.BuildUnbondingTx(
+	unbondingTx, _ := testutils.BuildUnbondingTx(
 		t,
 		sysParams,
 		tm.WalletPrivKey,
@@ -312,7 +547,7 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 		testStakingData.StakingAmount,
 		&stakingTxHash,
 		storedStakingTx.StakingOutputIdx,
-		unbondingSpendInfo,
+		stakingInfo,
 		stakingTx,
 		getCovenantPrivKeys(t),
 		regtestParams,
@@ -343,16 +578,19 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 	require.NoError(t, err)
 	withdrawSpendInfo, err := unbondingInfo.TimeLockPathSpendInfo()
 	require.NoError(t, err)
+	fundingInfo := &testutils.FundingInfo{
+		// unbonding tx only has one output
+		FundTxOutput:      unbondingTx.TxOut[0],
+		FundTxHash:        unbondingTx.TxHash(),
+		FundTxOutputIndex: 0,
+		FundTxSpendInfo:   withdrawSpendInfo,
+		LockTime:          sysParams.UnbondingTime,
+		Value:             testStakingData.StakingAmount,
+	}
 	withdrawTx := testutils.BuildWithdrawTx(
 		t,
 		tm.WalletPrivKey,
-		// unbonding tx only has one output
-		unbondingTx.TxOut[0],
-		unbondingTx.TxHash(),
-		0,
-		withdrawSpendInfo,
-		sysParams.UnbondingTime,
-		testStakingData.StakingAmount,
+		[]*testutils.FundingInfo{fundingInfo},
 		regtestParams,
 	)
 	tm.SendTxWithNConfirmations(t, withdrawTx, int(k))

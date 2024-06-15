@@ -64,20 +64,6 @@ func (mr *MockBtcScannerMockRecorder) GetUnconfirmedBlocks() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUnconfirmedBlocks", reflect.TypeOf((*MockBtcScanner)(nil).GetUnconfirmedBlocks))
 }
 
-// IsSynced mocks base method.
-func (m *MockBtcScanner) IsSynced() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsSynced")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsSynced indicates an expected call of IsSynced.
-func (mr *MockBtcScannerMockRecorder) IsSynced() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSynced", reflect.TypeOf((*MockBtcScanner)(nil).IsSynced))
-}
-
 // LastConfirmedHeight mocks base method.
 func (m *MockBtcScanner) LastConfirmedHeight() uint64 {
 	m.ctrl.T.Helper()

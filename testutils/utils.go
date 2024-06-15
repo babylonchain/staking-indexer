@@ -33,6 +33,15 @@ type Utxo struct {
 	Address      string
 }
 
+type FundingInfo struct {
+	FundTxOutput      *wire.TxOut
+	FundTxHash        chainhash.Hash
+	FundTxOutputIndex uint32
+	FundTxSpendInfo   *btcstaking.SpendInfo
+	LockTime          uint16
+	Value             btcutil.Amount
+}
+
 type byAmount []Utxo
 
 func (s byAmount) Len() int           { return len(s) }
@@ -107,10 +116,6 @@ func CreateTxFromOutputsAndSign(
 	}
 
 	tx, err := buildTxFromOutputs(utxos, outputs, feeRatePerKb, changeScript)
-
-	if err != nil {
-		return nil, err
-	}
 
 	if err != nil {
 		return nil, err
@@ -244,11 +249,13 @@ func BuildUnbondingTx(
 	stakingAmount btcutil.Amount,
 	stakingTxHash *chainhash.Hash,
 	stakingOutputIdx uint32,
-	unbondingSpendInfo *btcstaking.SpendInfo,
+	stakingInfo *btcstaking.IdentifiableStakingInfo,
 	stakingTx *wire.MsgTx,
 	covPrivKeys []*btcec.PrivateKey,
 	btcParams *chaincfg.Params,
-) *wire.MsgTx {
+) (*wire.MsgTx, *btcstaking.UnbondingInfo) {
+	unbondingSpendInfo, err := stakingInfo.UnbondingPathSpendInfo()
+	require.NoError(t, err)
 	expectedOutputValue := stakingAmount - params.UnbondingFee
 	unbondingInfo, err := btcstaking.BuildUnbondingInfo(
 		stakerPrivKey.PubKey(),
@@ -292,50 +299,133 @@ func BuildUnbondingTx(
 	require.NoError(t, err)
 	unbondingTx.TxIn[0].Witness = witness
 
-	return unbondingTx
+	return unbondingTx, unbondingInfo
 }
 
 func BuildWithdrawTx(
 	t *testing.T,
 	stakerPrivKey *btcec.PrivateKey,
-	fundTxOutput *wire.TxOut,
-	fundTxHash chainhash.Hash,
-	fundTxOutputIndex uint32,
-	fundTxSpendInfo *btcstaking.SpendInfo,
-	lockTime uint16,
-	lockedAmount btcutil.Amount,
+	fundings []*FundingInfo,
 	btcParams *chaincfg.Params,
 ) *wire.MsgTx {
-
 	destAddress, err := btcutil.NewAddressPubKey(stakerPrivKey.PubKey().SerializeCompressed(), btcParams)
 
 	require.NoError(t, err)
 	destAddressScript, err := txscript.PayToAddrScript(destAddress)
 	require.NoError(t, err)
 
+	// calculate total value
+	var totalValue btcutil.Amount
+	for _, f := range fundings {
+		totalValue += f.Value
+	}
+
 	// to spend output with relative timelock transaction need to be version two or higher
 	withdrawTx := wire.NewMsgTx(2)
-	withdrawTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(&fundTxHash, fundTxOutputIndex), nil, nil))
-	withdrawTx.AddTxOut(wire.NewTxOut(int64(lockedAmount.MulF64(0.5)), destAddressScript))
+	withdrawTx.AddTxOut(wire.NewTxOut(int64(totalValue.MulF64(0.5)), destAddressScript))
 
-	// we need to set sequence number before signing, as signing commits to sequence
-	// number
-	withdrawTx.TxIn[0].Sequence = uint32(lockTime)
+	fundingOutputs := make([]*wire.TxOut, 0)
+	privKeys := make([]*btcec.PrivateKey, 0)
+	revealedLeaves := make([]txscript.TapLeaf, 0)
+	for _, fundingInfo := range fundings {
+		txInput := wire.NewTxIn(wire.NewOutPoint(&fundingInfo.FundTxHash, fundingInfo.FundTxOutputIndex), nil, nil)
+		// we need to set sequence number before signing, as signing commits to sequence
+		// number
+		txInput.Sequence = uint32(fundingInfo.LockTime)
+		withdrawTx.AddTxIn(txInput)
 
-	sig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
+		fundingOutputs = append(fundingOutputs, fundingInfo.FundTxOutput)
+		// for testing purpose, all the txs are using the same private key
+		privKeys = append(privKeys, stakerPrivKey)
+		revealedLeaves = append(revealedLeaves, fundingInfo.FundTxSpendInfo.RevealedLeaf)
+	}
+
+	sigs, err := SignTxWithMultipleScriptSpendInputFromTapLeaf(
 		withdrawTx,
-		fundTxOutput,
-		stakerPrivKey,
-		fundTxSpendInfo.RevealedLeaf,
+		fundingOutputs,
+		privKeys,
+		revealedLeaves,
 	)
-
 	require.NoError(t, err)
 
-	witness, err := fundTxSpendInfo.CreateTimeLockPathWitness(sig)
-
-	require.NoError(t, err)
-
-	withdrawTx.TxIn[0].Witness = witness
+	for i, s := range sigs {
+		witness, err := fundings[i].FundTxSpendInfo.CreateTimeLockPathWitness(s)
+		require.NoError(t, err)
+		withdrawTx.TxIn[i].Witness = witness
+	}
 
 	return withdrawTx
+}
+
+func signTxWithOneScriptSpendInputFromTapLeafInternalWithIdx(
+	txToSign *wire.MsgTx,
+	fundingOutput *wire.TxOut,
+	idx int,
+	fetcher txscript.PrevOutputFetcher,
+	privKey *btcec.PrivateKey,
+	tapLeaf txscript.TapLeaf) (*schnorr.Signature, error) {
+
+	sigHashes := txscript.NewTxSigHashes(txToSign, fetcher)
+
+	sig, err := txscript.RawTxInTapscriptSignature(
+		txToSign, sigHashes, idx, fundingOutput.Value,
+		fundingOutput.PkScript, tapLeaf, txscript.SigHashDefault,
+		privKey,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	parsedSig, err := schnorr.ParseSignature(sig)
+	if err != nil {
+		return nil, err
+	}
+
+	return parsedSig, nil
+}
+
+func SignTxWithMultipleScriptSpendInputFromTapLeaf(
+	txToSign *wire.MsgTx,
+	fundingOutputs []*wire.TxOut,
+	privKeys []*btcec.PrivateKey,
+	tapLeafs []txscript.TapLeaf,
+) ([]*schnorr.Signature, error) {
+	if txToSign == nil {
+		return nil, fmt.Errorf("tx to sign must not be nil")
+	}
+
+	if len(fundingOutputs) == 0 {
+		return nil, fmt.Errorf("funding output must not be nil")
+	}
+
+	if len(privKeys) == 0 {
+		return nil, fmt.Errorf("private key must not be nil")
+	}
+
+	var signatures []*schnorr.Signature
+
+	outputs := make(map[wire.OutPoint]*wire.TxOut)
+
+	for idx, in := range txToSign.TxIn {
+		outputs[in.PreviousOutPoint] = fundingOutputs[idx]
+	}
+
+	outputRetriever := txscript.NewMultiPrevOutFetcher(outputs)
+
+	for idx := range txToSign.TxIn {
+		signature, err := signTxWithOneScriptSpendInputFromTapLeafInternalWithIdx(
+			txToSign,
+			fundingOutputs[idx],
+			idx,
+			outputRetriever,
+			privKeys[idx],
+			tapLeafs[idx],
+		)
+		if err != nil {
+			return nil, err
+		}
+		signatures = append(signatures, signature)
+	}
+
+	return signatures, nil
 }

@@ -186,11 +186,6 @@ func (si *StakingIndexer) blocksEventLoop() {
 // 4. push unconfirmed info event to the queue
 // 5. record metrics
 func (si *StakingIndexer) processUnconfirmedInfo() error {
-	if !si.btcScanner.IsSynced() {
-		si.logger.Debug("the btc scanner is still catching up, skip processing unconfirmed info")
-		return nil
-	}
-
 	unconfirmedBlocks, err := si.btcScanner.GetUnconfirmedBlocks()
 	if err != nil {
 		return fmt.Errorf("failed to get unconfirmed blocks: %w", err)
@@ -249,22 +244,17 @@ func (si *StakingIndexer) CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks []*t
 			if err == nil {
 				// this is a new staking tx, validate it against staking requirement
 				if err := si.validateStakingTx(params, stakingData); err != nil {
-					if errors.Is(err, ErrInvalidStakingTx) {
-						// Note: the metrics and logs will be repeated when the tx is confirmed
-						invalidTransactionsCounter.WithLabelValues("unconfirmed_staking_transaction").Inc()
-						si.logger.Warn("found an invalid staking tx",
-							zap.String("tx_hash", msgTx.TxHash().String()),
-							zap.Int32("height", b.Height),
-							zap.Bool("is_confirmed", false),
-							zap.Error(err),
-						)
-						continue
-					}
+					// Note: the metrics and logs will be repeated when the tx is confirmed
+					invalidTransactionsCounter.WithLabelValues("unconfirmed_staking_transaction").Inc()
+					si.logger.Warn("found an invalid staking tx",
+						zap.String("tx_hash", msgTx.TxHash().String()),
+						zap.Int32("height", b.Height),
+						zap.Bool("is_confirmed", false),
+						zap.Error(err),
+					)
 
-					// record metrics
-					failedProcessingStakingTxsCounter.Inc()
-
-					return 0, fmt.Errorf("failed to validate unconfirmed staking tx: %w", err)
+					// invalid staking tx will not be counted for TVL
+					continue
 				}
 
 				tvl += btcutil.Amount(stakingData.StakingOutput.Value)
@@ -289,13 +279,13 @@ func (si *StakingIndexer) CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks []*t
 			}
 
 			// 2. not a staking tx, check whether it spends a stored staking tx
-			stakingTx, spentInputIdx := si.getSpentStakingTx(msgTx)
-			if spentInputIdx < 0 {
+			stakingTxs, _ := si.getSpentStakingTxs(msgTx)
+			if len(stakingTxs) == 0 {
 				// it does not spend a stored staking tx, check whether it spends
 				// an unconfirmed staking tx
-				stakingTx, spentInputIdx = getSpentFromStakingTxs(msgTx, unconfirmedStakingTxs)
+				stakingTxs, _ = getSpentFromStakingTxs(msgTx, unconfirmedStakingTxs)
 			}
-			if spentInputIdx >= 0 {
+			for _, stakingTx := range stakingTxs {
 				// 3. is a spending tx, check whether it is a valid unbonding tx
 				paramsFromStakingTxHeight, err := si.getVersionedParams(stakingTx.InclusionHeight)
 				if err != nil {
@@ -338,7 +328,6 @@ func (si *StakingIndexer) CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks []*t
 						zap.String("tx_hash", msgTx.TxHash().String()),
 						zap.String("staking_tx_hash", stakingTx.Tx.TxHash().String()))
 				}
-				continue
 			}
 		}
 	}
@@ -374,33 +363,29 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 
 		// 2. not a staking tx, check whether it is a spending tx from a previous
 		// staking tx, and handle it if so
-		stakingTx, spendingInputIdx := si.getSpentStakingTx(msgTx)
-		if spendingInputIdx >= 0 {
+		stakingTxs, spendStakingInputIndexes := si.getSpentStakingTxs(msgTx)
+		for i, stakingTx := range stakingTxs {
 			// this is a spending tx from a previous staking tx, further process it
 			// by checking whether it is unbonding or withdrawal
 			if err := si.handleSpendingStakingTransaction(
-				msgTx, stakingTx, spendingInputIdx,
+				msgTx, stakingTx, spendStakingInputIndexes[i],
 				uint64(b.Height), b.Header.Timestamp); err != nil {
 
 				return err
 			}
-
-			continue
 		}
 
 		// 3. it's not a spending tx from a previous staking tx,
 		// check whether it spends a previous unbonding tx, and
 		// handle it if so
-		unbondingTx, spendingInputIdx := si.getSpentUnbondingTx(msgTx)
-		if spendingInputIdx >= 0 {
+		unbondingTxs, spendUnbondingInputIndexes := si.getSpentUnbondingTxs(msgTx)
+		for i, unbondingTx := range unbondingTxs {
 			// this is a spending tx from the unbonding, validate it, and processes it
 			if err := si.handleSpendingUnbondingTransaction(
-				msgTx, unbondingTx, spendingInputIdx, uint64(b.Height)); err != nil {
+				msgTx, unbondingTx, spendUnbondingInputIndexes[i], uint64(b.Height)); err != nil {
 
 				return err
 			}
-
-			continue
 		}
 	}
 
@@ -626,10 +611,11 @@ func (si *StakingIndexer) IsTxProcessed(txHash *chainhash.Hash) (bool, error) {
 	return si.is.TxExists(txHash)
 }
 
-// getSpentStakingTx checks if the given tx spends any of the stored staking tx
-// if so, it returns the found staking tx and the spent staking input index,
-// otherwise, it returns nil and -1
-func (si *StakingIndexer) getSpentStakingTx(tx *wire.MsgTx) (*indexerstore.StoredStakingTransaction, int) {
+// getSpentStakingTxs find all the stored staking txs spent by the given tx.
+// It returns the found staking txs and the spending input index of the given tx
+func (si *StakingIndexer) getSpentStakingTxs(tx *wire.MsgTx) ([]*indexerstore.StoredStakingTransaction, []int) {
+	storedStakingTxs := make([]*indexerstore.StoredStakingTransaction, 0)
+	spendingInputIndexes := make([]int, 0)
 	for i, txIn := range tx.TxIn {
 		maybeStakingTxHash := txIn.PreviousOutPoint.Hash
 		stakingTx, err := si.GetStakingTxByHash(&maybeStakingTxHash)
@@ -642,20 +628,21 @@ func (si *StakingIndexer) getSpentStakingTx(tx *wire.MsgTx) (*indexerstore.Store
 			continue
 		}
 
-		return stakingTx, i
+		storedStakingTxs = append(storedStakingTxs, stakingTx)
+		spendingInputIndexes = append(spendingInputIndexes, i)
 	}
 
-	return nil, -1
+	return storedStakingTxs, spendingInputIndexes
 }
 
-// getSpentFromStakingTxs checks if the given tx spends any of the
-// given staking txs.
-// if so, it returns the found staking tx and the spent staking input index,
-// otherwise, it returns nil and -1
+// getSpentStakingTxs find all the staking txs from the given ones spent by the given tx.
+// It returns the found staking txs and the spending input index of the given tx
 func getSpentFromStakingTxs(
 	tx *wire.MsgTx,
 	stakingTxs map[chainhash.Hash]*indexerstore.StoredStakingTransaction,
-) (*indexerstore.StoredStakingTransaction, int) {
+) ([]*indexerstore.StoredStakingTransaction, []int) {
+	storedStakingTxs := make([]*indexerstore.StoredStakingTransaction, 0)
+	spendingInputIndexes := make([]int, 0)
 	for i, txIn := range tx.TxIn {
 		maybeStakingTxHash := txIn.PreviousOutPoint.Hash
 		stakingTx, exists := stakingTxs[maybeStakingTxHash]
@@ -668,16 +655,18 @@ func getSpentFromStakingTxs(
 			continue
 		}
 
-		return stakingTx, i
+		storedStakingTxs = append(storedStakingTxs, stakingTx)
+		spendingInputIndexes = append(spendingInputIndexes, i)
 	}
 
-	return nil, -1
+	return storedStakingTxs, spendingInputIndexes
 }
 
-// getSpentStakingTx checks if the given tx spends any of the stored staking tx
-// if so, it returns the found staking tx and the spent staking input index,
-// otherwise, it returns nil and -1
-func (si *StakingIndexer) getSpentUnbondingTx(tx *wire.MsgTx) (*indexerstore.StoredUnbondingTransaction, int) {
+// getSpentUnbondingTxs find all the stored unbonding txs spent by the given tx.
+// It returns the found unbonding txs and the spending input index of the given tx
+func (si *StakingIndexer) getSpentUnbondingTxs(tx *wire.MsgTx) ([]*indexerstore.StoredUnbondingTransaction, []int) {
+	storedUnbondingTxs := make([]*indexerstore.StoredUnbondingTransaction, 0)
+	spendingInputIndexes := make([]int, 0)
 	for i, txIn := range tx.TxIn {
 		maybeUnbondingTxHash := txIn.PreviousOutPoint.Hash
 		unbondingTx, err := si.GetUnbondingTxByHash(&maybeUnbondingTxHash)
@@ -685,10 +674,11 @@ func (si *StakingIndexer) getSpentUnbondingTx(tx *wire.MsgTx) (*indexerstore.Sto
 			continue
 		}
 
-		return unbondingTx, i
+		storedUnbondingTxs = append(storedUnbondingTxs, unbondingTx)
+		spendingInputIndexes = append(spendingInputIndexes, i)
 	}
 
-	return nil, -1
+	return storedUnbondingTxs, spendingInputIndexes
 }
 
 // IsValidUnbondingTx tries to identify a tx is a valid unbonding tx

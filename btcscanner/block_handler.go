@@ -35,7 +35,7 @@ func (bs *BtcPoller) blockEventLoop(startHeight uint64) {
 
 	defer blockEventNotifier.Cancel()
 	if err != nil {
-		panic(fmt.Errorf("failed to register BTC notifier"))
+		panic("failed to register BTC notifier")
 	}
 
 	bs.logger.Info("BTC notifier registered")
@@ -51,25 +51,23 @@ func (bs *BtcPoller) blockEventLoop(startHeight uint64) {
 			bs.logger.Debug("received new best btc block",
 				zap.Int32("height", newBlock.Height))
 
-			err := bs.handleNewBlock(newBlock)
+			err := bs.HandleNewBlock(newBlock)
 			if err != nil {
 				bs.logger.Debug("failed to handle a new block, need bootstrapping",
 					zap.Int32("height", newBlock.Height),
 					zap.Error(err))
 
-				if bs.isSynced.Swap(false) {
-					bootStrapHeight := startHeight
-					lastConfirmedHeight := bs.LastConfirmedHeight()
-					if lastConfirmedHeight != 0 {
-						bootStrapHeight = lastConfirmedHeight + 1
-					}
+				bootStrapHeight := startHeight
+				lastConfirmedHeight := bs.LastConfirmedHeight()
+				if lastConfirmedHeight != 0 {
+					bootStrapHeight = lastConfirmedHeight + 1
+				}
 
-					err := bs.Bootstrap(bootStrapHeight)
-					if err != nil {
-						bs.logger.Error("failed to bootstrap",
-							zap.Uint64("start_height", bootStrapHeight),
-							zap.Error(err))
-					}
+				err := bs.Bootstrap(bootStrapHeight)
+				if err != nil {
+					bs.logger.Error("failed to bootstrap",
+						zap.Uint64("start_height", bootStrapHeight),
+						zap.Error(err))
 				}
 			}
 		case <-bs.quit:
@@ -79,15 +77,11 @@ func (bs *BtcPoller) blockEventLoop(startHeight uint64) {
 	}
 }
 
-// handleNewBlock handles a new block by adding it in the unconfirmed
+// HandleNewBlock handles a new block by adding it in the unconfirmed
 // block cache, and extracting confirmed blocks if there are any
 // error will be returned if the new block is not in the same branch
 // of the cache
-func (bs *BtcPoller) handleNewBlock(blockEpoch *notifier.BlockEpoch) error {
-	if !bs.isSynced.Load() {
-		return fmt.Errorf("the btc scanner is not synced")
-	}
-
+func (bs *BtcPoller) HandleNewBlock(blockEpoch *notifier.BlockEpoch) error {
 	// get cache tip and check whether this block is expected
 	cacheTip := bs.unconfirmedBlockCache.Tip()
 	if cacheTip == nil {
@@ -141,7 +135,8 @@ func (bs *BtcPoller) commitChainUpdate(confirmedBlocks []*types.IndexedBlock) {
 			if !confirmedTipHash.IsEqual(&confirmedBlocks[0].Header.PrevBlock) {
 				// this indicates either programmatic error or the confirmation
 				// depth is not large enough to cover re-orgs
-				panic(fmt.Errorf("invalid canonical chain"))
+				majorReorgsCounter.Inc()
+				panic(fmt.Errorf("major reorgs happened at height %d", confirmedBlocks[0].Height))
 			}
 		}
 		bs.confirmedTipBlock = confirmedBlocks[len(confirmedBlocks)-1]

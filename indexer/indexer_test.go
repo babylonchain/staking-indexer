@@ -293,7 +293,6 @@ func FuzzGetStartHeight(f *testing.F) {
 		require.NoError(t, err)
 		chainUpdateInfoChan := make(chan *btcscanner.ChainUpdateInfo)
 		mockBtcScanner := NewMockedBtcScanner(t, chainUpdateInfoChan)
-		mockBtcScanner.EXPECT().IsSynced().Return(false).AnyTimes()
 		stakingIndexer, err := indexer.NewStakingIndexer(cfg, zap.NewNop(), NewMockedConsumer(t), db, sysParams, mockBtcScanner)
 		require.NoError(t, err)
 
