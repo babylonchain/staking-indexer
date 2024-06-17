@@ -28,7 +28,7 @@ func FuzzBootstrap(f *testing.F) {
 		k := uint64(versionedParams.Versions[0].ConfirmationDepth)
 		startHeight := versionedParams.Versions[0].ActivationHeight
 		// Generate a random number of blocks
-		numBlocks := bbndatagen.RandomIntOtherThan(r, 0, 50) + k // make sure we have at least k+1 entry
+		numBlocks := bbndatagen.RandomIntOtherThan(r, 0, 200) + k // make sure we have at least k+1 entry
 		chainIndexedBlocks := datagen.GetRandomIndexedBlocks(r, startHeight, numBlocks)
 		bestHeight := chainIndexedBlocks[len(chainIndexedBlocks)-1].Height
 
@@ -46,23 +46,34 @@ func FuzzBootstrap(f *testing.F) {
 
 		var wg sync.WaitGroup
 
-		// receive confirmed blocks
+		var numBatches int
+		if len(confirmedBlocks)%btcscanner.ConfirmedBlockBatchSize == 0 {
+			numBatches = len(confirmedBlocks) / btcscanner.ConfirmedBlockBatchSize
+		} else {
+			numBatches = len(confirmedBlocks)/btcscanner.ConfirmedBlockBatchSize + 1
+		}
+
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			updateInfo := <-btcScanner.ChainUpdateInfoChan()
-			for i, b := range updateInfo.ConfirmedBlocks {
-				require.Equal(t, confirmedBlocks[i].BlockHash(), b.BlockHash())
+			confirmedBlockIndex := 0
+			for i := 0; i < numBatches; i++ {
+				updateInfo := <-btcScanner.ChainUpdateInfoChan()
+				require.Greater(t, len(updateInfo.ConfirmedBlocks), 0)
+				for _, b := range updateInfo.ConfirmedBlocks {
+					require.Equal(t, confirmedBlocks[confirmedBlockIndex].Height, b.Height)
+					require.Equal(t, confirmedBlocks[confirmedBlockIndex].BlockHash(), b.BlockHash())
+					confirmedBlockIndex++
+				}
+
+				lastConfirmedHeight := updateInfo.ConfirmedBlocks[len(updateInfo.ConfirmedBlocks)-1].Height
+				require.Equal(t, int(k)-1, len(updateInfo.UnconfirmedBlocks))
+				require.Equal(t, lastConfirmedHeight+1, updateInfo.UnconfirmedBlocks[0].Height)
 			}
-			require.Equal(t, bestHeight, updateInfo.TipUnconfirmedBlock.Height)
 		}()
 
-		err = btcScanner.Start(startHeight, startHeight)
+		err = btcScanner.Bootstrap(startHeight)
 		require.NoError(t, err)
-		defer func() {
-			err := btcScanner.Stop()
-			require.NoError(t, err)
-		}()
 
 		wg.Wait()
 	})
