@@ -12,6 +12,8 @@ import (
 	"github.com/babylonchain/staking-indexer/types"
 )
 
+const ConfirmedBlockBatchSize = 100
+
 var _ BtcScanner = (*BtcPoller)(nil)
 
 type BtcScanner interface {
@@ -23,16 +25,12 @@ type BtcScanner interface {
 
 	LastConfirmedHeight() uint64
 
-	// GetUnconfirmedBlocks returns all the unconfirmed blocks in the
-	// cache
-	GetUnconfirmedBlocks() ([]*types.IndexedBlock, error)
-
 	Stop() error
 }
 
 type ChainUpdateInfo struct {
-	ConfirmedBlocks     []*types.IndexedBlock
-	TipUnconfirmedBlock *types.IndexedBlock
+	ConfirmedBlocks   []*types.IndexedBlock
+	UnconfirmedBlocks []*types.IndexedBlock
 }
 
 type BtcPoller struct {
@@ -164,9 +162,21 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 
 		tempConfirmedBlocks := bs.unconfirmedBlockCache.TrimConfirmedBlocks(int(bs.confirmationDepth) - 1)
 		confirmedBlocks = append(confirmedBlocks, tempConfirmedBlocks...)
+
+		// commit a batch to free up memory
+		if len(confirmedBlocks) >= ConfirmedBlockBatchSize {
+			// deep copy so that the copy will not be affected by memory release
+			blocksCopy := make([]*types.IndexedBlock, len(confirmedBlocks))
+			copy(blocksCopy, confirmedBlocks)
+			bs.commitChainUpdate(blocksCopy)
+
+			confirmedBlocks = nil
+		}
 	}
 
-	bs.commitChainUpdate(confirmedBlocks)
+	if len(confirmedBlocks) != 0 {
+		bs.commitChainUpdate(confirmedBlocks)
+	}
 
 	bs.logger.Info("bootstrapping is finished",
 		zap.Uint64("tip_unconfirmed_height", tipHeight))
@@ -174,15 +184,15 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 	return nil
 }
 
-func (bs *BtcPoller) GetUnconfirmedBlocks() ([]*types.IndexedBlock, error) {
+func (bs *BtcPoller) getUnconfirmedBlocks() []*types.IndexedBlock {
 	tipBlock := bs.unconfirmedBlockCache.Tip()
 	if tipBlock == nil {
-		return nil, nil
+		return nil
 	}
 
 	lastBlocks := bs.unconfirmedBlockCache.GetLastBlocks(int(bs.confirmationDepth) - 1)
 
-	return lastBlocks, nil
+	return lastBlocks
 }
 
 func (bs *BtcPoller) ChainUpdateInfoChan() <-chan *ChainUpdateInfo {

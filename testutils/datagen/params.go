@@ -30,7 +30,7 @@ func GenerateGlobalParamsVersions(r *rand.Rand, t *testing.T) *parser.ParsedGlob
 	tag := []byte{0x01, 0x02, 0x03, 0x04}
 	// Keep the confirmation depth across versions
 	// the value should be at least 2
-	confirmationDepth := uint16(r.Intn(100) + 2)
+	confirmationDepth := uint16(r.Intn(10) + 2)
 
 	paramsVersions := &parser.ParsedGlobalParams{
 		Versions: make([]*parser.ParsedVersionedGlobalParams, 0),

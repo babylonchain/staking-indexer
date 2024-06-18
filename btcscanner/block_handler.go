@@ -143,8 +143,8 @@ func (bs *BtcPoller) commitChainUpdate(confirmedBlocks []*types.IndexedBlock) {
 	}
 
 	chainUpdateInfo := &ChainUpdateInfo{
-		ConfirmedBlocks:     confirmedBlocks,
-		TipUnconfirmedBlock: bs.unconfirmedBlockCache.Tip(),
+		ConfirmedBlocks:   confirmedBlocks,
+		UnconfirmedBlocks: bs.getUnconfirmedBlocks(),
 	}
 
 	select {
