@@ -270,6 +270,7 @@ func BuildUnbondingTx(
 
 	unbondingTx := wire.NewMsgTx(2)
 	unbondingTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(stakingTxHash, stakingOutputIdx), nil, nil))
+	unbondingTx.TxIn[0].Sequence = wire.MaxTxInSequenceNum
 	unbondingTx.AddTxOut(unbondingInfo.UnbondingOutput)
 
 	// generate covenant unbonding sigs
@@ -294,6 +295,7 @@ func BuildUnbondingTx(
 		unbondingSpendInfo.RevealedLeaf.Script,
 	)
 	require.NoError(t, err)
+	t.Logf("unbonding sid: %s", hex.EncodeToString(stakerUnbondingSig.Serialize()))
 
 	witness, err := unbondingSpendInfo.CreateUnbondingPathWitness(unbondingCovSigs, stakerUnbondingSig)
 	require.NoError(t, err)

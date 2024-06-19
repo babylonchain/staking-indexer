@@ -1,9 +1,7 @@
-//go:build e2e
-// +build e2e
-
 package e2etest
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"math/rand"
@@ -15,6 +13,7 @@ import (
 	bbnbtclightclienttypes "github.com/babylonchain/babylon/x/btclightclient/types"
 	queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/stretchr/testify/require"
@@ -23,6 +22,7 @@ import (
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
+	"github.com/babylonchain/staking-indexer/utils"
 )
 
 func TestBTCScanner(t *testing.T) {
@@ -552,6 +552,15 @@ func TestStakingUnbondingLifeCycle(t *testing.T) {
 		getCovenantPrivKeys(t),
 		regtestParams,
 	)
+	t.Logf("staking tx hash hex: %s", stakingTxHash.String())
+	t.Logf("staker pk hex: %s", hex.EncodeToString(schnorr.SerializePubKey(storedStakingTx.StakerPk)))
+	t.Logf("finality provider pk hex: %s", hex.EncodeToString(schnorr.SerializePubKey(storedStakingTx.FinalityProviderPk)))
+	t.Logf("staking value: %d", storedStakingTx.StakingValue)
+	t.Logf("staking start height: %d", storedStakingTx.InclusionHeight)
+	t.Logf("staking time: %d", storedStakingTx.StakingTime)
+	t.Logf("staking tx hex: %s", getTxHex(storedStakingTx.Tx))
+	t.Logf("unbonding tx hash hex: %s", unbondingTx.TxHash().String())
+	t.Logf("unbonding tx hex: %s", getTxHex(unbondingTx))
 	tm.SendTxWithNConfirmations(t, unbondingTx, int(k))
 
 	// check the unbonding tx is already stored
@@ -698,7 +707,7 @@ func getTestStakingData(
 	stakerPrivKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
 
-	fpPrivKey, err := btcec.NewPrivateKey()
+	fppk, err := utils.ParseCovenantPubKeyFromHex("03d5a0bb72d71993e435d6c5a70e2aa4db500a62cfaae33c56050deefee64ec0")
 	require.NoError(t, err)
 
 	stakingAmount := btcutil.Amount(100000)
@@ -706,8 +715,18 @@ func getTestStakingData(
 
 	return &datagen.TestStakingData{
 		StakerKey:           stakerPrivKey.PubKey(),
-		FinalityProviderKey: fpPrivKey.PubKey(),
+		FinalityProviderKey: fppk,
 		StakingAmount:       stakingAmount,
 		StakingTime:         stakingTime,
 	}
+}
+
+func getTxHex(tx *wire.MsgTx) string {
+	var buf bytes.Buffer
+	if err := tx.Serialize(&buf); err != nil {
+		return ""
+	}
+	txHex := hex.EncodeToString(buf.Bytes())
+
+	return txHex
 }

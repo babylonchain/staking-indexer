@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 )
 
 // ParseCovenantPubKeyFromHex parses public key string to btc public key
@@ -14,7 +15,7 @@ func ParseCovenantPubKeyFromHex(pkStr string) (*btcec.PublicKey, error) {
 		return nil, err
 	}
 
-	pk, err := btcec.ParsePubKey(pkBytes)
+	pk, err := schnorr.ParsePubKey(pkBytes)
 	if err != nil {
 		return nil, err
 	}
