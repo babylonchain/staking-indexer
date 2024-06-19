@@ -1,6 +1,7 @@
 package indexer_test
 
 import (
+	"fmt"
 	"math/rand"
 	"path/filepath"
 	"sync"
@@ -416,22 +417,40 @@ func FuzzVerifyUnbondingTx(f *testing.F) {
 		require.NoError(t, err)
 		require.False(t, isValid)
 
-		// 4. test IsValidUnbondingTx with invalid unbonding tx (random unbonding fee in params), expect (false, ErrInvalidUnbondingTx)
+		// 4. test IsValidUnbondingTx with rbf enabled, expect (false, ErrInvalidUnbondingTx)
+		unbondingTx = datagen.GenerateUnbondingTxFromStaking(t, params, stakingData, stakingTx.Hash(), 0)
+		unbondingTx.MsgTx().TxIn[0].Sequence = 0
+		isValid, err = stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx, params)
+		require.ErrorIs(t, err, indexer.ErrInvalidUnbondingTx)
+		require.Contains(t, err.Error(), "unbonding tx should not enable rbf")
+		require.False(t, isValid)
+
+		// 5. test IsValidUnbondingTx with time lock set, expect (false, ErrInvalidUnbondingTx)
+		unbondingTx = datagen.GenerateUnbondingTxFromStaking(t, params, stakingData, stakingTx.Hash(), 0)
+		unbondingTx.MsgTx().LockTime = 1
+		isValid, err = stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx, params)
+		require.ErrorIs(t, err, indexer.ErrInvalidUnbondingTx)
+		require.Contains(t, err.Error(), "unbonding tx should not set lock time")
+		require.False(t, isValid)
+
+		// 6. test IsValidUnbondingTx with invalid unbonding tx (random unbonding fee in params), expect (false, ErrInvalidUnbondingTx)
 		newParams := *params
 		newParams.UnbondingFee = btcutil.Amount(bbndatagen.RandomIntOtherThan(r, int(params.UnbondingFee), 10000000))
 		unbondingTx = datagen.GenerateUnbondingTxFromStaking(t, &newParams, stakingData, stakingTx.Hash(), 0)
 		// pass the old params
 		isValid, err = stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx, params)
 		require.ErrorIs(t, err, indexer.ErrInvalidUnbondingTx)
+		require.Contains(t, err.Error(), fmt.Sprintf("the unbonding output value %d is not expected", unbondingTx.MsgTx().TxOut[0].Value))
 		require.False(t, isValid)
 
-		// 5. test IsValidUnbondingTx with invalid unbonding tx (random unbonding time in params), expect (false, ErrInvalidUnbondingTx)
+		// 7. test IsValidUnbondingTx with invalid unbonding tx (random unbonding time in params), expect (false, ErrInvalidUnbondingTx)
 		newParams2 := *params
 		newParams2.UnbondingTime = uint16(bbndatagen.RandomIntOtherThan(r, int(params.UnbondingTime), 1000))
 		unbondingTx = datagen.GenerateUnbondingTxFromStaking(t, &newParams2, stakingData, stakingTx.Hash(), 0)
 		// pass the old params
 		isValid, err = stakingIndexer.IsValidUnbondingTx(unbondingTx.MsgTx(), storedStakingTx, params)
 		require.ErrorIs(t, err, indexer.ErrInvalidUnbondingTx)
+		require.Contains(t, err.Error(), "the unbonding output is not expected")
 		require.False(t, isValid)
 	})
 }
