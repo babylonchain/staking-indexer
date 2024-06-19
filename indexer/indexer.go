@@ -676,11 +676,8 @@ func (si *StakingIndexer) getSpentUnbondingTxs(tx *wire.MsgTx) ([]*indexerstore.
 // to invalid parameters, and (2) the tx spends the unbonding path
 // but is invalid
 func (si *StakingIndexer) IsValidUnbondingTx(tx *wire.MsgTx, stakingTx *indexerstore.StoredStakingTransaction, params *parser.ParsedVersionedGlobalParams) (bool, error) {
-	// 1. an unbonding tx must have exactly one input and output
-	if len(tx.TxIn) != 1 {
-		return false, nil
-	}
-	if len(tx.TxOut) != 1 {
+	// 1. an unbonding tx must be a transfer tx
+	if err := btcstaking.IsTransferTx(tx); err != nil {
 		return false, nil
 	}
 
@@ -724,7 +721,15 @@ func (si *StakingIndexer) IsValidUnbondingTx(tx *wire.MsgTx, stakingTx *indexers
 		return false, nil
 	}
 
-	// 4. check whether the script of an unbonding tx output is expected
+	// 4. check whether the unbonding tx enables rbf has time lock
+	if tx.TxIn[0].Sequence != wire.MaxTxInSequenceNum {
+		return false, fmt.Errorf("%w: unbonding tx should not enable rbf", ErrInvalidUnbondingTx)
+	}
+	if tx.LockTime != 0 {
+		return false, fmt.Errorf("%w: unbonding tx should not set lock time", ErrInvalidUnbondingTx)
+	}
+
+	// 5. check whether the script of an unbonding tx output is expected
 	// by re-building unbonding output from params
 	stakingValue := btcutil.Amount(stakingTx.Tx.TxOut[stakingTx.StakingOutputIdx].Value)
 	expectedUnbondingOutputValue := stakingValue - params.UnbondingFee
