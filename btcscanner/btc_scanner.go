@@ -174,7 +174,7 @@ func (bs *BtcPoller) Bootstrap(startHeight uint64) error {
 		}
 	}
 
-	if len(confirmedBlocks) != 0 {
+	if len(confirmedBlocks) != 0 || len(bs.getUnconfirmedBlocks()) != 0 {
 		bs.commitChainUpdate(confirmedBlocks)
 	}
 
