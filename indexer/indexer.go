@@ -151,18 +151,8 @@ func (si *StakingIndexer) blocksEventLoop() {
 				}
 			}
 
-			tipUnconfirmedBlock := update.TipUnconfirmedBlock
-			if tipUnconfirmedBlock == nil {
-				si.logger.Debug("received empty tip unconfirmed block")
-				continue
-			}
-
-			si.logger.Info("received tip unconfirmed block",
-				zap.Int32("height", tipUnconfirmedBlock.Height))
-
-			if err := si.processUnconfirmedInfo(); err != nil {
-				si.logger.Error("failed to process tip unconfirmed block",
-					zap.Int32("height", tipUnconfirmedBlock.Height),
+			if err := si.processUnconfirmedInfo(update.UnconfirmedBlocks); err != nil {
+				si.logger.Error("failed to process unconfirmed blocks",
 					zap.Error(err))
 
 				failedProcessingUnconfirmedBlockCounter.Inc()
@@ -175,24 +165,24 @@ func (si *StakingIndexer) blocksEventLoop() {
 	}
 }
 
-// processUnconfirmedInfo processes information from the last confirmed height + 1
-// to the current tip height. This method will not make any change to the system
-// state.
-// If the btc scanner is synced, it follows the steps below:
-// 1. get unconfirmed blocks from the cache
-// 2. iterate all txs of each unconfirmed block to identify staking and unbonding transactions,
+// processUnconfirmedInfo processes information from given unconfirmed blocks
+// It follows the steps below:
+// 1. iterate all txs of each unconfirmed block to identify staking and unbonding transactions,
 // and calculate total unconfirmed tvl
-// 3. get the current confirmed tvl
-// 4. push unconfirmed info event to the queue
-// 5. record metrics
-func (si *StakingIndexer) processUnconfirmedInfo() error {
-	unconfirmedBlocks, err := si.btcScanner.GetUnconfirmedBlocks()
-	if err != nil {
-		return fmt.Errorf("failed to get unconfirmed blocks: %w", err)
-	}
+// 2. get the current confirmed tvl
+// 3. push unconfirmed info event to the queue
+// 4. record metrics
+// This method will not make any change to the system state.
+func (si *StakingIndexer) processUnconfirmedInfo(unconfirmedBlocks []*types.IndexedBlock) error {
 	if len(unconfirmedBlocks) == 0 {
-		return fmt.Errorf("no unconfirmed blocks")
+		si.logger.Info("no unconfirmed blocks, skip processing unconfirmed info")
+		return nil
 	}
+
+	si.logger.Info("processing unconfirmed blocks",
+		zap.Int32("start_height", unconfirmedBlocks[0].Height),
+		zap.Int32("end_height", unconfirmedBlocks[len(unconfirmedBlocks)-1].Height))
+
 	tipBlockCache := unconfirmedBlocks[len(unconfirmedBlocks)-1]
 
 	tvlInUnconfirmedBlocks, err := si.CalculateTvlInUnconfirmedBlocks(unconfirmedBlocks)
@@ -686,11 +676,8 @@ func (si *StakingIndexer) getSpentUnbondingTxs(tx *wire.MsgTx) ([]*indexerstore.
 // to invalid parameters, and (2) the tx spends the unbonding path
 // but is invalid
 func (si *StakingIndexer) IsValidUnbondingTx(tx *wire.MsgTx, stakingTx *indexerstore.StoredStakingTransaction, params *parser.ParsedVersionedGlobalParams) (bool, error) {
-	// 1. an unbonding tx must have exactly one input and output
-	if len(tx.TxIn) != 1 {
-		return false, nil
-	}
-	if len(tx.TxOut) != 1 {
+	// 1. an unbonding tx must be a transfer tx
+	if err := btcstaking.IsTransferTx(tx); err != nil {
 		return false, nil
 	}
 
@@ -734,7 +721,15 @@ func (si *StakingIndexer) IsValidUnbondingTx(tx *wire.MsgTx, stakingTx *indexers
 		return false, nil
 	}
 
-	// 4. check whether the script of an unbonding tx output is expected
+	// 4. check whether the unbonding tx enables rbf has time lock
+	if tx.TxIn[0].Sequence != wire.MaxTxInSequenceNum {
+		return false, fmt.Errorf("%w: unbonding tx should not enable rbf", ErrInvalidUnbondingTx)
+	}
+	if tx.LockTime != 0 {
+		return false, fmt.Errorf("%w: unbonding tx should not set lock time", ErrInvalidUnbondingTx)
+	}
+
+	// 5. check whether the script of an unbonding tx output is expected
 	// by re-building unbonding output from params
 	stakingValue := btcutil.Amount(stakingTx.Tx.TxOut[stakingTx.StakingOutputIdx].Value)
 	expectedUnbondingOutputValue := stakingValue - params.UnbondingFee

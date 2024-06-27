@@ -20,7 +20,7 @@ import (
 
 // FuzzBootstrap tests happy path of bootstrapping
 func FuzzBootstrap(f *testing.F) {
-	bbndatagen.AddRandomSeedsToFuzzer(f, 100)
+	bbndatagen.AddRandomSeedsToFuzzer(f, 1000)
 
 	f.Fuzz(func(t *testing.T, seed int64) {
 		r := rand.New(rand.NewSource(seed))
@@ -28,14 +28,18 @@ func FuzzBootstrap(f *testing.F) {
 		k := uint64(versionedParams.Versions[0].ConfirmationDepth)
 		startHeight := versionedParams.Versions[0].ActivationHeight
 		// Generate a random number of blocks
-		numBlocks := bbndatagen.RandomIntOtherThan(r, 0, 50) + k // make sure we have at least k+1 entry
+		numBlocks := bbndatagen.RandomIntOtherThan(r, 0, 200) + 1
 		chainIndexedBlocks := datagen.GetRandomIndexedBlocks(r, startHeight, numBlocks)
 		bestHeight := chainIndexedBlocks[len(chainIndexedBlocks)-1].Height
 
 		ctl := gomock.NewController(t)
 		mockBtcClient := mocks.NewMockClient(ctl)
 		mockBtcClient.EXPECT().GetTipHeight().Return(uint64(bestHeight), nil).AnyTimes()
-		confirmedBlocks := chainIndexedBlocks[:numBlocks-k+1]
+
+		confirmedBlocks := make([]*types.IndexedBlock, 0)
+		if numBlocks >= k-1 {
+			confirmedBlocks = chainIndexedBlocks[:numBlocks-k+1]
+		}
 		for i := 0; i < int(numBlocks); i++ {
 			mockBtcClient.EXPECT().GetBlockByHeight(gomock.Eq(uint64(chainIndexedBlocks[i].Height))).
 				Return(chainIndexedBlocks[i], nil).AnyTimes()
@@ -46,23 +50,34 @@ func FuzzBootstrap(f *testing.F) {
 
 		var wg sync.WaitGroup
 
-		// receive confirmed blocks
+		numBatches := len(confirmedBlocks)/btcscanner.ConfirmedBlockBatchSize + 1
+
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			updateInfo := <-btcScanner.ChainUpdateInfoChan()
-			for i, b := range updateInfo.ConfirmedBlocks {
-				require.Equal(t, confirmedBlocks[i].BlockHash(), b.BlockHash())
+			confirmedBlockIndex := 0
+			for i := 0; i < numBatches; i++ {
+				updateInfo := <-btcScanner.ChainUpdateInfoChan()
+				for _, b := range updateInfo.ConfirmedBlocks {
+					require.Equal(t, confirmedBlocks[confirmedBlockIndex].Height, b.Height)
+					require.Equal(t, confirmedBlocks[confirmedBlockIndex].BlockHash(), b.BlockHash())
+					confirmedBlockIndex++
+				}
+
+				// this is the case where bootstrap to a small height and
+				// no confirmed blocks found
+				if numBatches == 1 && len(updateInfo.ConfirmedBlocks) == 0 {
+					require.Equal(t, chainIndexedBlocks, updateInfo.UnconfirmedBlocks)
+				} else if len(updateInfo.ConfirmedBlocks) != 0 {
+					require.Equal(t, int(k)-1, len(updateInfo.UnconfirmedBlocks))
+					lastConfirmedHeight := updateInfo.ConfirmedBlocks[len(updateInfo.ConfirmedBlocks)-1].Height
+					require.Equal(t, lastConfirmedHeight+1, updateInfo.UnconfirmedBlocks[0].Height)
+				}
 			}
-			require.Equal(t, bestHeight, updateInfo.TipUnconfirmedBlock.Height)
 		}()
 
-		err = btcScanner.Start(startHeight, startHeight)
+		err = btcScanner.Bootstrap(startHeight)
 		require.NoError(t, err)
-		defer func() {
-			err := btcScanner.Stop()
-			require.NoError(t, err)
-		}()
 
 		wg.Wait()
 	})

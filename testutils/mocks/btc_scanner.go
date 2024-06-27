@@ -8,7 +8,6 @@ import (
 	reflect "reflect"
 
 	btcscanner "github.com/babylonchain/staking-indexer/btcscanner"
-	types "github.com/babylonchain/staking-indexer/types"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -47,21 +46,6 @@ func (m *MockBtcScanner) ChainUpdateInfoChan() <-chan *btcscanner.ChainUpdateInf
 func (mr *MockBtcScannerMockRecorder) ChainUpdateInfoChan() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChainUpdateInfoChan", reflect.TypeOf((*MockBtcScanner)(nil).ChainUpdateInfoChan))
-}
-
-// GetUnconfirmedBlocks mocks base method.
-func (m *MockBtcScanner) GetUnconfirmedBlocks() ([]*types.IndexedBlock, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetUnconfirmedBlocks")
-	ret0, _ := ret[0].([]*types.IndexedBlock)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetUnconfirmedBlocks indicates an expected call of GetUnconfirmedBlocks.
-func (mr *MockBtcScannerMockRecorder) GetUnconfirmedBlocks() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUnconfirmedBlocks", reflect.TypeOf((*MockBtcScanner)(nil).GetUnconfirmedBlocks))
 }
 
 // LastConfirmedHeight mocks base method.

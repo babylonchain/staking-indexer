@@ -104,6 +104,7 @@ func GenerateUnbondingTxFromStaking(t *testing.T, params *parser.ParsedVersioned
 	witness, err := btcstaking.CreateWitness(unbondingSpendInfo, [][]byte{})
 	require.NoError(t, err)
 	unbondingTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(stakingTxHash, stakingOutputIdx), nil, witness))
+	unbondingTx.TxIn[0].Sequence = wire.MaxTxInSequenceNum
 	unbondingTx.AddTxOut(unbondingInfo.UnbondingOutput)
 
 	return btcutil.NewTx(unbondingTx)
