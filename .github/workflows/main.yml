@@ -63,7 +63,7 @@ jobs:
     - name: Build Docker image
       uses: docker/build-push-action@v6
       with:
-        tags: staking-indexer:${{GITHUB_SHA}}
+        tags: staking-indexer:${{ github.sha }}
         outputs: type=docker,dest=/tmp/staking-indexer.tar
 
     - name: Upload Docker image to workspace
@@ -98,5 +98,5 @@ jobs:
 
       - name: Push Docker image
         run: |
-          docker tag staking-indexer:${{GITHUB_SHA}} ${{ secrets.DOCKERHUB_REGISTRY }}/staking-indexer:${{GITHUB_SHA}}
-          docker push ${{ secrets.DOCKERHUB_REGISTRY }}/staking-indexer:${{GITHUB_SHA}}
+          docker tag staking-indexer:${{ github.sha }} ${{ secrets.DOCKERHUB_REGISTRY }}/staking-indexer:${{ github.sha }}
+          docker push ${{ secrets.DOCKERHUB_REGISTRY }}/staking-indexer:${{ github.sha }}
