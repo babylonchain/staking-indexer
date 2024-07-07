@@ -80,7 +80,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: staking-indexer
-          path: /tmp/staking-indexer.tar
+          path: /tmp/
 
       - name: Load Docker image
         run: docker load -i /tmp/staking-indexer.tar
