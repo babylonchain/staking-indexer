@@ -3,9 +3,9 @@ name: build_docker
 on:
   push:
     branches:
-    - '*'
+    - '**'
     tags:
-    - '*'
+    - '**'
 
 jobs:
   build_lint_test:
