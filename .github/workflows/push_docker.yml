@@ -2,10 +2,10 @@ name: push_docker
 
 on:
     workflow_run:
-      workflows: ["build_docker"]
+      workflows:
+      - "build_docker"
       branches:
-      - main
-      - dev
+      - "hiep/add-github-actions"
       types: 
       - completed
 
