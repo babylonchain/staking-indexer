@@ -5,7 +5,8 @@ on:
       workflows:
       - "build_docker"
       branches:
-      - "hiep/add-github-actions"
+      - main
+      - dev
       types: 
       - completed
 
