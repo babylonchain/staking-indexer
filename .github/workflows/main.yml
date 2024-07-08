@@ -93,5 +93,5 @@ jobs:
 
       - name: Push Docker image
         run: |
-          docker tag staking-indexer:${{ github.sha }} ${{ secrets.DOCKERHUB_REGISTRY }}/staking-indexer:${{ github.sha }}
-          docker push ${{ secrets.DOCKERHUB_REGISTRY }}/staking-indexer:${{ github.sha }}
+          docker tag staking-indexer:${{ github.sha }} ${{ secrets.DOCKERHUB_REGISTRY_ID }}/staking-indexer:${{ github.sha }}
+          docker push ${{ secrets.DOCKERHUB_REGISTRY_ID }}/staking-indexer:${{ github.sha }}
