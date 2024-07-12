@@ -12,9 +12,9 @@ jobs:
      install-dependencies-command: 'sudo apt-get install libzmq3-dev'
      run-unit-tests: true
      run-integration-tests: true
+     run-lint: true
      
   docker_pipeline:
-    needs: ["lint_test"]
     uses: babylonchain/.github/.github/workflows/reusable_docker_pipeline.yml@hiep/add-reusable-workflows
     secrets: inherit
     with:
