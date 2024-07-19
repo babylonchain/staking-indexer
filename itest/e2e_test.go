@@ -99,11 +99,14 @@ func TestStakingLifeCycle(t *testing.T) {
 	stakingTxHash := stakingTx.TxHash()
 	tm.SendTxWithNConfirmations(t, stakingTx, int(k))
 
+	tm.CheckConfirmedInfoEvent(t, 100, 0)
+
 	// check that the staking tx is already stored
 	_ = tm.WaitForStakingTxStored(t, stakingTxHash)
 
 	// check the staking event is received by the queue
 	tm.CheckNextStakingEvent(t, stakingTxHash)
+	tm.CheckConfirmedInfoEvent(t, 102, uint64(testStakingData.StakingAmount))
 
 	// wait for the staking tx expires
 	if uint64(testStakingData.StakingTime) > k {
