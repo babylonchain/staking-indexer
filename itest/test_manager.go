@@ -397,7 +397,7 @@ func (tm *TestManager) CheckNextUnconfirmedEvent(t *testing.T, confirmedTvl, tot
 		if totalTvl != btcInfoEvent.UnconfirmedTvl {
 			continue
 		}
-		
+
 		return
 	}
 }
