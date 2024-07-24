@@ -10,20 +10,24 @@ import (
 
 	"github.com/babylonchain/babylon/btcstaking"
 	"github.com/babylonchain/networks/parameters/parser"
-	queuecli "github.com/babylonchain/staking-queue-client/client"
+
+	// queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/kvdb"
+	queuecli "github.com/scalarorg/staking-queue-client/client"
 	"go.uber.org/zap"
 
 	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/consumer"
-	"github.com/babylonchain/staking-indexer/indexerstore"
+
+	// "github.com/babylonchain/staking-indexer/indexerstore"
 	"github.com/babylonchain/staking-indexer/types"
+	"github.com/scalarorg/staking-indexer/indexerstore"
 )
 
 type StakingIndexer struct {
@@ -76,6 +80,8 @@ func (si *StakingIndexer) Start(startHeight uint64) error {
 
 		si.wg.Add(1)
 		go si.blocksEventLoop()
+		// TODO_SCALAR: Done
+		// go si.blocksScalarEventLoop()
 
 		if err := si.ValidateStartHeight(startHeight); err != nil {
 			startErr = fmt.Errorf("invalid start height %d: %w", startHeight, err)
@@ -334,7 +340,6 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 	}
 	for _, tx := range b.Txs {
 		msgTx := tx.MsgTx()
-
 		// 1. try to parse staking tx
 		stakingData, err := si.tryParseStakingTx(msgTx, params)
 		if err == nil {
@@ -385,7 +390,6 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 
 	// record metrics
 	lastProcessedBtcHeight.Set(float64(b.Height))
-
 	return nil
 }
 
@@ -770,13 +774,11 @@ func (si *StakingIndexer) ProcessStakingTx(
 		// whether the staking tx is overflow
 		isOverflow bool
 	)
-
 	si.logger.Info("found a staking tx",
 		zap.Uint64("height", height),
 		zap.String("tx_hash", tx.TxHash().String()),
 		zap.Int64("value", stakingData.StakingOutput.Value),
 	)
-
 	// check whether the staking tx already exists in db
 	// if so, get the isOverflow from the data in db
 	// otherwise, check it if the current tvl already reaches

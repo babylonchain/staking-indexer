@@ -12,8 +12,9 @@ import (
 
 	"github.com/babylonchain/babylon/btcstaking"
 	"github.com/babylonchain/networks/parameters/parser"
-	queuecli "github.com/babylonchain/staking-queue-client/client"
-	"github.com/babylonchain/staking-queue-client/queuemngr"
+
+	// queuecli "github.com/babylonchain/staking-queue-client/client"
+	// "github.com/babylonchain/staking-queue-client/queuemngr"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -23,6 +24,8 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/kvdb"
 	"github.com/lightningnetwork/lnd/signal"
+	queuecli "github.com/scalarorg/staking-queue-client/client"
+	"github.com/scalarorg/staking-queue-client/queuemngr"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
@@ -30,12 +33,14 @@ import (
 	"github.com/babylonchain/staking-indexer/btcscanner"
 	"github.com/babylonchain/staking-indexer/config"
 	"github.com/babylonchain/staking-indexer/indexer"
-	"github.com/babylonchain/staking-indexer/indexerstore"
+
+	// "github.com/babylonchain/staking-indexer/indexerstore"
 	"github.com/babylonchain/staking-indexer/log"
 	"github.com/babylonchain/staking-indexer/params"
 	"github.com/babylonchain/staking-indexer/server"
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
+	"github.com/scalarorg/staking-indexer/indexerstore"
 )
 
 type TestManager struct {

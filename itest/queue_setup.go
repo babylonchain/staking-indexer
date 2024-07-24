@@ -5,9 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/babylonchain/staking-queue-client/client"
-	"github.com/babylonchain/staking-queue-client/queuemngr"
+	// "github.com/babylonchain/staking-queue-client/client"
+	// "github.com/babylonchain/staking-queue-client/queuemngr"
 	"github.com/rabbitmq/amqp091-go"
+	"github.com/scalarorg/staking-queue-client/client"
+	"github.com/scalarorg/staking-queue-client/queuemngr"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 

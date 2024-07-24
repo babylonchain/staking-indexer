@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/babylonchain/staking-queue-client/queuemngr"
+	// "github.com/babylonchain/staking-queue-client/queuemngr"
 	"github.com/lightningnetwork/lnd/signal"
+	"github.com/scalarorg/staking-queue-client/queuemngr"
 	"github.com/urfave/cli"
 
 	"github.com/babylonchain/staking-indexer/btcclient"

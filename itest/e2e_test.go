@@ -13,10 +13,12 @@ import (
 	"github.com/babylonchain/babylon/btcstaking"
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
 	bbnbtclightclienttypes "github.com/babylonchain/babylon/x/btclightclient/types"
-	queuecli "github.com/babylonchain/staking-queue-client/client"
+
+	// queuecli "github.com/babylonchain/staking-queue-client/client"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
+	queuecli "github.com/scalarorg/staking-queue-client/client"
 	"github.com/stretchr/testify/require"
 
 	"github.com/babylonchain/staking-indexer/cmd/sid/cli"

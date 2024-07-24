@@ -14,7 +14,8 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/stretchr/testify/require"
 
-	"github.com/babylonchain/staking-indexer/indexerstore"
+	// "github.com/babylonchain/staking-indexer/indexerstore"
+	"github.com/scalarorg/staking-indexer/indexerstore"
 )
 
 type TestStakingData struct {

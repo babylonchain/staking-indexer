@@ -8,9 +8,10 @@ import (
 	bbndatagen "github.com/babylonchain/babylon/testutil/datagen"
 	"github.com/stretchr/testify/require"
 
-	"github.com/babylonchain/staking-indexer/indexerstore"
+	// "github.com/babylonchain/staking-indexer/indexerstore"
 	"github.com/babylonchain/staking-indexer/testutils"
 	"github.com/babylonchain/staking-indexer/testutils/datagen"
+	"github.com/scalarorg/staking-indexer/indexerstore"
 )
 
 func TestEmptyStore(t *testing.T) {
