@@ -595,7 +595,6 @@ func NewMockedConsumer(t *testing.T) *mocks.MockEventConsumer {
 	mockedConsumer.EXPECT().PushStakingEvent(gomock.Any()).Return(nil).AnyTimes()
 	mockedConsumer.EXPECT().PushUnbondingEvent(gomock.Any()).Return(nil).AnyTimes()
 	mockedConsumer.EXPECT().PushWithdrawEvent(gomock.Any()).Return(nil).AnyTimes()
-	mockedConsumer.EXPECT().PushConfirmedInfoEvent(gomock.Any()).Return(nil).AnyTimes()
 	mockedConsumer.EXPECT().Start().Return(nil).AnyTimes()
 	mockedConsumer.EXPECT().Stop().Return(nil).AnyTimes()
 

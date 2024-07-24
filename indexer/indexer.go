@@ -383,14 +383,16 @@ func (si *StakingIndexer) HandleConfirmedBlock(b *types.IndexedBlock) error {
 		return fmt.Errorf("failed to save the last processed height: %w", err)
 	}
 
-	// emit ConfirmedInfoEvent to send the confirmed height and tvl
-	confirmedTvl, err := si.is.GetConfirmedTvl()
-	if err != nil {
-		return fmt.Errorf("failed to get the confirmed tvl: %w", err)
-	}
-	confirmedInfoEvent := queuecli.NewConfirmedInfoEvent(uint64(b.Height), confirmedTvl)
-	if err := si.consumer.PushConfirmedInfoEvent(&confirmedInfoEvent); err != nil {
-		return fmt.Errorf("failed to push the confirmed info event: %w", err)
+	if si.cfg.ExtraEventEnabled {
+		// emit ConfirmedInfoEvent to send the confirmed height and tvl
+		confirmedTvl, err := si.is.GetConfirmedTvl()
+		if err != nil {
+			return fmt.Errorf("failed to get the confirmed tvl: %w", err)
+		}
+		confirmedInfoEvent := queuecli.NewConfirmedInfoEvent(uint64(b.Height), confirmedTvl)
+		if err := si.consumer.PushConfirmedInfoEvent(&confirmedInfoEvent); err != nil {
+			return fmt.Errorf("failed to push the confirmed info event: %w", err)
+		}
 	}
 
 	// record metrics

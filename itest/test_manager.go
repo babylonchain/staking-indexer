@@ -218,7 +218,10 @@ func ReStartFromHeight(t *testing.T, tm *TestManager, height uint64) *TestManage
 func DefaultStakingIndexerConfig(homePath string) *config.Config {
 	defaultConfig := config.DefaultConfigWithHome(homePath)
 
-	// both wallet and node are bicoind
+	// enable emitting extra events for testing
+	defaultConfig.ExtraEventEnabled = true
+
+	// both wallet and node are bitcoind
 	defaultConfig.BTCNetParams = *regtestParams
 
 	bitcoindHost := "127.0.0.1:18443"
