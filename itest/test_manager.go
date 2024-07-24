@@ -39,23 +39,24 @@ import (
 )
 
 type TestManager struct {
-	Config             *config.Config
-	Db                 kvdb.Backend
-	Si                 *indexer.StakingIndexer
-	BS                 *btcscanner.BtcPoller
-	WalletPrivKey      *btcec.PrivateKey
-	serverStopper      *signal.Interceptor
-	wg                 *sync.WaitGroup
-	BitcoindHandler    *BitcoindTestHandler
-	WalletClient       *rpcclient.Client
-	MinerAddr          btcutil.Address
-	DirPath            string
-	QueueConsumer      *queuemngr.QueueManager
-	StakingEventChan   <-chan queuecli.QueueMessage
-	UnbondingEventChan <-chan queuecli.QueueMessage
-	WithdrawEventChan  <-chan queuecli.QueueMessage
-	BtcInfoEventChan   <-chan queuecli.QueueMessage
-	VersionedParams    *parser.ParsedGlobalParams
+	Config                 *config.Config
+	Db                     kvdb.Backend
+	Si                     *indexer.StakingIndexer
+	BS                     *btcscanner.BtcPoller
+	WalletPrivKey          *btcec.PrivateKey
+	serverStopper          *signal.Interceptor
+	wg                     *sync.WaitGroup
+	BitcoindHandler        *BitcoindTestHandler
+	WalletClient           *rpcclient.Client
+	MinerAddr              btcutil.Address
+	DirPath                string
+	QueueConsumer          *queuemngr.QueueManager
+	StakingEventChan       <-chan queuecli.QueueMessage
+	UnbondingEventChan     <-chan queuecli.QueueMessage
+	WithdrawEventChan      <-chan queuecli.QueueMessage
+	BtcInfoEventChan       <-chan queuecli.QueueMessage
+	ConfirmedInfoEventChan <-chan queuecli.QueueMessage
+	VersionedParams        *parser.ParsedGlobalParams
 }
 
 // bitcoin params used for testing
@@ -146,6 +147,8 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 	require.NoError(t, err)
 	unconfirmedEventChan, err := queueConsumer.BtcInfoQueue.ReceiveMessages()
 	require.NoError(t, err)
+	confirmedInfoEventChan, err := queueConsumer.ConfirmedInfoQueue.ReceiveMessages()
+	require.NoError(t, err)
 
 	db, err := cfg.DatabaseConfig.GetDbBackend()
 	require.NoError(t, err)
@@ -176,22 +179,23 @@ func StartWithBitcoinHandler(t *testing.T, h *BitcoindTestHandler, minerAddress 
 	time.Sleep(3 * time.Second)
 
 	return &TestManager{
-		Config:             cfg,
-		Si:                 si,
-		BS:                 scanner,
-		serverStopper:      &interceptor,
-		wg:                 &wg,
-		BitcoindHandler:    h,
-		WalletClient:       rpcclient,
-		WalletPrivKey:      walletPrivKey.PrivKey,
-		MinerAddr:          minerAddress,
-		DirPath:            dirPath,
-		QueueConsumer:      queueConsumer,
-		StakingEventChan:   stakingEventChan,
-		UnbondingEventChan: unbondingEventChan,
-		WithdrawEventChan:  withdrawEventChan,
-		BtcInfoEventChan:   unconfirmedEventChan,
-		VersionedParams:    versionedParams,
+		Config:                 cfg,
+		Si:                     si,
+		BS:                     scanner,
+		serverStopper:          &interceptor,
+		wg:                     &wg,
+		BitcoindHandler:        h,
+		WalletClient:           rpcclient,
+		WalletPrivKey:          walletPrivKey.PrivKey,
+		MinerAddr:              minerAddress,
+		DirPath:                dirPath,
+		QueueConsumer:          queueConsumer,
+		StakingEventChan:       stakingEventChan,
+		UnbondingEventChan:     unbondingEventChan,
+		WithdrawEventChan:      withdrawEventChan,
+		BtcInfoEventChan:       unconfirmedEventChan,
+		ConfirmedInfoEventChan: confirmedInfoEventChan,
+		VersionedParams:        versionedParams,
 	}
 }
 
@@ -214,7 +218,10 @@ func ReStartFromHeight(t *testing.T, tm *TestManager, height uint64) *TestManage
 func DefaultStakingIndexerConfig(homePath string) *config.Config {
 	defaultConfig := config.DefaultConfigWithHome(homePath)
 
-	// both wallet and node are bicoind
+	// enable emitting extra events for testing
+	defaultConfig.ExtraEventEnabled = true
+
+	// both wallet and node are bitcoind
 	defaultConfig.BTCNetParams = *regtestParams
 
 	bitcoindHost := "127.0.0.1:18443"
@@ -361,6 +368,23 @@ func (tm *TestManager) CheckNextWithdrawEvent(t *testing.T, stakingTxHash chainh
 	require.NoError(t, err)
 }
 
+func (tm *TestManager) CheckConfirmedInfoEvent(t *testing.T, height, tvl uint64) {
+	var confirmedInfoEv queuecli.ConfirmedInfoEvent
+
+	for {
+		confirmedInfoEventBytes := <-tm.ConfirmedInfoEventChan
+		err := tm.QueueConsumer.ConfirmedInfoQueue.DeleteMessage(confirmedInfoEventBytes.Receipt)
+		require.NoError(t, err)
+		err = json.Unmarshal([]byte(confirmedInfoEventBytes.Body), &confirmedInfoEv)
+		require.NoError(t, err)
+		if height != confirmedInfoEv.Height {
+			continue
+		}
+		require.Equal(t, confirmedInfoEv.Tvl, tvl)
+		return
+	}
+}
+
 func (tm *TestManager) CheckNextUnconfirmedEvent(t *testing.T, confirmedTvl, totalTvl uint64) {
 	var btcInfoEvent queuecli.BtcInfoEvent
 
@@ -376,6 +400,7 @@ func (tm *TestManager) CheckNextUnconfirmedEvent(t *testing.T, confirmedTvl, tot
 		if totalTvl != btcInfoEvent.UnconfirmedTvl {
 			continue
 		}
+
 		return
 	}
 }

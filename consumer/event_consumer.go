@@ -10,5 +10,6 @@ type EventConsumer interface {
 	PushUnbondingEvent(ev *client.UnbondingStakingEvent) error
 	PushWithdrawEvent(ev *client.WithdrawStakingEvent) error
 	PushBtcInfoEvent(ev *client.BtcInfoEvent) error
+	PushConfirmedInfoEvent(ev *client.ConfirmedInfoEvent) error
 	Stop() error
 }

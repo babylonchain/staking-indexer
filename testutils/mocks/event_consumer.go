@@ -48,6 +48,20 @@ func (mr *MockEventConsumerMockRecorder) PushBtcInfoEvent(ev interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushBtcInfoEvent", reflect.TypeOf((*MockEventConsumer)(nil).PushBtcInfoEvent), ev)
 }
 
+// PushConfirmedInfoEvent mocks base method.
+func (m *MockEventConsumer) PushConfirmedInfoEvent(ev *client.ConfirmedInfoEvent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PushConfirmedInfoEvent", ev)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PushConfirmedInfoEvent indicates an expected call of PushConfirmedInfoEvent.
+func (mr *MockEventConsumerMockRecorder) PushConfirmedInfoEvent(ev interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushConfirmedInfoEvent", reflect.TypeOf((*MockEventConsumer)(nil).PushConfirmedInfoEvent), ev)
+}
+
 // PushStakingEvent mocks base method.
 func (m *MockEventConsumer) PushStakingEvent(ev *client.ActiveStakingEvent) error {
 	m.ctrl.T.Helper()
