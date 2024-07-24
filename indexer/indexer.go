@@ -79,9 +79,9 @@ func (si *StakingIndexer) Start(startHeight uint64) error {
 		si.logger.Info("Starting Staking Indexer App")
 
 		si.wg.Add(1)
-		go si.blocksEventLoop()
+		// go si.blocksEventLoop()
 		// TODO_SCALAR: Done
-		// go si.blocksScalarEventLoop()
+		go si.blocksScalarEventLoop()
 
 		if err := si.ValidateStartHeight(startHeight); err != nil {
 			startErr = fmt.Errorf("invalid start height %d: %w", startHeight, err)
