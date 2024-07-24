@@ -23,7 +23,11 @@ require (
 	github.com/lightningnetwork/lnd/kvdb v1.4.1
 	github.com/ory/dockertest/v3 v3.9.1
 	github.com/prometheus/client_golang v1.19.0
-	github.com/rabbitmq/amqp091-go v1.9.0
+	github.com/rabbitmq/amqp091-go v1.10.0
+	github.com/scalarorg/btcvault v0.0.0-00010101000000-000000000000
+	github.com/scalarorg/staking-indexer/indexerstore v0.0.0-00010101000000-000000000000
+	github.com/scalarorg/staking-queue-client/client v0.0.0-00010101000000-000000000000
+	github.com/scalarorg/staking-queue-client/queuemngr v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli v1.22.14
 	go.uber.org/atomic v1.10.0
@@ -251,6 +255,7 @@ require (
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/sasha-s/go-deadlock v0.3.1 // indirect
+	github.com/scalarorg/staking-indexer/proto v0.0.0-00010101000000-000000000000 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/soheilhy/cmux v0.1.5 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
@@ -310,6 +315,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20240227224415-6ceb2ff114de // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240401170217-c3f982113cda // indirect
 	google.golang.org/grpc v1.63.2 // indirect
+	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -331,3 +337,13 @@ require (
 )
 
 replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
+
+replace github.com/scalarorg/btcvault => ../btc-vault
+
+replace github.com/scalarorg/staking-indexer/indexerstore => ./indexerstore
+
+replace github.com/scalarorg/staking-indexer/proto => ./proto
+
+replace github.com/scalarorg/staking-queue-client/client => ../staking-queue-client/client
+
+replace github.com/scalarorg/staking-queue-client/queuemngr => ../staking-queue-client/queuemngr

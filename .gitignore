@@ -32,3 +32,6 @@ rabbitmq_data/
 
 # integration test
 .testnets
+
+/*/go.mod
+/*/go.sum
