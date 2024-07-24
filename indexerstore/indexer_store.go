@@ -13,8 +13,9 @@ import (
 	"github.com/lightningnetwork/lnd/kvdb"
 	pm "google.golang.org/protobuf/proto"
 
-	"github.com/babylonchain/staking-indexer/proto"
+	// "github.com/babylonchain/staking-indexer/proto"
 	"github.com/babylonchain/staking-indexer/utils"
+	"github.com/scalarorg/staking-indexer/proto"
 )
 
 var (
@@ -84,7 +85,16 @@ func (c *IndexerStore) initBuckets() error {
 		if err != nil {
 			return err
 		}
+		// SCALAR
+		_, err = tx.CreateTopLevelBucket(vaultTxBucketName)
+		if err != nil {
+			return err
+		}
 
+		_, err = tx.CreateTopLevelBucket(burningTxBucketName)
+		if err != nil {
+			return err
+		}
 		return nil
 	})
 }
@@ -356,6 +366,30 @@ func (is *IndexerStore) TxExists(txHash *chainhash.Hash) (bool, error) {
 		}
 
 		maybeTx = unbondingTxBucket.Get(txHashBytes)
+		if maybeTx != nil {
+			existed = true
+			return nil
+		}
+
+		// SCALAR
+
+		vaultTxBucket := tx.ReadBucket(vaultTxBucketName)
+		if vaultTxBucket == nil {
+			return ErrCorruptedTransactionsDb
+		}
+
+		maybeTx = vaultTxBucket.Get(txHashBytes)
+		if maybeTx != nil {
+			existed = true
+			return nil
+		}
+
+		burningTxBucket := tx.ReadBucket(burningTxBucketName)
+		if burningTxBucket == nil {
+			return ErrCorruptedTransactionsDb
+		}
+
+		maybeTx = burningTxBucket.Get(txHashBytes)
 		if maybeTx != nil {
 			existed = true
 			return nil
