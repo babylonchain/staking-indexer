@@ -580,7 +580,7 @@ func getParsedStakingData(data *datagen.TestStakingData, tx *wire.MsgTx, params 
 		OpReturnOutput:    tx.TxOut[1],
 		OpReturnOutputIdx: 1,
 		OpReturnData: &btcstaking.V0OpReturnData{
-			MagicBytes:                params.Tag,
+			Tag:                       params.Tag,
 			Version:                   0,
 			StakerPublicKey:           &btcstaking.XonlyPubKey{PubKey: data.StakerKey},
 			FinalityProviderPublicKey: &btcstaking.XonlyPubKey{PubKey: data.FinalityProviderKey},
@@ -595,6 +595,11 @@ func NewMockedConsumer(t *testing.T) *mocks.MockEventConsumer {
 	mockedConsumer.EXPECT().PushStakingEvent(gomock.Any()).Return(nil).AnyTimes()
 	mockedConsumer.EXPECT().PushUnbondingEvent(gomock.Any()).Return(nil).AnyTimes()
 	mockedConsumer.EXPECT().PushWithdrawEvent(gomock.Any()).Return(nil).AnyTimes()
+	// SCALAR
+	mockedConsumer.EXPECT().PushVaultEvent(gomock.Any()).Return(nil).AnyTimes()
+	mockedConsumer.EXPECT().PushBurningEvent(gomock.Any()).Return(nil).AnyTimes()
+	mockedConsumer.EXPECT().PushWithdrawVaultEvent(gomock.Any()).Return(nil).AnyTimes()
+	// SCALAR
 	mockedConsumer.EXPECT().Start().Return(nil).AnyTimes()
 	mockedConsumer.EXPECT().Stop().Return(nil).AnyTimes()
 
