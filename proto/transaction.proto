@@ -2,7 +2,8 @@ syntax = "proto3";
 
 package proto;
 
-option go_package = "github.com/babylonchain/staking-indexer/proto";
+// option go_package = "github.com/babylonchain/staking-indexer/proto";
+option go_package = "github.com/scalarorg/staking-indexer/proto";
 
 message StakingTransaction {
     // transaction_bytes is the full tx data
@@ -31,4 +32,38 @@ message UnbondingTransaction {
     // staking_tx_hash is the hash of the staking tx
     // that the unbonding tx spends
     bytes staking_tx_hash = 2;
+}
+
+message VaultTransaction {
+    // transaction_bytes is the full tx data
+    bytes transaction_bytes = 1;
+
+    uint32 staking_output_idx = 2;
+
+    // inclusion_height is the height the tx included
+    // on BTC
+    uint64 inclusion_height = 3;
+
+    // staking info
+    bytes staker_pk = 4;
+    bytes finality_provider_pk = 5;
+    uint64 staking_value = 6;
+
+    // payload info
+    bytes chainID = 7;
+    bytes chainIdUserAddress = 8;
+    bytes chainIdSmartContractAddress = 9;
+    bytes amountVault = 10;
+
+    // Indicate if the staking tx would exceed the staking cap.
+    bool is_overflow = 11;
+    // The staking amount
+}
+
+message BurningTransaction {
+    // transaction_bytes is the full tx data
+    bytes transaction_bytes = 1;
+    // vault_tx_hash is the hash of the vault tx
+    // that the burning tx spends
+    bytes vault_tx_hash = 2;
 }
