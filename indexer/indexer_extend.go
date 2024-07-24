@@ -720,7 +720,7 @@ func (si *StakingIndexer) addVaultTransaction(
 	chainID []byte,
 	chainIdUserAddress []byte,
 	chainIdSmartContractAddress []byte,
-	amountVault []byte,
+	amountMinting []byte,
 	isOverflow bool,
 ) error {
 	txHex, err := getTxHex(tx)
@@ -730,6 +730,7 @@ func (si *StakingIndexer) addVaultTransaction(
 
 	vaultEvent := queuecli.NewActiveVaultEvent(
 		tx.TxHash().String(),
+		txHex,
 		hex.EncodeToString(schnorr.SerializePubKey(stakerPk)),
 		hex.EncodeToString(schnorr.SerializePubKey(dAppPk)),
 		stakingValue,
@@ -739,8 +740,7 @@ func (si *StakingIndexer) addVaultTransaction(
 		chainID,
 		chainIdUserAddress,
 		chainIdSmartContractAddress,
-		amountVault,
-		txHex,
+		amountMinting,
 		isOverflow,
 	)
 
@@ -757,7 +757,7 @@ func (si *StakingIndexer) addVaultTransaction(
 	if err := si.is.AddVaultTransaction(
 		tx, stakingOutputIndex, height,
 		stakerPk, dAppPk,
-		stakingValue, chainID, chainIdUserAddress, chainIdSmartContractAddress, amountVault, isOverflow,
+		stakingValue, chainID, chainIdUserAddress, chainIdSmartContractAddress, amountMinting, isOverflow,
 	); err != nil && !errors.Is(err, indexerstore.ErrDuplicateTransaction) {
 		return fmt.Errorf("failed to add the vault tx to store: %w", err)
 	}

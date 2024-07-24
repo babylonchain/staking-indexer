@@ -53,7 +53,7 @@ func (is *IndexerStore) AddVaultTransaction(
 	chainID []byte,
 	chainIdUserAddress []byte,
 	chainIdSmartContractAddress []byte,
-	amountVault []byte,
+	amountMinting []byte,
 	isOverflow bool,
 ) error {
 	txHash := tx.TxHash()
@@ -72,7 +72,7 @@ func (is *IndexerStore) AddVaultTransaction(
 		ChainID:                     chainID,
 		ChainIdUserAddress:          chainIdUserAddress,
 		ChainIdSmartContractAddress: chainIdSmartContractAddress,
-		MintingAmount:               amountVault,
+		MintingAmount:               amountMinting,
 		IsOverflow:                  isOverflow,
 	}
 	return is.addVaultTransaction(txHash[:], &msg)
