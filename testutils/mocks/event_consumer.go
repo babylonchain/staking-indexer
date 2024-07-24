@@ -7,7 +7,8 @@ package mocks
 import (
 	reflect "reflect"
 
-	client "github.com/babylonchain/staking-queue-client/client"
+	// client "github.com/babylonchain/staking-queue-client/client"
+	client "github.com/scalarorg/staking-queue-client/client"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -116,4 +117,46 @@ func (m *MockEventConsumer) Stop() error {
 func (mr *MockEventConsumerMockRecorder) Stop() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockEventConsumer)(nil).Stop))
+}
+
+// PushStakingEvent mocks base method.
+func (m *MockEventConsumer) PushVaultEvent(ev *client.ActiveVaultEvent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PushVaultEvent", ev)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PushStakingEvent indicates an expected call of PushStakingEvent.
+func (mr *MockEventConsumerMockRecorder) PushVaultEvent(ev interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushVaultEvent", reflect.TypeOf((*MockEventConsumer)(nil).PushVaultEvent), ev)
+}
+
+// PushBurningEvent mocks base method.
+func (m *MockEventConsumer) PushBurningEvent(ev *client.BurningVaultEvent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PushBurningEvent", ev)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PushBurningEvent indicates an expected call of PushBurningEvent.
+func (mr *MockEventConsumerMockRecorder) PushBurningEvent(ev interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushBurningEvent", reflect.TypeOf((*MockEventConsumer)(nil).PushBurningEvent), ev)
+}
+
+// PushWithdrawEvent mocks base method.
+func (m *MockEventConsumer) PushWithdrawVaultEvent(ev *client.WithdrawVaultEvent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PushWithdrawVaultEvent", ev)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PushWithdrawEvent indicates an expected call of PushWithdrawEvent.
+func (mr *MockEventConsumerMockRecorder) PushWithdrawVaultEvent(ev interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushWithdrawVaultEvent", reflect.TypeOf((*MockEventConsumer)(nil).PushWithdrawVaultEvent), ev)
 }
