@@ -13,10 +13,8 @@ type EventConsumer interface {
 	PushBtcInfoEvent(ev *client.BtcInfoEvent) error
 	Stop() error
 
+	// SCALAR
 	PushVaultEvent(ev *client.ActiveVaultEvent) error
 	PushBurningEvent(ev *client.BurningVaultEvent) error
 	PushWithdrawVaultEvent(ev *client.WithdrawVaultEvent) error
-	// TODO_SCALAR
-	// PushSlashingOrLostKeyEvent(ev *client.SlashingOrLostKeyVaultEvent) error
-	// PushBurnWithoutDAppEvent(ev *client.BurnWithoutDAppVaultEvent) error
 }
