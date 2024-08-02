@@ -36,7 +36,7 @@ func FuzzBtcHeaders(f *testing.F) {
 				Return(idxBlock.Header, nil).AnyTimes()
 		}
 
-		infos, err := cli.BtcHeaderInfoList(mockBtcClient, startHeight, endHeight)
+		infos, err := cli.BtcHeaderInfoList(mockBtcClient, startHeight, endHeight, false)
 		require.NoError(t, err)
 		require.EqualValues(t, len(infos), numBlocks)
 
